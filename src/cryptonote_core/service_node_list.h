@@ -32,6 +32,7 @@
 #include <mutex>
 #include <shared_mutex>
 #include <boost/thread/shared_mutex.hpp>
+#include <string_view>
 #include "serialization/serialization.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "cryptonote_core/service_node_rules.h"
@@ -427,6 +428,10 @@ namespace service_nodes
 
     /// Initializes the x25519 map from current pubkey state; called during initialization
     void initialize_x25519_map();
+
+    /// Remote SN lookup address function for LokiMQ: given a string_view of a x25519 pubkey, this
+    /// returns that service node's quorumnet contact information, if we have it, else empty string.
+    std::string remote_lookup(std::string_view x25519_pk);
 
     /// Does something read-only for each registered service node in the range of pubkeys.  The SN
     /// lock is held while iterating, so the "something" should be quick.  Func should take

@@ -249,13 +249,7 @@ namespace tools
   std::string get_human_readable_timespan(std::chrono::seconds seconds);
   std::string get_human_readable_bytes(uint64_t bytes);
 
-#ifdef __cpp_fold_expressions
-  template <typename... T> constexpr size_t constexpr_sum(Ts... ns) { return (0 + ... + size_t{ns}); }
-#else
-  constexpr size_t constexpr_sum() { return 0; }
-  template <typename T, typename... Tmore>
-  constexpr size_t constexpr_sum(T n, Tmore... more) { return size_t{n} + constexpr_sum(more...); }
-#endif
+  template <typename... T> constexpr size_t constexpr_sum(T... ns) { return (0 + ... + size_t{ns}); }
 
   namespace detail {
     // Copy an integer type, swapping to little-endian if needed

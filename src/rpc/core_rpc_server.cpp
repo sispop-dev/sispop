@@ -45,7 +45,6 @@ using namespace epee;
 #include "common/util.h"
 #include "common/perf_timer.h"
 #include "common/random.h"
-#include "common/base32z.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_basic/account.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
@@ -62,6 +61,110 @@ using namespace epee;
 
 #undef SISPOP_DEFAULT_LOG_CATEGORY
 #define SISPOP_DEFAULT_LOG_CATEGORY "daemon.rpc"
+
+
+namespace cryptonote { namespace rpc {
+
+  namespace {
+    // Helper loaders for RPC registration; this lets us reduce the amount of compiled code by
+    // avoiding the need to instantiate {JSON,binary} loading code for {binary,JSON} commands.
+    // This first one is for JSON, the specialization below is for binary.
+    template <typename RPC, typename JSON = void>
+    struct reg_helper {
+      using Request = typename RPC::request;
+
+      Request load(rpc_request& request) {
+        Request req{};
+        if (std::holds_alternative<std::string_view>(request.body)) {
+          if (!epee::serialization::load_t_from_json(req, std::get<std::string_view>(request.body)))
+            throw parse_error{"Failed to parse JSON parameters"};
+        } else {
+          // This is nasty.  TODO: get rid of epee's horrible serialization code.
+          auto& epee_stuff = std::get<jsonrpc_params>(request.body);
+          auto& storage_entry = epee_stuff.second;
+          // For some reason epee calls a json object a "section" instead of something common like
+          // dict, object, hash, map.  But okay, then it calls a pointer to a section a "hsection"
+          // because obfuscation is the epee way.  Then we have `array_entry` (and of course,
+          // `harray` to refer to an `array_entry*`), but array_entries are *only* allowed to be
+          // arrays of sections.  Meanwhile epee's author left comments telling us that XML is
+          // horrible.  Pot meet kettle.
+          if (storage_entry.type() == typeid(epee::serialization::section)) {
+            auto* section = &boost::get<epee::serialization::section>(storage_entry);
+            req.load(epee_stuff.first, section);
+          }
+          else if (storage_entry.type() == typeid(epee::serialization::array_entry)) {
+            throw std::runtime_error("FIXME 125157015");
+          }
+        }
+        return req;
+      }
+
+      // store_t_to_json can't store a string.  Go epee.
+      template <typename R = typename RPC::response, std::enable_if_t<std::is_same<R, std::string>::value, int> = 0>
+      std::string serialize(std::string&& res) {
+        std::ostringstream o;
+        epee::serialization::dump_as_json(o, std::move(res), 0 /*indent*/, false /*newlines*/);
+        return o.str();
+      }
+
+      template <typename R = typename RPC::response, std::enable_if_t<!std::is_same<R, std::string>::value, int> = 0>
+      std::string serialize(typename RPC::response&& res) {
+        std::string response;
+        epee::serialization::store_t_to_json(res, response, 0 /*indent*/, false /*newlines*/);
+        return response;
+      }
+    };
+
+    // binary command specialization
+    template <typename RPC>
+    struct reg_helper<RPC, std::enable_if_t<std::is_base_of<BINARY, RPC>::value>> {
+      using Request = typename RPC::request;
+      Request load(rpc_request& request) { 
+        Request req{};
+        if (!std::holds_alternative<std::string_view>(request.body))
+          throw std::runtime_error{"Internal error: can't load binary a RPC command with non-string body"};
+        auto data = std::get<std::string_view>(request.body);
+        if (!epee::serialization::load_t_from_binary(req, data))
+          throw parse_error{"Failed to parse binary data parameters"};
+        return req;
+      }
+
+      std::string serialize(typename RPC::response&& res) {
+        std::string response;
+        epee::serialization::store_t_to_binary(res, response);
+        return response;
+      }
+    };
+
+    template <typename RPC>
+    void register_rpc_command(std::unordered_map<std::string, std::shared_ptr<const rpc_command>>& regs)
+    {
+      using Request = typename RPC::request;
+      using Response = typename RPC::response;
+      /// check that core_rpc_server.invoke(Request, rpc_context) returns a Response; the code below
+      /// will fail anyway if this isn't satisfied, but that compilation failure might be more cryptic.
+      using invoke_return_type = decltype(std::declval<core_rpc_server>().invoke(std::declval<Request&&>(), rpc_context{}));
+      static_assert(std::is_same<Response, invoke_return_type>::value,
+          "Unable to register RPC command: core_rpc_server::invoke(Request) is not defined or does not return a Response");
+      auto cmd = std::make_shared<rpc_command>();
+      constexpr bool binary = std::is_base_of<BINARY, RPC>::value;
+      cmd->is_public = std::is_base_of<PUBLIC, RPC>::value;
+      cmd->is_binary = binary;
+      cmd->invoke = [](rpc_request&& request, core_rpc_server& server) {
+        reg_helper<RPC> helper;
+        Response res = server.invoke(helper.load(request), std::move(request.context));
+        return helper.serialize(std::move(res));
+      };
+
+      for (const auto& name : RPC::names())
+        regs.emplace(name, cmd);
+    }
+
+    template <typename... RPC>
+    std::unordered_map<std::string, std::shared_ptr<const rpc_command>> register_rpc_commands(rpc::type_list<RPC...>) {
+      std::unordered_map<std::string, std::shared_ptr<const rpc_command>> regs;
+
+      (register_rpc_command<RPC>(regs), ...);
 
 #define MAX_RESTRICTED_FAKE_OUTS_COUNT 40
 #define MAX_RESTRICTED_GLOBAL_FAKE_OUTS_COUNT 5000
@@ -3484,11 +3587,11 @@ namespace cryptonote
         entry.name_hash                                        = record.name_hash;
         entry.owner                                            = record.owner.to_string(nettype());
         if (record.backup_owner) entry.backup_owner            = record.backup_owner.to_string(nettype());
-        entry.encrypted_value                                  = epee::to_hex::string(record.encrypted_value.to_span());
+        entry.encrypted_value                                  = lokimq::to_hex(record.encrypted_value.to_view());
         entry.register_height                                  = record.register_height;
         entry.update_height                                    = record.update_height;
-        entry.txid                                             = epee::string_tools::pod_to_hex(record.txid);
-        if (record.prev_txid) entry.prev_txid                  = epee::string_tools::pod_to_hex(record.prev_txid);
+        entry.txid                                             = lokimq::to_hex(tools::view_guts(record.txid));
+        if (record.prev_txid) entry.prev_txid                  = lokimq::to_hex(tools::view_guts(record.prev_txid));
       }
     }
 
@@ -3543,11 +3646,11 @@ namespace cryptonote
       entry.name_hash       = std::move(record.name_hash);
       if (record.owner) entry.owner = record.owner.to_string(nettype());
       if (record.backup_owner) entry.backup_owner = record.backup_owner.to_string(nettype());
-      entry.encrypted_value = epee::to_hex::string(record.encrypted_value.to_span());
+      entry.encrypted_value = lokimq::to_hex(record.encrypted_value.to_view());
       entry.register_height = record.register_height;
       entry.update_height   = record.update_height;
-      entry.txid            = epee::string_tools::pod_to_hex(record.txid);
-      if (record.prev_txid) entry.prev_txid = epee::string_tools::pod_to_hex(record.prev_txid);
+      entry.txid            = lokimq::to_hex(tools::view_guts(record.txid));
+      if (record.prev_txid) entry.prev_txid = lokimq::to_hex(tools::view_guts(record.prev_txid));
     }
 
     res.status = CORE_RPC_STATUS_OK;

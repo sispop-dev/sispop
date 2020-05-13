@@ -44,6 +44,7 @@
 #include <sstream>
 #include <fstream>
 #include <ctype.h>
+#include <string_view>
 #include <boost/lexical_cast.hpp>
 #include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
@@ -660,7 +661,7 @@ namespace
 
   void print_secret_key(const crypto::secret_key &k)
   {
-    sispopmq::string_view data{reinterpret_cast<const char*>(k.data), sizeof(k.data)};
+    std::string_view data{k.data, sizeof(k.data)};
     std::ostream_iterator<char> osi{std::cout};
     sispopmq::to_hex(data.begin(), data.end(), osi);
   }
@@ -9774,9 +9775,7 @@ int main(int argc, char* argv[])
   po::positional_options_description positional_options;
   positional_options.add(arg_command.name, -1);
 
-  boost::optional<po::variables_map> vm;
-  bool should_terminate = false;
-  std::tie(vm, should_terminate) = wallet_args::main(
+  auto [vm, should_terminate] = wallet_args::main(
    argc, argv,
    "sispop-wallet-cli [--wallet-file=<filename>|--generate-new-wallet=<filename>] [<COMMAND>]",
     sw::tr("This is the command line Sispop wallet. It needs to connect to a Sispop\ndaemon to work correctly.\n\nWARNING: Do not reuse your Sispop keys on a contentious fork, doing so will harm your privacy.\n Only consider reusing your key on a contentious fork if the fork has key reuse mitigations built in."),

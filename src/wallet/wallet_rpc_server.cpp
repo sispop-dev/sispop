@@ -4735,9 +4735,7 @@ int main(int argc, char** argv) {
   daemonizer::init_options(hidden_options, desc_params);
   desc_params.add(hidden_options);
 
-  boost::optional<po::variables_map> vm;
-  bool should_terminate = false;
-  std::tie(vm, should_terminate) = wallet_args::main(
+  auto [vm, should_terminate] = wallet_args::main(
     argc, argv,
     "sispop-wallet-rpc [--wallet-file=<file>|--generate-from-json=<file>|--wallet-dir=<directory>] [--rpc-bind-port=<port>]",
     tools::wallet_rpc_server::tr("This is the RPC sispop wallet. It needs to connect to a sispop\ndaemon to work correctly."),

@@ -599,12 +599,12 @@ cryptonote::transaction sispop_chain_generator::create_sispop_name_system_tx_upd
   if (!signature)
   {
     signature = &signature_;
-    crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), owner, backup_owner, prev_txid);
+    crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), owner, backup_owner, prev_txid);
     *signature = lns::make_monero_signature(hash, src.get_keys().m_account_address.m_spend_public_key, src.get_keys().m_spend_secret_key);
   }
 
   std::vector<uint8_t> extra;
-  cryptonote::tx_extra_sispop_name_system data = cryptonote::tx_extra_sispop_name_system::make_update(*signature, type, name_hash, encrypted_value.to_span(), owner, backup_owner, prev_txid);
+  cryptonote::tx_extra_sispop_name_system data = cryptonote::tx_extra_sispop_name_system::make_update(*signature, type, name_hash, encrypted_value.to_view(), owner, backup_owner, prev_txid);
   cryptonote::add_sispop_name_system_to_tx_extra(extra, data);
 
   cryptonote::block const &head = top().block;

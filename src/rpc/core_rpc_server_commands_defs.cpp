@@ -1,6 +1,6 @@
 #include "core_rpc_server_commands_defs.h"
 
-namespace cryptonote::rpc {
+namespace cryptonote { namespace rpc {
 
 KV_SERIALIZE_MAP_CODE_BEGIN(STATUS)
   KV_SERIALIZE(status)

@@ -1078,7 +1078,45 @@ namespace cryptonote
       *
       * @return true on success, false otherwise
       */
-     bool init_service_node_keys();
+     bool init_service_keys();
+
+     /**
+      * Checks the given x25519 pubkey against the configured access lists and, if allowed, returns
+      * the access level; otherwise returns `denied`.
+      */
+     sispopmq::AuthLevel lmq_check_access(const crypto::x25519_public_key& pubkey) const;
+
+     /**
+      * @brief Initializes sispopmq object, called during init().
+      *
+      * Does not start it: this gets called to initialize it, then it gets configured with endpoints
+      * and listening addresses, then finally a call to `start_sispopmq()` should happen to actually
+      * start it.
+      */
+     void init_sispopmq(const boost::program_options::variables_map& vm);
+
+ public:
+     /**
+      * @brief Starts sispopmq listening.
+      *
+      * Called after all sispopmq initialization is done.
+      */
+     void start_sispopmq();
+
+     /**
+      * Returns whether to allow the connection and, if so, at what authentication level.
+      */
+     sispopmq::AuthLevel lmq_allow(std::string_view ip, std::string_view x25519_pubkey, sispopmq::AuthLevel default_auth);
+
+     /**
+      * @brief Internal use only!
+      *
+      * This returns a mutable reference to the internal auth level map that sispopmq uses, for
+      * internal use only.
+      */
+     std::unordered_map<crypto::x25519_public_key, sispopmq::AuthLevel>& _lmq_auth_level_map() { return m_lmq_auth; }
+
+ private:
 
      /**
       * @brief do the uptime proof logic and calls for idle loop.

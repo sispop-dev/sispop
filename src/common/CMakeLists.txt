@@ -28,7 +28,7 @@
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 add_library(common
-  base32z.cpp
+  aligned.c
   base58.cpp
   command_line.cpp
   dns_utils.cpp

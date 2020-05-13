@@ -38,7 +38,8 @@
 if(NOT STATIC AND NOT BUILD_STATIC_DEPS)
   find_package(PkgConfig REQUIRED)
   pkg_check_modules(MINIUPNPC miniupnpc>=2.1)
-  pkg_check_modules(SISPOPMQ libsispopmq>=1.1.4)
+  pkg_check_modules(UNBOUND libunbound)
+  pkg_check_modules(SISPIPMQ libsispopmq>=1.2)
 endif()
 
 if(MINIUPNPC_FOUND)

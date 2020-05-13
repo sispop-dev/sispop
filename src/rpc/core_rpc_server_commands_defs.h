@@ -92,11 +92,46 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
 // has its own version, and that clients can just test major to see
 // whether they can talk to a given daemon without having to know in
 // advance which version they will stop working with
-// Don't go over 32767 for any of these
-#define CORE_RPC_VERSION_MAJOR 3
-#define CORE_RPC_VERSION_MINOR 4
-#define MAKE_CORE_RPC_VERSION(major,minor) (((major)<<16)|(minor))
-#define CORE_RPC_VERSION MAKE_CORE_RPC_VERSION(CORE_RPC_VERSION_MAJOR, CORE_RPC_VERSION_MINOR)
+  constexpr version_t VERSION = {3, 8};
+
+  /// Makes a version array from a packed 32-bit integer version
+  constexpr version_t make_version(uint32_t version)
+  {
+    return {static_cast<uint16_t>(version >> 16), static_cast<uint16_t>(version & 0xffff)};
+  }
+  /// Packs a version array into a packed 32-bit integer version
+  constexpr uint32_t pack_version(version_t version)
+  {
+    return (uint32_t(version.first) << 16) | version.second;
+  }
+
+  const static std::string
+    STATUS_OK = "OK",
+    STATUS_FAILED = "FAILED",
+    STATUS_BUSY = "BUSY",
+    STATUS_NOT_MINING = "NOT MINING",
+    STATUS_TX_LONG_POLL_TIMED_OUT = "Long polling client timed out before txpool had an update",
+    STATUS_TX_LONG_POLL_MAX_CONNECTIONS = "Daemon maxed out long polling connections";
+
+
+  namespace {
+    /// Returns a constexpr std::array of string_views from an arbitrary list of string literals
+    /// Used to specify RPC names as:
+    /// static constexpr auto names() { return NAMES("primary_name", "some_alias"); }
+    template <size_t... N>
+    constexpr std::array<std::string_view, sizeof...(N)> NAMES(const char (&...names)[N]) {
+      static_assert(sizeof...(N) > 0, "RPC command must have at least one name");
+      return {std::string_view{names, N-1}...};
+    }
+  }
+
+  /// Base command that all RPC commands must inherit from (either directly or via one or more of
+  /// the below tags).  Inheriting from this (and no others) gives you a private, json, non-legacy
+  /// RPC command.  For LMQ RPC the command will be available at `admin.whatever`; for HTTP RPC
+  /// it'll be at `whatever`.
+  struct RPC_COMMAND {};
+
+  /// Tag types that are used (via inheritance) to set rpc endpoint properties
 
   SISPOP_RPC_DOC_INTROSPECT
   // Get the node's current height.

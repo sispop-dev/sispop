@@ -1304,8 +1304,8 @@ namespace cryptonote
       // We try to lock the sync lock. If we can, it means no other thread is
       // currently adding blocks, so we do that for as long as we can from the
       // block queue. Then, we go back to download.
-      const boost::unique_lock<boost::mutex> sync{m_sync_lock, boost::try_to_lock};
-      if (!sync.owns_lock())
+      const std::unique_lock sync{m_sync_lock, std::try_to_lock};
+      if (!sync)
       {
         MINFO(context << "Failed to lock m_sync_lock, going back to download");
         goto skip;
@@ -1988,8 +1988,8 @@ skip:
 
         // this one triggers if all threads are in standby, which should not happen,
         // but happened at least once, so we unblock at least one thread if so
-        boost::unique_lock<boost::mutex> sync{m_sync_lock, boost::try_to_lock};
-        if (sync.owns_lock())
+        std::unique_lock sync{m_sync_lock, std::try_to_lock};
+        if (sync)
         {
           bool filled = false;
           boost::posix_time::ptime time;
@@ -2186,8 +2186,8 @@ skip:
     // actually already requested). In this case, if we can add blocks instead, do so
     if (m_core.get_current_blockchain_height() < m_core.get_target_blockchain_height())
     {
-      const boost::unique_lock<boost::mutex> sync{m_sync_lock, boost::try_to_lock};
-      if (sync.owns_lock())
+      const std::unique_lock sync{m_sync_lock, std::try_to_lock};
+      if (sync)
       {
         uint64_t start_height;
         std::vector<cryptonote::block_complete_entry> blocks;

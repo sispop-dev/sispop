@@ -502,7 +502,7 @@ namespace cryptonote
     static tx_extra_sispop_name_system make_update(lns::generic_signature const &signature,
                                                  lns::mapping_type type,
                                                  crypto::hash const &name_hash,
-                                                 epee::span<const uint8_t> encrypted_value,
+                                                 std::string_view encrypted_value,
                                                  lns::generic_owner const *owner,
                                                  lns::generic_owner const *backup_owner,
                                                  crypto::hash const &prev_txid)

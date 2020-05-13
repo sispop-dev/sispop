@@ -37,13 +37,13 @@ struct mapping_value
   std::array<uint8_t, BUFFER_SIZE> buffer;
   size_t len;
 
-  std::string               to_string() const { return std::string(reinterpret_cast<char const *>(buffer.data()), len); }
-  epee::span<const uint8_t> to_span()   const { return epee::span<const uint8_t>(reinterpret_cast<const uint8_t *>(buffer.data()), len); }
-  std::string               to_readable_value(cryptonote::network_type nettype, mapping_type type) const;
-  bool operator==(mapping_value const &other) const { return other.len    == len && memcmp(buffer.data(), other.buffer.data(), len) == 0; }
-  bool operator==(std::string   const &other) const { return other.size() == len && memcmp(buffer.data(), other.data(), len) == 0; }
+  std::string      to_string() const { return std::string{to_view()}; }
+  std::string_view to_view()   const { return {reinterpret_cast<const char*>(buffer.data()), len}; }
+  std::string      to_readable_value(cryptonote::network_type nettype, mapping_type type) const;
+  bool operator==(mapping_value const &other) const { return other.to_view() == to_view(); }
+  bool operator==(std::string_view other)     const { return other == to_view(); }
 };
-inline std::ostream &operator<<(std::ostream &os, mapping_value const &v) { return os << sispopmq::to_hex({reinterpret_cast<char const *>(v.buffer.data()), v.len}); }
+inline std::ostream &operator<<(std::ostream &os, mapping_value const &v) { return os << sispopmq::to_hex(v.to_view()); }
 
 inline char const *mapping_type_str(mapping_type type)
 {
@@ -73,7 +73,7 @@ generic_signature  make_ed25519_signature(crypto::hash const &hash, crypto::ed25
 generic_owner      make_monero_owner(cryptonote::account_public_address const &owner, bool is_subaddress);
 generic_owner      make_ed25519_owner(crypto::ed25519_public_key const &pkey);
 bool               parse_owner_to_generic_owner(cryptonote::network_type nettype, std::string const &owner, generic_owner &key, std::string *reason);
-crypto::hash       tx_extra_signature_hash(epee::span<const uint8_t> value, generic_owner const *owner, generic_owner const *backup_owner, crypto::hash const &prev_txid);
+crypto::hash       tx_extra_signature_hash(std::string_view value, generic_owner const *owner, generic_owner const *backup_owner, crypto::hash const &prev_txid);
 
 // Validate a human readable mapping value representation in 'value' and write the binary form into 'blob'.
 // value: if type is session, 66 character hex string of an ed25519 public key
@@ -170,13 +170,7 @@ public:
 
   /// Attempts to prepare the given statement.  MERRORs and returns false on failure.  If the object
   /// already has a prepare statement then it is finalized first.
-  bool compile(sispopmq::string_view query, bool optimise_for_multiple_usage = true);
-
-  template <size_t N>
-  bool compile(const char (&query)[N], bool optimise_for_multiple_usage = true)
-  {
-    return compile({&query[0], N}, optimise_for_multiple_usage);
-  }
+  bool compile(std::string_view query, bool optimise_for_multiple_usage = true);
 
   /// Returns true if the object owns a prepared statement
   explicit operator bool() const { return statement != nullptr; }

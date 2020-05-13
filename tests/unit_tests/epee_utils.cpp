@@ -885,14 +885,13 @@ TEST(parsing, number)
 {
   boost::string_ref val;
   std::string s;
-  std::string::const_iterator i;
 
   // the parser expects another character to end the number, and accepts things
   // that aren't numbers, as it's meant as a pre-filter for strto* functions,
   // so we just check that numbers get accepted, but don't test non numbers
 
   s = "0 ";
-  i = s.begin();
+  auto i = s.begin();
   epee::misc_utils::parse::match_number(i, s.end(), val);
   ASSERT_EQ(val, "0");
 

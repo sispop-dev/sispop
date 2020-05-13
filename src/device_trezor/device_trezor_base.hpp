@@ -33,28 +33,16 @@
 
 #include <cstddef>
 #include <string>
+#include <mutex>
 #include "device/device.hpp"
 #include "device/device_default.hpp"
 #include "device/device_cold.hpp"
-#include <boost/scope_exit.hpp>
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/recursive_mutex.hpp>
 #include "cryptonote_config.h"
 #include "trezor.hpp"
 
 #ifdef WITH_TREZOR_DEBUGGING
 #include "trezor/debug_link.hpp"
 #endif
-
-//automatic lock one more level on device ensuring the current thread is allowed to use it
-#define TREZOR_AUTO_LOCK_CMD() \
-  /* lock both mutexes without deadlock*/ \
-  boost::lock(device_locker, command_locker); \
-  /* make sure both already-locked mutexes are unlocked at the end of scope */ \
-  boost::lock_guard<boost::recursive_mutex> lock1(device_locker, boost::adopt_lock); \
-  boost::lock_guard<boost::mutex> lock2(command_locker, boost::adopt_lock)
-
-#define TREZOR_AUTO_LOCK_DEVICE() boost::lock_guard<boost::recursive_mutex> lock1_device(device_locker)
 
 namespace hw {
 namespace trezor {
@@ -86,8 +74,8 @@ namespace trezor {
     protected:
 
       // Locker for concurrent access
-      mutable boost::recursive_mutex  device_locker;
-      mutable boost::mutex  command_locker;
+      mutable std::recursive_mutex  device_locker;
+      mutable std::mutex  command_locker;
 
       std::shared_ptr<Transport> m_transport;
       i_device_callback * m_callback;
@@ -144,7 +132,7 @@ namespace trezor {
                       bool open_session = false)
       {
         // Require strictly protocol buffers response in the template.
-        BOOST_STATIC_ASSERT(boost::is_base_of<google::protobuf::Message, t_message>::value);
+        static_assert(std::is_base_of_v<google::protobuf::Message, t_message>);
         const bool accepting_base = boost::is_same<google::protobuf::Message, t_message>::value;
         if (resp_types && !accepting_base){
           throw std::invalid_argument("Cannot specify list of accepted types and not using generic response");
@@ -164,7 +152,7 @@ namespace trezor {
         }
 
         // Scoped session closer
-        BOOST_SCOPE_EXIT_ALL(&, this) {
+        LOKI_DEFER {
           if (open_session){
             this->get_transport()->close();
           }

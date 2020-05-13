@@ -28,6 +28,7 @@
 //
 
 #include "device_trezor.hpp"
+#include "common/lock.h"
 
 namespace hw {
 namespace trezor {
@@ -130,7 +131,7 @@ namespace trezor {
           continue;
         }
 
-        TREZOR_AUTO_LOCK_DEVICE();
+        std::lock_guard lock{device_locker};
         if (!m_transport || !m_live_refresh_in_progress)
         {
           continue;
@@ -211,7 +212,8 @@ namespace trezor {
     std::shared_ptr<messages::monero::MoneroAddress> device_trezor::get_address(
         const boost::optional<std::vector<uint32_t>> & path,
         const boost::optional<cryptonote::network_type> & network_type){
-      TREZOR_AUTO_LOCK_CMD();
+      CHECK_AND_ASSERT_THROW_MES(!payment_id || !subaddress || subaddress->is_zero(), "Subaddress cannot be integrated");
+      auto locks = tools::unique_locks(device_locker, command_locker);
       require_connected();
       device_state_reset_unsafe();
       require_initialized();
@@ -227,7 +229,7 @@ namespace trezor {
     std::shared_ptr<messages::monero::MoneroWatchKey> device_trezor::get_view_key(
         const boost::optional<std::vector<uint32_t>> & path,
         const boost::optional<cryptonote::network_type> & network_type){
-      TREZOR_AUTO_LOCK_CMD();
+      auto locks = tools::unique_locks(device_locker, command_locker);
       require_connected();
       device_state_reset_unsafe();
       require_initialized();
@@ -256,7 +258,7 @@ namespace trezor {
         const ::hw::device_cold::tx_key_data_t & tx_aux_data,
         const ::crypto::secret_key & view_key_priv)
     {
-      TREZOR_AUTO_LOCK_CMD();
+      auto locks = tools::unique_locks(device_locker, command_locker);
       require_connected();
       device_state_reset_unsafe();
       require_initialized();
@@ -276,7 +278,7 @@ namespace trezor {
     {
 #define EVENT_PROGRESS(P) do { if (m_callback) {(m_callback)->on_progress(device_cold::op_progress(P)); } }while(0)
 
-      TREZOR_AUTO_LOCK_CMD();
+      auto locks = tools::unique_locks(device_locker, command_locker);
       require_connected();
       device_state_reset_unsafe();
       require_initialized();
@@ -363,7 +365,7 @@ namespace trezor {
 
     void device_trezor::live_refresh_start()
     {
-      TREZOR_AUTO_LOCK_CMD();
+      auto locks = tools::unique_locks(device_locker, command_locker);
       require_connected();
       live_refresh_start_unsafe();
     }
@@ -390,7 +392,7 @@ namespace trezor {
         crypto::key_image& ki
     )
     {
-      TREZOR_AUTO_LOCK_CMD();
+      auto locks = tools::unique_locks(device_locker, command_locker);
       require_connected();
 
       if (!m_live_refresh_in_progress)
@@ -420,7 +422,7 @@ namespace trezor {
 
     void device_trezor::live_refresh_finish()
     {
-      TREZOR_AUTO_LOCK_CMD();
+      auto locks = tools::unique_locks(device_locker, command_locker);
       require_connected();
       if (m_live_refresh_in_progress)
       {
@@ -474,7 +476,7 @@ namespace trezor {
     {
       CHECK_AND_ASSERT_THROW_MES(unsigned_tx.transfers.first == 0, "Unsuported non zero offset");
 
-      TREZOR_AUTO_LOCK_CMD();
+      auto locks = tools::unique_locks(device_locker, command_locker);
       require_connected();
       device_state_reset_unsafe();
       require_initialized();

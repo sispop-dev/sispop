@@ -37,6 +37,8 @@ using namespace epee;
 
 #include <unordered_set>
 #include <iomanip>
+#include <sispopmq/hex.h>
+#include <sispopmq/base32z.h>
 
 extern "C" {
 #include <sodium.h>
@@ -1027,10 +1029,127 @@ namespace cryptonote
     CHECK_AND_ASSERT_MES(rc == 0, false, "failed to convert ed25519 pubkey to x25519");
     crypto_sign_ed25519_sk_to_curve25519(keys.key_x25519.data, keys.key_ed25519.data);
 
+<<<<<<< HEAD
     MGINFO_YELLOW("Service node x25519 pubkey is " << epee::string_tools::pod_to_hex(keys.pub_x25519));
 
     return true;
   }
+=======
+    if (m_service_node) {
+      MGINFO_YELLOW("Service node public keys:");
+      MGINFO_YELLOW("- primary: " << sispopmq::to_hex(tools::view_guts(keys.pub)));
+      MGINFO_YELLOW("- ed25519: " << sispopmq::to_hex(tools::view_guts(keys.pub_ed25519)));
+      // .snode address is the ed25519 pubkey, encoded with base32z and with .snode appended:
+      MGINFO_YELLOW("- lokinet: " << sispopmq::to_base32z(tools::view_guts(keys.pub_ed25519)) << ".snode");
+      MGINFO_YELLOW("-  x25519: " << sispopmq::to_hex(tools::view_guts(keys.pub_x25519)));
+    } else {
+      // Only print the x25519 version because it's the only thing useful for a non-SN (for
+      // encrypted LMQ RPC connections).
+      MGINFO_YELLOW("x25519 public key: " << sispopmq::to_hex(tools::view_guts(keys.pub_x25519)));
+    }
+
+    return true;
+  }
+
+  static constexpr el::Level easylogging_level(sispopmq::LogLevel level) {
+    using namespace sispopmq;
+    switch (level) {
+        case LogLevel::fatal: return el::Level::Fatal;
+        case LogLevel::error: return el::Level::Error;
+        case LogLevel::warn:  return el::Level::Warning;
+        case LogLevel::info:  return el::Level::Info;
+        case LogLevel::debug: return el::Level::Debug;
+        case LogLevel::trace: return el::Level::Trace;
+        default:              return el::Level::Unknown;
+    }
+  }
+
+  sispopmq::AuthLevel core::lmq_check_access(const crypto::x25519_public_key& pubkey) const {
+    auto it = m_lmq_auth.find(pubkey);
+    if (it != m_lmq_auth.end())
+      return it->second;
+    return sispopmq::AuthLevel::denied;
+  }
+
+  // Builds an allow function; takes `*this`, the default auth level, and whether this connection
+  // should allow incoming SN connections.
+  //
+  // default_auth should be AuthLevel::denied if only pre-approved connections may connect,
+  // AuthLevel::basic for public RPC, AuthLevel::admin for a (presumably localhost) unrestricted
+  // port, and AuthLevel::none for a super restricted mode (generally this is useful when there are
+  // also SN-restrictions on commands, i.e. for quorumnet).
+  //
+  // check_sn is whether we check an incoming key against known service nodes (and thus return
+  // "true" for the service node access if it checks out).
+  //
+  sispopmq::AuthLevel core::lmq_allow(std::string_view ip, std::string_view x25519_pubkey_str, sispopmq::AuthLevel default_auth) {
+    using namespace sispopmq;
+    AuthLevel auth = default_auth;
+    if (x25519_pubkey_str.size() == sizeof(crypto::x25519_public_key)) {
+      crypto::x25519_public_key x25519_pubkey;
+      std::memcpy(x25519_pubkey.data, x25519_pubkey_str.data(), x25519_pubkey_str.size());
+      auto user_auth = lmq_check_access(x25519_pubkey);
+      if (user_auth >= AuthLevel::basic) {
+        if (user_auth > auth)
+          auth = user_auth;
+        MCINFO("lmq", "Incoming " << auth << "-authenticated connection");
+      }
+
+      MCINFO("lmq", "Incoming [" << auth << "] curve connection from " << ip << "/" << x25519_pubkey);
+    }
+    else {
+      MCINFO("lmq", "Incoming [" << auth << "] plain connection from " << ip);
+    }
+    return auth;
+  }
+
+  void core::init_sispopmq(const boost::program_options::variables_map& vm) {
+    using namespace sispopmq;
+    MGINFO("Starting sispopmq");
+    m_lmq = std::make_unique<Sispopmq>(
+        tools::copy_guts(m_service_keys.pub_x25519),
+        tools::copy_guts(m_service_keys.key_x25519),
+        m_service_node,
+        [this](std::string_view x25519_pk) { return m_service_node_list.remote_lookup(x25519_pk); },
+        [](LogLevel level, const char *file, int line, std::string msg) {
+          // What a lovely interface (<-- sarcasm)
+          if (ELPP->vRegistry()->allowed(easylogging_level(level), "lmq"))
+            el::base::Writer(easylogging_level(level), file, line, ELPP_FUNC, el::base::DispatchAction::NormalLog).construct("lmq") << msg;
+        },
+        sispopmq::LogLevel::trace
+    );
+
+    // ping.ping: a simple debugging target for pinging the lmq listener
+    m_lmq->add_category("ping", Access{AuthLevel::none})
+        .add_request_command("ping", [](Message& m) {
+            MCINFO("lmq", "Received ping from " << m.conn);
+            m.send_reply("pong");
+        })
+    ;
+
+    if (m_service_node)
+    {
+      // Service nodes always listen for quorumnet data on the p2p IP, quorumnet port
+      std::string listen_ip = vm["p2p-bind-ip"].as<std::string>();
+      if (listen_ip.empty())
+        listen_ip = "0.0.0.0";
+      std::string qnet_listen = "tcp://" + listen_ip + ":" + std::to_string(m_quorumnet_port);
+      MGINFO("- listening on " << qnet_listen << " (quorumnet)");
+      m_lmq->listen_curve(qnet_listen,
+          [this, public_=command_line::get_arg(vm, arg_lmq_quorumnet_public)](std::string_view ip, std::string_view pk, bool) {
+            return lmq_allow(ip, pk, public_ ? AuthLevel::basic : AuthLevel::none);
+          });
+
+      m_quorumnet_state = quorumnet_new(*this);
+    }
+
+  }
+
+  void core::start_sispopmq() {
+      update_lmq_sns(); // Ensure we have SNs set for the current block before starting
+      m_lmq->start();
+  }
+
   //-----------------------------------------------------------------------------------------------
   bool core::set_genesis_block(const block& b)
   {

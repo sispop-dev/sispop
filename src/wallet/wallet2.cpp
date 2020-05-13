@@ -8479,7 +8479,7 @@ static bool try_generate_lns_signature(wallet2 const &wallet, std::string const 
   crypto::public_key pkey;
   crypto::secret_key_to_public_key(skey, pkey);
 
-  crypto::hash hash = lns::tx_extra_signature_hash(result.encrypted_value.to_span(),
+  crypto::hash hash = lns::tx_extra_signature_hash(result.encrypted_value.to_view(),
                                                    new_owner ? &result.owner : nullptr,
                                                    new_backup_owner ? &result.backup_owner : nullptr,
                                                    result.prev_txid);
@@ -8685,7 +8685,7 @@ std::vector<wallet2::pending_tx> wallet2::lns_create_update_mapping_tx(lns::mapp
   auto entry = cryptonote::tx_extra_sispop_name_system::make_update(prepared_args.signature,
                                                                   type,
                                                                   prepared_args.name_hash,
-                                                                  prepared_args.encrypted_value.to_span(),
+                                                                  prepared_args.encrypted_value.to_view(),
                                                                   owner ? &prepared_args.owner : nullptr,
                                                                   backup_owner ? &prepared_args.backup_owner : nullptr,
                                                                   prepared_args.prev_txid);

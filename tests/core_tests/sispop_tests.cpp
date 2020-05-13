@@ -2172,7 +2172,7 @@ bool sispop_name_system_update_mapping_multiple_owners::generate(std::vector<tes
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
       lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
-      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
+      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_ed25519_signature(hash, owner1_key);
 
       cryptonote::transaction tx2 = gen.create_and_add_sispop_name_system_tx_update(miner, lns::mapping_type::session, name, &temp_keys.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
@@ -2194,7 +2194,7 @@ bool sispop_name_system_update_mapping_multiple_owners::generate(std::vector<tes
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
       lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
-      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
+      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_ed25519_signature(hash, owner2_key);
 
       cryptonote::transaction tx2 = gen.create_and_add_sispop_name_system_tx_update(miner, lns::mapping_type::session, name, &temp_keys.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
@@ -2232,7 +2232,7 @@ bool sispop_name_system_update_mapping_multiple_owners::generate(std::vector<tes
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
       lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
-      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
+      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_monero_signature(hash, owner1.wallet.address.m_spend_public_key, account1.get_keys().m_spend_secret_key);
 
       cryptonote::transaction tx2 = gen.create_and_add_sispop_name_system_tx_update(miner, lns::mapping_type::session, name, &temp_keys.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
@@ -2254,7 +2254,7 @@ bool sispop_name_system_update_mapping_multiple_owners::generate(std::vector<tes
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
       lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
-      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
+      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_monero_signature(hash, owner2.wallet.address.m_spend_public_key, account2.get_keys().m_spend_secret_key);
 
       cryptonote::transaction tx2 = gen.create_and_add_sispop_name_system_tx_update(miner, lns::mapping_type::session, name, &temp_keys.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
@@ -2296,7 +2296,7 @@ bool sispop_name_system_update_mapping_multiple_owners::generate(std::vector<tes
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
       lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
-      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
+      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_ed25519_signature(hash, owner1_key);
 
       cryptonote::transaction tx2 = gen.create_and_add_sispop_name_system_tx_update(miner, lns::mapping_type::session, name, &temp_keys.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
@@ -2318,7 +2318,7 @@ bool sispop_name_system_update_mapping_multiple_owners::generate(std::vector<tes
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
       lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
-      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
+      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_monero_signature(hash, owner2.wallet.address.m_spend_public_key, account2.get_keys().m_spend_secret_key);
 
       cryptonote::transaction tx2 = gen.create_and_add_sispop_name_system_tx_update(miner, lns::mapping_type::session, name, &temp_keys.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
@@ -2360,7 +2360,7 @@ bool sispop_name_system_update_mapping_multiple_owners::generate(std::vector<tes
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
 
       lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
-      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
+      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_monero_signature(hash, owner1.wallet.address.m_spend_public_key, account1.get_keys().m_spend_secret_key);
 
       cryptonote::transaction tx2 = gen.create_and_add_sispop_name_system_tx_update(miner, lns::mapping_type::session, name, &temp_keys.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
@@ -2383,7 +2383,7 @@ bool sispop_name_system_update_mapping_multiple_owners::generate(std::vector<tes
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
 
       lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
-      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
+      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_ed25519_signature(hash, owner2_key);
 
       cryptonote::transaction tx2 = gen.create_and_add_sispop_name_system_tx_update(miner, lns::mapping_type::session, name, &temp_keys.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
