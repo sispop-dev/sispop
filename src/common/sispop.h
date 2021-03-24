@@ -29,9 +29,6 @@
 #ifndef SISPOP_H
 #define SISPOP_H
 
-#define SISPOP_HOUR(val) ((val) * SISPOP_MINUTES(60))
-#define SISPOP_MINUTES(val) val * 60
-
 #include <cstddef>
 #include <cstdint>
 #include <string>

@@ -3172,9 +3172,17 @@ namespace cryptonote
     std::ostream &operator<<(std::ostream &o, const version_printer &vp) { return o << vp.v[0] << '.' << vp.v[1] << '.' << vp.v[2]; }
 
     // Handles a ping.  Returns true if the ping was significant (i.e. first ping after startup, or
-    // after the ping had expired).
-    template <typename Response>
-    bool handle_ping(const std::array<int, 3> &cur_version, const std::array<int, 3> &required, const char *name, std::atomic<std::time_t> &update, time_t lifetime, Response &res)
+    // after the ping had expired).  `Success` is a callback that is invoked with a single boolean
+    // argument: true if this ping should trigger an immediate proof send (i.e. first ping after
+    // startup or after a ping expiry), false for an ordinary ping.
+    template <typename RPC, typename Success>
+    auto handle_ping(
+            std::array<uint16_t, 3> cur_version,
+            std::array<uint16_t, 3> required,
+            std::string_view name,
+            std::atomic<std::time_t>& update,
+            std::chrono::seconds lifetime,
+            Success success)
     {
       if (cur_version < required) {
         std::ostringstream status;
@@ -3185,7 +3193,8 @@ namespace cryptonote
         res.status = "OK";
         auto now = std::time(nullptr);
         auto old = update.exchange(now);
-        if (old + lifetime < now) { // Print loudly for the first ping after startup/expiry
+        bool significant = std::chrono::seconds{now - old} > lifetime; // Print loudly for the first ping after startup/expiry
+        if (significant)
           MGINFO_GREEN("Received ping from " << name << " " << version_printer{cur_version});
           return true;
         }
@@ -3201,15 +3210,15 @@ namespace cryptonote
                                                epee::json_rpc::error&,
                                                const connection_context*)
   {
-    if (handle_ping({req.version_major, req.version_minor, req.version_patch}, service_nodes::MIN_STORAGE_SERVER_VERSION,
-          "Storage Server", m_core.m_last_storage_server_ping, STORAGE_SERVER_PING_LIFETIME, res))
-    {
-      m_core.reset_proof_interval();
-
-      m_core.m_storage_lmq_port = req.storage_lmq_port;
-    }
-
-    return true;
+    m_core.ss_version = {req.version_major, req.version_minor, req.version_patch};
+    return handle_ping<STORAGE_SERVER_PING>(
+      {req.version_major, req.version_minor, req.version_patch}, service_nodes::MIN_STORAGE_SERVER_VERSION,
+      "Storage Server", m_core.m_last_storage_server_ping, m_core.get_net_config().UPTIME_PROOF_FREQUENCY,
+      [this, &req](bool significant) {
+        m_core.m_storage_lmq_port = req.storage_lmq_port;
+        if (significant)
+          m_core.reset_proof_interval();
+      });
   }
   //------------------------------------------------------------------------------------------------------------------------------
   bool core_rpc_server::on_sispopnet_ping(const COMMAND_RPC_SISPOPNET_PING::request& req,
@@ -3217,10 +3226,11 @@ namespace cryptonote
                                         epee::json_rpc::error&,
                                         const connection_context*)
   {
-    if (handle_ping(req.version, service_nodes::MIN_SISPOPNET_VERSION,
-          "Sispopnet", m_core.m_last_sispopnet_ping, SISPOPNET_PING_LIFETIME, res))
-      m_core.reset_proof_interval();
-    return true;
+    m_core.sispopnet_version = req.version;
+    return handle_ping<SISPOPNET_PING>(
+        req.version, service_nodes::MIN_SISPOPNET_VERSION,
+        "Sispopnet", m_core.m_last_sispopnet_ping, m_core.get_net_config().UPTIME_PROOF_FREQUENCY,
+        [this](bool significant) { if (significant) m_core.reset_proof_interval(); });
   }
   //------------------------------------------------------------------------------------------------------------------------------
   bool core_rpc_server::on_get_staking_requirement(const COMMAND_RPC_GET_STAKING_REQUIREMENT::request& req, COMMAND_RPC_GET_STAKING_REQUIREMENT::response& res, epee::json_rpc::error& error_resp, const connection_context *ctx)

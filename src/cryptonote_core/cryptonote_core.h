@@ -801,15 +801,11 @@ namespace cryptonote
       */
      network_type get_nettype() const { return m_nettype; };
 
-     /**
-      * @brief check whether an update is known to be available or not
-      *
-      * This does not actually trigger a check, but returns the result
-      * of the last check
-      *
-      * @return whether an update is known to be available or not
-      */
      bool is_update_available() const { return m_update_available; }
+     /**
+      * Returns the config settings for the network we are on.
+      */
+     constexpr const network_config& get_net_config() const { return get_config(m_nettype); }
 
      /**
       * @brief get whether transaction relay should be padded
@@ -1123,7 +1119,7 @@ namespace cryptonote
      epee::math_helper::periodic_task m_txpool_auto_relayer{2min, false}; //!< interval for checking re-relaying txpool transactions
      epee::math_helper::periodic_task m_check_updates_interval{12h}; //!< interval for checking for new versions
      epee::math_helper::periodic_task m_check_disk_space_interval{10min}; //!< interval for checking for disk space
-     epee::math_helper::periodic_task m_check_uptime_proof_interval{std::chrono::seconds{UPTIME_PROOF_TIMER_SECONDS}}; //!< interval for checking our own uptime proof
+     epee::math_helper::periodic_task m_check_uptime_proof_interval{get_net_config().UPTIME_PROOF_CHECK_INTERVAL};
      epee::math_helper::periodic_task m_block_rate_interval{90s, false}; //!< interval for checking block rate
      epee::math_helper::periodic_task m_blockchain_pruning_interval{5h}; //!< interval for incremental blockchain pruning
      epee::math_helper::periodic_task m_service_node_vote_relayer{2min, false};

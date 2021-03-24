@@ -534,7 +534,7 @@ namespace service_nodes
 
     /// Maps x25519 pubkeys to registration pubkeys + last block seen value (used for expiry)
     std::unordered_map<crypto::x25519_public_key, std::pair<crypto::public_key, time_t>> x25519_to_pub;
-    time_t x25519_map_last_pruned = 0;
+    std::chrono::system_clock::time_point x25519_map_last_pruned = std::chrono::system_clock::from_time_t(0);
     std::unordered_map<crypto::public_key, proof_info> proofs;
 
     struct quorums_by_height

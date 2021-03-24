@@ -2036,14 +2036,19 @@ namespace cryptonote
     return m_blockchain_storage.get_block_by_hash(h, blk, orphan);
   }
   //-----------------------------------------------------------------------------------------------
-  static bool check_external_ping(time_t last_ping, time_t lifetime, const char *what)
+  bool core::get_block_by_height(uint64_t height, block &blk) const
   {
-    const auto elapsed = std::time(nullptr) - last_ping;
+    return m_blockchain_storage.get_block_by_height(height, blk);
+  }
+  //-----------------------------------------------------------------------------------------------
+  static bool check_external_ping(time_t last_ping, std::chrono::seconds lifetime, std::string_view what)
+  {
+    const std::chrono::seconds elapsed{std::time(nullptr) - last_ping};
     if (elapsed > lifetime)
     {
       MWARNING("Have not heard from " << what << " " <<
               (!last_ping ? "since starting" :
-               "for more than " + tools::get_human_readable_timespan(std::chrono::seconds(elapsed))));
+               "since more than " + tools::get_human_readable_timespan(elapsed) + " ago"));
       return false;
     }
     return true;
@@ -2063,10 +2068,12 @@ namespace cryptonote
       m_check_uptime_proof_interval.do_call([this]() {
         // This timer is not perfectly precise and can leak seconds slightly, so send the uptime
         // proof if we are within half a tick of the target time.  (Essentially our target proof
-        // window becomes the first time this triggers in the 57.5-62.5 minute window).
+        // window becomes the first time this triggers in the 59.75-60.25 minute window).
         uint64_t next_proof_time = 0;
-        m_service_node_list.access_proof(m_service_node_keys->pub, [&](auto &proof) { next_proof_time = proof.timestamp; });
-        next_proof_time += UPTIME_PROOF_FREQUENCY_IN_SECONDS - UPTIME_PROOF_TIMER_SECONDS/2;
+        m_service_node_list.access_proof(m_service_keys.pub, [&](auto &proof) { next_proof_time = proof.timestamp; });
+        auto& netconf = get_net_config();
+        next_proof_time += std::chrono::seconds{
+            netconf.UPTIME_PROOF_FREQUENCY - netconf.UPTIME_PROOF_CHECK_INTERVAL/2}.count();
 
         if ((uint64_t) std::time(nullptr) < next_proof_time)
           return;
@@ -2090,14 +2097,14 @@ namespace cryptonote
         uint8_t hf_version = get_blockchain_storage().get_current_hard_fork_version();
         if (!check_external_ping(m_last_sispopnet_ping, SISPOPNET_PING_LIFETIME, "Sispopnet"))
         {
-          if (hf_version >= cryptonote::network_version_14_blink)
+          if (!check_external_ping(m_last_storage_server_ping, get_net_config().UPTIME_PROOF_FREQUENCY, "the storage server"))
           {
             MGINFO_RED(
                 "Failed to submit uptime proof: have not heard from sispopnet recently. Make sure that it "
                 "is running! It is required to run alongside the Sispop daemon");
             return;
           }
-          else
+          if (!check_external_ping(m_last_lokinet_ping, get_net_config().UPTIME_PROOF_FREQUENCY, "Sispopnet"))
           {
             MGINFO_RED(
                 "Have not heard from sispopnet recently. Make sure that it is running! "
@@ -2144,9 +2151,8 @@ namespace cryptonote
     m_block_rate_interval.do_call(boost::bind(&core::check_block_rate, this));
     m_sn_proof_cleanup_interval.do_call([&snl=m_service_node_list] { snl.cleanup_proofs(); return true; });
 
-    time_t const lifetime = time(nullptr) - get_start_time();
-    int proof_delay = m_nettype == FAKECHAIN ? 5 : UPTIME_PROOF_INITIAL_DELAY_SECONDS;
-    if (m_service_node_keys && lifetime > proof_delay) // Give us some time to connect to peers before sending uptimes
+    std::chrono::seconds lifetime{time(nullptr) - get_start_time()};
+    if (m_service_node && lifetime > get_net_config().UPTIME_PROOF_STARTUP_DELAY) // Give us some time to connect to peers before sending uptim
     {
       do_uptime_proof_call();
     }

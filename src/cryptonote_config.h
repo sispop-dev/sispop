@@ -58,20 +58,6 @@ static_assert(STAKING_PORTIONS % 12 == 0, "Use a multiple of twelve, so that it 
 
 #define BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW               11
 
-// For local testnet debug purposes allow shrinking the uptime proof frequency
-#ifndef UPTIME_PROOF_BASE_MINUTE
-#define UPTIME_PROOF_BASE_MINUTE                        60
-#endif
-
-#define UPTIME_PROOF_BUFFER_IN_SECONDS                  (5*60) // The acceptable window of time to accept a peer's uptime proof from its reported timestamp
-#define UPTIME_PROOF_INITIAL_DELAY_SECONDS              (2*UPTIME_PROOF_BASE_MINUTE) // Delay after startup before sending a proof (to allow connections to be established)
-#define UPTIME_PROOF_TIMER_SECONDS                      (5*UPTIME_PROOF_BASE_MINUTE) // How often we check whether we need to send an uptime proof
-#define UPTIME_PROOF_FREQUENCY_IN_SECONDS               (60*UPTIME_PROOF_BASE_MINUTE) // How often we resend uptime proofs normally (i.e. after we've seen an uptime proof reply from the network)
-#define UPTIME_PROOF_MAX_TIME_IN_SECONDS                (UPTIME_PROOF_FREQUENCY_IN_SECONDS * 2 + UPTIME_PROOF_BUFFER_IN_SECONDS) // How long until proofs of other network service nodes are considered expired
-
-#define STORAGE_SERVER_PING_LIFETIME                    UPTIME_PROOF_FREQUENCY_IN_SECONDS
-#define SISPOPNET_PING_LIFETIME                           UPTIME_PROOF_FREQUENCY_IN_SECONDS
-
 #define CRYPTONOTE_REWARD_BLOCKS_WINDOW                 100
 #define CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V1    20000 // NOTE(sispop): For testing suite, //size of block (bytes) after which reward for block calculated using block size - before first fork
 #define CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE_V5    300000 //size of block (bytes) after which reward for block calculated using block size - second change, from v5
@@ -204,6 +190,26 @@ namespace config
     "49HsfhWTvKZgc4qH1hwcEpM99Ng2TqmcxVHJoSkSQvV3N9iVJP1NT6gJTWRvuTWMNqeDgHNUcrpYVdnXW5Ep33W33YfwqRe",
   };
 
+  inline constexpr auto UPTIME_PROOF_TOLERANCE = 5min; // How much an uptime proof timestamp can deviate from our timestamp before we refuse it
+  inline constexpr auto UPTIME_PROOF_STARTUP_DELAY = 30s; // How long to wait after startup before broadcasting a proof
+  inline constexpr auto UPTIME_PROOF_CHECK_INTERVAL = 30s; // How frequently to check whether we need to broadcast a proof
+  inline constexpr auto UPTIME_PROOF_FREQUENCY = 1h; // How often to send proofs out to the network since the last proof we successfully sent.  (Approximately; this can be up to CHECK_INTERFACE/2 off in either direction).  The minimum accepted time between proofs is half of this.
+  inline constexpr auto UPTIME_PROOF_VALIDITY = 2h + 5min; // The maximum time that we consider an uptime proof to be valid (i.e. after this time since the last proof we consider the SN to be down)
+
+  // Hash domain separators
+  inline constexpr std::string_view HASH_KEY_BULLETPROOF_EXPONENT = "bulletproof"sv;
+  inline constexpr std::string_view HASH_KEY_RINGDB = "ringdsb\0"sv;
+  inline constexpr std::string_view HASH_KEY_SUBADDRESS = "SubAddr\0"sv;
+  inline constexpr unsigned char HASH_KEY_ENCRYPTED_PAYMENT_ID = 0x8d;
+  inline constexpr unsigned char HASH_KEY_WALLET = 0x8c;
+  inline constexpr unsigned char HASH_KEY_WALLET_CACHE = 0x8d;
+  inline constexpr unsigned char HASH_KEY_RPC_PAYMENT_NONCE = 0x58;
+  inline constexpr unsigned char HASH_KEY_MEMORY = 'k';
+  inline constexpr std::string_view HASH_KEY_MULTISIG = "Multisig\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"sv;
+  inline constexpr std::string_view HASH_KEY_CLSAG_ROUND = "CLSAG_round"sv;
+  inline constexpr std::string_view HASH_KEY_CLSAG_AGG_0 = "CLSAG_agg_0"sv;
+  inline constexpr std::string_view HASH_KEY_CLSAG_AGG_1 = "CLSAG_agg_1"sv;
+
   namespace testnet
   {
     uint64_t const CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 156;
@@ -226,6 +232,9 @@ namespace config
       "T6TzkJb5EiASaCkcH7idBEi1HSrpSQJE1Zq3aL65ojBMPZvqHNYPTL56i3dncGVNEYCG5QG5zrBmRiVwcg6b1cRM1SRNqbp44", // hardfork v10
     };
 
+    // Testnet uptime proofs are 6x faster than mainnet (devnet config also uses these)
+    inline constexpr auto UPTIME_PROOF_FREQUENCY = 10min;
+    inline constexpr auto UPTIME_PROOF_VALIDITY = 21min;
   }
 
   namespace stagenet
@@ -249,6 +258,15 @@ namespace config
       "59f7FCwYMiwMnFr8HwsnfJ2hK3DYB1tryhjsfmXqEBJojKyqKeNWoaDaZaauoZPiZHUYp2wJuy5s9H96qy4q9xUVCXXHmTU", // hardfork v7-9
       "59f7FCwYMiwMnFr8HwsnfJ2hK3DYB1tryhjsfmXqEBJojKyqKeNWoaDaZaauoZPiZHUYp2wJuy5s9H96qy4q9xUVCXXHmTU", // hardfork v10
     };
+  }
+
+  namespace fakechain {
+    // Fakechain uptime proofs are 60x faster than mainnet, because this really only runs on a
+    // hand-crafted, typically local temporary network.
+    inline constexpr auto UPTIME_PROOF_STARTUP_DELAY = 5s;
+    inline constexpr auto UPTIME_PROOF_CHECK_INTERVAL = 5s;
+    inline constexpr auto UPTIME_PROOF_FREQUENCY = 1min;
+    inline constexpr auto UPTIME_PROOF_VALIDITY = 2min + 5s;
   }
 }
 
@@ -291,7 +309,109 @@ namespace cryptonote
     std::string GENESIS_TX;
     uint32_t GENESIS_NONCE;
     uint64_t GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS;
-    std::string const *GOVERNANCE_WALLET_ADDRESS;
+    std::array<std::string_view, 2> GOVERNANCE_WALLET_ADDRESS;
+
+    std::chrono::seconds UPTIME_PROOF_TOLERANCE;
+    std::chrono::seconds UPTIME_PROOF_STARTUP_DELAY;
+    std::chrono::seconds UPTIME_PROOF_CHECK_INTERVAL;
+    std::chrono::seconds UPTIME_PROOF_FREQUENCY;
+    std::chrono::seconds UPTIME_PROOF_VALIDITY;
+
+    inline constexpr std::string_view governance_wallet_address(int hard_fork_version) const {
+      const auto wallet_switch =
+        (NETWORK_TYPE == MAINNET || NETWORK_TYPE == FAKECHAIN)
+        ? network_version_11_infinite_staking
+        : network_version_10_bulletproofs;
+      return GOVERNANCE_WALLET_ADDRESS[hard_fork_version >= wallet_switch ? 1 : 0];
+    }
+  };
+  inline constexpr network_config mainnet_config{
+    MAINNET,
+    ::config::HEIGHT_ESTIMATE_HEIGHT,
+    ::config::HEIGHT_ESTIMATE_TIMESTAMP,
+    ::config::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
+    ::config::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
+    ::config::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX,
+    ::config::P2P_DEFAULT_PORT,
+    ::config::RPC_DEFAULT_PORT,
+    ::config::ZMQ_RPC_DEFAULT_PORT,
+    ::config::QNET_DEFAULT_PORT,
+    ::config::NETWORK_ID,
+    ::config::GENESIS_TX,
+    ::config::GENESIS_NONCE,
+    ::config::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
+    ::config::GOVERNANCE_WALLET_ADDRESS,
+    config::UPTIME_PROOF_TOLERANCE,
+    config::UPTIME_PROOF_STARTUP_DELAY,
+    config::UPTIME_PROOF_CHECK_INTERVAL,
+    config::UPTIME_PROOF_FREQUENCY,
+    config::UPTIME_PROOF_VALIDITY,
+  };
+  inline constexpr network_config testnet_config{
+    TESTNET,
+    ::config::testnet::HEIGHT_ESTIMATE_HEIGHT,
+    ::config::testnet::HEIGHT_ESTIMATE_TIMESTAMP,
+    ::config::testnet::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
+    ::config::testnet::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
+    ::config::testnet::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX,
+    ::config::testnet::P2P_DEFAULT_PORT,
+    ::config::testnet::RPC_DEFAULT_PORT,
+    ::config::testnet::ZMQ_RPC_DEFAULT_PORT,
+    ::config::testnet::QNET_DEFAULT_PORT,
+    ::config::testnet::NETWORK_ID,
+    ::config::testnet::GENESIS_TX,
+    ::config::testnet::GENESIS_NONCE,
+    ::config::testnet::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
+    ::config::testnet::GOVERNANCE_WALLET_ADDRESS,
+    config::UPTIME_PROOF_TOLERANCE,
+    config::UPTIME_PROOF_STARTUP_DELAY,
+    config::UPTIME_PROOF_CHECK_INTERVAL,
+    config::testnet::UPTIME_PROOF_FREQUENCY,
+    config::testnet::UPTIME_PROOF_VALIDITY,
+  };
+  inline constexpr network_config devnet_config{
+    DEVNET,
+    ::config::devnet::HEIGHT_ESTIMATE_HEIGHT,
+    ::config::devnet::HEIGHT_ESTIMATE_TIMESTAMP,
+    ::config::devnet::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
+    ::config::devnet::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
+    ::config::devnet::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX,
+    ::config::devnet::P2P_DEFAULT_PORT,
+    ::config::devnet::RPC_DEFAULT_PORT,
+    ::config::devnet::ZMQ_RPC_DEFAULT_PORT,
+    ::config::devnet::QNET_DEFAULT_PORT,
+    ::config::devnet::NETWORK_ID,
+    ::config::devnet::GENESIS_TX,
+    ::config::devnet::GENESIS_NONCE,
+    ::config::devnet::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
+    ::config::devnet::GOVERNANCE_WALLET_ADDRESS,
+    config::UPTIME_PROOF_TOLERANCE,
+    config::UPTIME_PROOF_STARTUP_DELAY,
+    config::UPTIME_PROOF_CHECK_INTERVAL,
+    config::testnet::UPTIME_PROOF_FREQUENCY,
+    config::testnet::UPTIME_PROOF_VALIDITY,
+  };
+  inline constexpr network_config fakenet_config{
+    FAKECHAIN,
+    ::config::HEIGHT_ESTIMATE_HEIGHT,
+    ::config::HEIGHT_ESTIMATE_TIMESTAMP,
+    ::config::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
+    ::config::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
+    ::config::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX,
+    ::config::P2P_DEFAULT_PORT,
+    ::config::RPC_DEFAULT_PORT,
+    ::config::ZMQ_RPC_DEFAULT_PORT,
+    ::config::QNET_DEFAULT_PORT,
+    ::config::NETWORK_ID,
+    ::config::GENESIS_TX,
+    ::config::GENESIS_NONCE,
+    100, //::config::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
+    ::config::GOVERNANCE_WALLET_ADDRESS,
+    config::UPTIME_PROOF_TOLERANCE,
+    config::fakechain::UPTIME_PROOF_STARTUP_DELAY,
+    config::fakechain::UPTIME_PROOF_CHECK_INTERVAL,
+    config::fakechain::UPTIME_PROOF_FREQUENCY,
+    config::fakechain::UPTIME_PROOF_VALIDITY,
   };
   inline const config_t& get_config(network_type nettype, int hard_fork_version = 7)
   {
