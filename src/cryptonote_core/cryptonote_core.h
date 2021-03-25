@@ -1121,6 +1121,7 @@ namespace cryptonote
      epee::math_helper::periodic_task m_check_disk_space_interval{10min}; //!< interval for checking for disk space
      epee::math_helper::periodic_task m_check_uptime_proof_interval{get_net_config().UPTIME_PROOF_CHECK_INTERVAL};
      epee::math_helper::periodic_task m_block_rate_interval{90s, false}; //!< interval for checking block rate
+     epee::math_helper::periodic_task m_check_uptime_proof_interval{30s};
      epee::math_helper::periodic_task m_blockchain_pruning_interval{5h}; //!< interval for incremental blockchain pruning
      epee::math_helper::periodic_task m_service_node_vote_relayer{2min, false};
      epee::math_helper::periodic_task m_sn_proof_cleanup_interval{1h, false};

@@ -402,6 +402,7 @@ namespace cryptonote
       const bool stagenet = command_line::get_arg(vm, arg_stagenet_on);
       m_nettype = testnet ? TESTNET : stagenet ? STAGENET : MAINNET;
     }
+    m_check_uptime_proof_interval.interval(get_net_config().UPTIME_PROOF_CHECK_INTERVAL);
 
     m_config_folder = command_line::get_arg(vm, arg_data_dir);
 
