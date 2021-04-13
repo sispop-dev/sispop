@@ -2896,6 +2896,16 @@ namespace cryptonote
     error_resp.message = "Daemon queried is not a service node or did not launch with --service-node";
     return false;
   }
+
+  static time_t reachable_to_time_t(
+      std::chrono::steady_clock::time_point t,
+      std::chrono::system_clock::time_point system_now,
+      std::chrono::steady_clock::time_point steady_now) {
+    if (t == service_nodes::NEVER)
+      return 0;
+    return std::chrono::system_clock::to_time_t(system_now + (t - steady_now));
+  }
+
   //------------------------------------------------------------------------------------------------------------------------------
   template<typename response>
   void core_rpc_server::fill_sn_response_entry(response &entry, const service_nodes::service_node_pubkey_info &sn_info, uint64_t current_height) {
@@ -2913,24 +2923,34 @@ namespace cryptonote
     entry.earned_downtime_blocks        = service_nodes::quorum_cop::calculate_decommission_credit(info, current_height);
     entry.decommission_count            = info.decommission_count;
 
-    m_core.get_service_node_list().access_proof(sn_info.pubkey, [&entry](const auto &proof) {
-        entry.service_node_version     = proof.version;
-        entry.public_ip                = string_tools::get_ip_string_from_int32(proof.public_ip);
-        entry.storage_port             = proof.storage_port;
-        entry.storage_lmq_port         = proof.storage_lmq_port;
-        entry.storage_server_reachable = proof.storage_server_reachable;
-        entry.pubkey_ed25519           = proof.pubkey_ed25519 ? string_tools::pod_to_hex(proof.pubkey_ed25519) : "";
-        entry.pubkey_x25519            = proof.pubkey_x25519 ? string_tools::pod_to_hex(proof.pubkey_x25519) : "";
-        entry.quorumnet_port           = proof.quorumnet_port;
+    auto& netconf = m_core.get_net_config();
+    m_core.get_service_node_list().access_proof(sn_info.pubkey, [&entry, &netconf](const auto &proof) {
+        entry.service_node_version     = proof.proof->version;
+        entry.lokinet_version          = proof.proof->lokinet_version;
+        entry.storage_server_version   = proof.proof->storage_server_version;
+        entry.public_ip                = epee::string_tools::get_ip_string_from_int32(proof.proof->public_ip);
+        entry.storage_port             = proof.proof->storage_https_port;
+        entry.storage_lmq_port         = proof.proof->storage_omq_port;
+        entry.pubkey_ed25519           = proof.proof->pubkey_ed25519 ? tools::type_to_hex(proof.proof->pubkey_ed25519) : "";
+        entry.pubkey_x25519            = proof.pubkey_x25519 ? tools::type_to_hex(proof.pubkey_x25519) : "";
+        entry.quorumnet_port           = proof.proof->qnet_port;
 
         // NOTE: Service Node Testing
-        entry.last_uptime_proof                  = proof.timestamp;
-        entry.storage_server_reachable           = proof.storage_server_reachable;
-        entry.storage_server_reachable_timestamp = proof.storage_server_reachable_timestamp;
-        entry.version_major                      = proof.version[0];
-        entry.version_minor                      = proof.version[1];
-        entry.version_patch                      = proof.version[2];
-        entry.votes = std::vector<service_nodes::checkpoint_vote_record>(proof.votes.begin(), proof.votes.end());
+        entry.last_uptime_proof                  = proof.proof->timestamp;
+        auto system_now = std::chrono::system_clock::now();
+        auto steady_now = std::chrono::steady_clock::now();
+        entry.storage_server_reachable = !proof.ss_unreachable_for(netconf.UPTIME_PROOF_VALIDITY - netconf.UPTIME_PROOF_FREQUENCY, steady_now);
+        entry.storage_server_first_unreachable = reachable_to_time_t(proof.ss_first_unreachable, system_now, steady_now);
+        entry.storage_server_last_unreachable = reachable_to_time_t(proof.ss_last_unreachable, system_now, steady_now);
+        entry.storage_server_last_reachable = reachable_to_time_t(proof.ss_last_reachable, system_now, steady_now);
+
+        service_nodes::participation_history<service_nodes::participation_entry> const &checkpoint_participation = proof.checkpoint_participation;
+        service_nodes::participation_history<service_nodes::participation_entry> const &pulse_participation      = proof.pulse_participation;
+        service_nodes::participation_history<service_nodes::timestamp_participation_entry> const &timestamp_participation      = proof.timestamp_participation;
+        service_nodes::participation_history<service_nodes::timesync_entry> const &timesync_status      = proof.timesync_status;
+        entry.checkpoint_participation = std::vector<service_nodes::participation_entry>(checkpoint_participation.begin(), checkpoint_participation.end());
+        entry.timestamp_participation  = std::vector<service_nodes::timestamp_participation_entry>(timestamp_participation.begin(),      timestamp_participation.end());
+        entry.timesync_status          = std::vector<service_nodes::timesync_entry>(timesync_status.begin(),      timesync_status.end());
     });
 
     entry.contributors.reserve(info.contributors.size());

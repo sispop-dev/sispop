@@ -28,7 +28,7 @@
 
 #pragma once
 
-#include <boost/variant.hpp>
+#include <chrono>
 #include <mutex>
 #include <shared_mutex>
 #include <boost/thread/shared_mutex.hpp>
@@ -61,6 +61,66 @@ namespace service_nodes
     END_KV_SERIALIZE_MAP()
   };
 
+  struct timestamp_participation_entry
+  {
+    bool participated      = true;
+    bool pass() const {
+      return participated;
+    }; 
+
+    BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE(participated);
+    END_KV_SERIALIZE_MAP()
+  };
+
+  struct timesync_entry
+  {
+    bool in_sync       = true;
+    bool pass() const {
+      return in_sync;
+    }; 
+
+    BEGIN_KV_SERIALIZE_MAP()
+      KV_SERIALIZE(in_sync);
+    END_KV_SERIALIZE_MAP()
+  };
+
+  template <typename ValueType, size_t Count = QUORUM_VOTE_CHECK_COUNT>
+  struct participation_history {
+    std::array<ValueType, Count> array;
+    size_t write_index;
+
+    void reset() { write_index = 0; }
+
+    void add(ValueType &entry)
+    {
+      size_t real_write_index = write_index % array.size();
+      array[real_write_index] = entry;
+      write_index++;
+    }
+
+    bool check_participation(uint16_t threshold)
+    {
+      if (this->write_index >= Count)
+      {
+        int failed_counter = 0;
+        for (ValueType &entry : array)
+          if (!entry.pass()) failed_counter++;
+
+        if (failed_counter > threshold)
+          return false;
+      }
+      return true;
+    }
+
+    ValueType *begin()       { return array.data(); }
+    ValueType *end()         { return array.data() + std::min(array.size(), write_index); }
+    ValueType const *begin() const { return array.data(); }
+    ValueType const *end()   const { return array.data() + std::min(array.size(), write_index); }
+  };
+
+  inline constexpr auto NEVER = std::chrono::steady_clock::time_point::min();
+
   struct proof_info
   {
     uint64_t timestamp           = 0; // The actual time we last received an uptime proof (serialized)
@@ -69,9 +129,20 @@ namespace service_nodes
     uint8_t vote_index = 0;
     std::array<std::pair<uint32_t, uint64_t>, 2> public_ips = {}; // (not serialized)
 
-    bool storage_server_reachable               = true;
-    uint64_t storage_server_reachable_timestamp = 0;
-    proof_info() { votes.fill({}); }
+    // See set_storage_server_peer_reachable(...)
+    std::chrono::steady_clock::time_point ss_last_reachable = NEVER;
+    std::chrono::steady_clock::time_point ss_first_unreachable = NEVER;
+    std::chrono::steady_clock::time_point ss_last_unreachable = NEVER;
+    // Returns whether or not this SS is currently (probably) reachable:
+    // - true if the last test was a pass (regardless of how long ago)
+    // - false if the last test was a recent fail (i.e. less than SS_MAX_FAILURE_VALIDITY ago)
+    // - nullopt if the last test was a failure, but is considered stale.
+    // Both true and nullopt are considered a pass for service node testing.
+    std::optional<bool> ss_reachable(const std::chrono::steady_clock::time_point& now = std::chrono::steady_clock::now()) const;
+    // Returns true if this node's SS has recently failed reachability (see above) *and* has been
+    // unreachable for at least the given grace time (that is: there is both a recent failure and a
+    // failure more than `grace` ago, with no intervening reachability pass reports).
+    bool ss_unreachable_for(std::chrono::seconds threshold, const std::chrono::steady_clock::time_point& now = std::chrono::steady_clock::now()) const;
 
     // Unlike all of the above (except for timestamp), these values *do* get serialized
     uint32_t public_ip        = 0;
@@ -406,6 +477,41 @@ namespace service_nodes
     // Called every hour to remove proofs for expired SNs from memory and the database.
     void cleanup_proofs();
 
+    // Called via RPC from storage server to report a ping test result for a remote storage server.
+    //
+    // How this works (as of SS 2.0.9/oxen 9.x):
+    // - SS randomly picks probably-good nodes to test every 10s (with fuzz), and pings
+    //   known-failing nodes to re-test them.
+    // - SS re-tests nodes with a linear backoff: 10s+fuzz after the first failure, then 20s+fuzz,
+    //   then 30s+fuzz, etc. (up to ~5min retest intervals)
+    // - Whenever SS gets *any* ping result at all it notifies us via RPC (which lands here), and it
+    //   is (as of 9.x) our responsibility to decide when too many bad pings should be penalized.
+    //
+    // Our rules are as follows:
+    // - if we have received only failures for more than 1h5min *and* we have at least one failure
+    //   in the last 10min then we consider SS reachability to be failing.
+    // - otherwise we consider it good.  (Which means either it passed a reachability test at least
+    //   once in the last 1h5min *or* SS stopped pinging it, perhaps because it restarted).
+    //
+    // We do all this by tracking three values:
+    // - ss_last_reachable
+    // - ss_first_unreachable
+    // - ss_last_unreachable
+    //
+    // On a good ping, we set last_reachable to the current time and clear first_unreachable.  On a
+    // bad ping we set last_unreachable to the current time and, if first_unreachable is empty, set
+    // it to current time as well.
+    //
+    // This then lets us figure out:
+    // - current status can be good (first_unreachable == 0), passable (last_unreachable < 10min ago), or failing.
+    // - current *failing* status (current status == failing && first_unreachable more than 1h5min ago)
+    // - last test time (max(last_reachable, last_unreachable), "not yet" if this is 0)
+    // - last test result (last_reachable >= last_unreachable)
+    // - how long it has been unreachable (now - first_unreachable, if first_unreachable is set)
+    //
+    // (Also note that the actual times references here are for convenience, 10min is actually
+    // SS_MAX_FAILURE_VALIDITY, and 1h5min is actually UPTIME_PROOF_VALIDITY-UPTIME_PROOF_FREQUENCY
+    // (which is actually 11min on testnet rather than 1h5min)).
     bool set_storage_server_peer_reachable(crypto::public_key const &pubkey, bool value);
 
     struct quorum_for_serialization

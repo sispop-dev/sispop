@@ -88,10 +88,11 @@ namespace service_nodes
     decltype(std::declval<proof_info>().public_ips) ips{};
     decltype(std::declval<proof_info>().votes) votes;
     m_core.get_service_node_list().access_proof(pubkey, [&](const proof_info &proof) {
-        ss_reachable = proof.storage_server_reachable;
-        timestamp = std::max(proof.timestamp, proof.effective_timestamp);
-        ips = proof.public_ips;
-        votes = proof.votes;
+      ss_reachable             = !proof.ss_unreachable_for(netconf.UPTIME_PROOF_VALIDITY - netconf.UPTIME_PROOF_FREQUENCY);
+      timestamp                = std::max(proof.proof->timestamp, proof.effective_timestamp);
+      ips                      = proof.public_ips;
+      checkpoint_participation = proof.checkpoint_participation;
+
     });
     std::chrono::seconds time_since_last_uptime_proof{std::time(nullptr) - timestamp};
 

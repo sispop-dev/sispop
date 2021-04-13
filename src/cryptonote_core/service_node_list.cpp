@@ -2250,23 +2250,48 @@ namespace service_nodes
     info.vote_index                    = (info.vote_index + 1) % info.votes.size();
   }
 
-  bool service_node_list::set_storage_server_peer_reachable(crypto::public_key const &pubkey, bool value)
+  std::optional<bool> proof_info::ss_reachable(const std::chrono::steady_clock::time_point& now) const {
+    if (ss_last_reachable >= ss_last_unreachable)
+      return true;
+    if (ss_last_unreachable > now - config::SS_MAX_FAILURE_VALIDITY)
+      return false;
+    // Last result was a failure, but it was a while ago, so we don't know for sure that it isn't
+    // reachable now:
+    return std::nullopt;
+  }
+
+  bool proof_info::ss_unreachable_for(std::chrono::seconds threshold, const std::chrono::steady_clock::time_point& now) const {
+    if (auto maybe_reachable = ss_reachable(now); !maybe_reachable /*stale*/ || *maybe_reachable /*good*/)
+      return false;
+    if (ss_first_unreachable > now - threshold)
+      return false; // Unreachable, but for less than the grace time
+    return true;
+  }
+
+  bool service_node_list::set_storage_server_peer_reachable(crypto::public_key const &pubkey, bool reachable)
   {
-    std::lock_guard<boost::recursive_mutex> lock(m_sn_mutex);
+    // (See .h for overview description)
+
+    std::lock_guard lock(m_sn_mutex);
 
     if (!m_state.service_nodes_infos.count(pubkey)) {
-      LOG_PRINT_L2("No Service Node is known by this pubkey: " << pubkey);
+      MDEBUG("Dropping SS reachable report: " << pubkey << " is not a registered SN pubkey");
       return false;
     }
 
-    proof_info &info = proofs[pubkey];
-    if (info.storage_server_reachable != value)
-    {
-      info.storage_server_reachable = value;
-      LOG_PRINT_L2("Setting reachability status for node " << pubkey << " as: " << (value ? "true" : "false"));
+    MDEBUG("Received " << (reachable ? "reachable" : "UNREACHABLE") << " report for SN " << pubkey);
+
+    const auto now = std::chrono::steady_clock::now();
+    proof_info& info = proofs[pubkey];
+    if (reachable) {
+      info.ss_last_reachable = now;
+      info.ss_first_unreachable = NEVER;
+    } else {
+      info.ss_last_unreachable = now;
+      if (info.ss_first_unreachable == NEVER)
+        info.ss_first_unreachable = now;
     }
 
-    info.storage_server_reachable_timestamp = time(nullptr);
     return true;
   }
 

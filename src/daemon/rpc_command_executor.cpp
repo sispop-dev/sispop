@@ -2541,12 +2541,30 @@ static void append_printable_service_node_list_entry(cryptonote::network_type ne
              << indent3 << (entry.pubkey_ed25519.empty() ? "(not yet received)" : entry.pubkey_ed25519) << " (Ed25519)\n"
              << indent3 << (entry.pubkey_x25519.empty()  ? "(not yet received)" : entry.pubkey_x25519)  << " (X25519)\n";
 
-    stream << indent2 << "Storage Server Reachable: " << (entry.storage_server_reachable ? "Yes" : "No") << " (";
-    if (entry.storage_server_reachable_timestamp == 0)
-      stream << "Awaiting first test";
-    else
-      stream << "Last checked: " << get_human_time_ago(entry.storage_server_reachable_timestamp, now);
-    stream << ")\n";
+    //
+    // NOTE: Storage Server Test
+    //
+    stream << indent2 << "Storage Server Reachable: ";
+    if (entry.storage_server_first_unreachable == 0) {
+      if (entry.storage_server_last_reachable == 0)
+        stream << "Not yet tested";
+      else {
+        stream << "Yes (last tested " << get_human_time_ago(entry.storage_server_last_reachable, now);
+        if (entry.storage_server_last_unreachable)
+          stream << "; last failure " << get_human_time_ago(entry.storage_server_last_unreachable, now);
+        stream << ")";
+      }
+    } else {
+      stream << "NO";
+      if (!entry.storage_server_reachable)
+        stream << " - FAILING!";
+      stream << " (last tested " << get_human_time_ago(entry.storage_server_last_unreachable, now)
+        << "; failing since " << get_human_time_ago(entry.storage_server_first_unreachable, now);
+      if (entry.storage_server_last_reachable)
+        stream << "; last good " << get_human_time_ago(entry.storage_server_last_reachable, now);
+      stream << ")";
+    }
+    stream << "\n";
 
     stream << indent2 <<  "Checkpoint Participation [Height: Voted]: ";
     // Checkpoints heights are a rotating queue, so find the smallest one and print starting from there
