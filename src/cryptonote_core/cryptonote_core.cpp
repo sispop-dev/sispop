@@ -252,10 +252,6 @@ namespace cryptonote
   const command_line::arg_descriptor<uint64_t> arg_recalculate_difficulty = {
     "recalculate-difficulty",
     "Recalculate per-block difficulty starting from the height specified",
-    // This is now enabled by default because the network broke at 526483 because of divergent
-    // difficulty values (and the chain that kept going violated the correct difficulty, and got
-    // checkpointed multiple times because enough of the network followed it).
-    //
     // TODO: We can disable this post-pulse (since diff won't matter anymore), but until then there
     // is a subtle bug somewhere in difficulty calculations that can cause divergence; this seems
     // important enough to just rescan at every startup (and only takes a few seconds).
