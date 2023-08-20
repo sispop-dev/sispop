@@ -9,13 +9,13 @@ constexpr uint64_t EMISSION_SUPPLY_DIVISOR    = 10;
 constexpr uint64_t EMISSION_DIVISOR           = 2000000;
 
 // Transition (HF15) money supply parameters
-constexpr uint64_t BLOCK_REWARD_HF15      = 25 * COIN;
+constexpr uint64_t BLOCK_REWARD_HF15      = 2500 * COIN;
 constexpr uint64_t MINER_REWARD_HF15      = BLOCK_REWARD_HF15 * 24 / 100;
 constexpr uint64_t SN_REWARD_HF15         = BLOCK_REWARD_HF15 * 66 / 100;
 constexpr uint64_t FOUNDATION_REWARD_HF15 = BLOCK_REWARD_HF15 * 10 / 100;
 
 // New (HF16+) money supply parameters (tentative - HF16 not yet scheduled)
-constexpr uint64_t BLOCK_REWARD_HF16      = 21 * COIN + 1 /* TODO - see below */;
+constexpr uint64_t BLOCK_REWARD_HF16      = 2100 * COIN + 1 /* TODO - see below */;
 constexpr uint64_t SN_REWARD_HF16         = BLOCK_REWARD_HF16 * 90 / 100;
 constexpr uint64_t FOUNDATION_REWARD_HF16 = BLOCK_REWARD_HF16 * 10 / 100;
 
@@ -81,12 +81,12 @@ constexpr uint64_t burn_needed(uint8_t /*hf_version*/, mapping_type type)
     case mapping_type::session: /* FALLTHRU */
     case mapping_type::wallet: /* FALLTHRU */
     default:
-      result = 20 * COIN;
+      result = 2000 * COIN;
       break;
 
-    case mapping_type::lokinet_2years: result = 40 * COIN; break;
-    case mapping_type::lokinet_5years: result = 80 * COIN; break;
-    case mapping_type::lokinet_10years: result = 120 * COIN; break;
+    case mapping_type::lokinet_2years: result = 4000 * COIN; break;
+    case mapping_type::lokinet_5years: result = 8000 * COIN; break;
+    case mapping_type::lokinet_10years: result = 12000 * COIN; break;
   }
   return result;
 }

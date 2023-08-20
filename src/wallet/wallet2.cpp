@@ -71,7 +71,6 @@ using namespace epee;
 #include "memwipe.h"
 #include "common/base58.h"
 #include "common/combinator.h"
-#include "common/dns_utils.h"
 #include "common/notify.h"
 #include "common/perf_timer.h"
 #include "ringct/rctSigs.h"

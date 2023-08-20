@@ -213,7 +213,6 @@ if(NOT MANUAL_SUBMODULES)
     
     message(STATUS "Checking submodules")
     check_submodule(external/miniupnp)
-    check_submodule(external/unbound)
     check_submodule(external/rapidjson)
     check_submodule(external/trezor-common)
     check_submodule(external/randomx)
@@ -222,7 +221,7 @@ if(NOT MANUAL_SUBMODULES)
 endif()
 
 # set this to 0 if per-block checkpoint needs to be disabled
-option(PER_BLOCK_CHECKPOINT "Enables per-block checkpointing" 0)
+option(PER_BLOCK_CHECKPOINT "Enables per-block checkpointing" ON)
 
 list(INSERT CMAKE_MODULE_PATH 0
   "${CMAKE_SOURCE_DIR}/cmake")

@@ -273,6 +273,10 @@ namespace tools
       std::move(rpc_config->ssl_options)
     );
   }
+//------------------------------------------------------------------------------------------------------------------------------
+void wallet_rpc_server::require_open() {
+
+}
   //------------------------------------------------------------------------------------------------------------------------------
   void wallet_rpc_server::check_background_mining()
   {
@@ -652,20 +656,6 @@ namespace tools
       cryptonote::address_parse_info info;
       cryptonote::tx_destination_entry de;
       er.message = "";
-      if(!get_account_address_from_str_or_url(info, m_wallet->nettype(), it->address,
-        [&er](const std::string &url, const std::vector<std::string> &addresses, bool dnssec_valid)->std::string {
-          if (!dnssec_valid)
-          {
-            er.message = std::string("Invalid DNSSEC for ") + url;
-            return {};
-          }
-          if (addresses.empty())
-          {
-            er.message = std::string("No Loki address found at ") + url;
-            return {};
-          }
-          return addresses[0];
-        }))
       {
         er.code = WALLET_RPC_ERROR_CODE_WRONG_ADDRESS;
         if (er.message.empty())
@@ -1902,20 +1892,6 @@ namespace tools
 
     cryptonote::address_parse_info info;
     er.message = "";
-    if(!get_account_address_from_str_or_url(info, m_wallet->nettype(), req.address,
-      [&er](const std::string &url, const std::vector<std::string> &addresses, bool dnssec_valid)->std::string {
-        if (!dnssec_valid)
-        {
-          er.message = std::string("Invalid DNSSEC for ") + url;
-          return {};
-        }
-        if (addresses.empty())
-        {
-          er.message = std::string("No Loki address found at ") + url;
-          return {};
-        }
-        return addresses[0];
-      }))
     {
       er.code = WALLET_RPC_ERROR_CODE_WRONG_ADDRESS;
       return false;
@@ -2692,20 +2668,6 @@ namespace tools
     cryptonote::address_parse_info info;
     crypto::hash payment_id = crypto::null_hash;
     er.message = "";
-    if(!get_account_address_from_str_or_url(info, m_wallet->nettype(), req.address,
-      [&er](const std::string &url, const std::vector<std::string> &addresses, bool dnssec_valid)->std::string {
-        if (!dnssec_valid)
-        {
-          er.message = std::string("Invalid DNSSEC for ") + url;
-          return {};
-        }
-        if (addresses.empty())
-        {
-          er.message = std::string("No Loki address found at ") + url;
-          return {};
-        }
-        return addresses[0];
-      }))
     {
       er.code = WALLET_RPC_ERROR_CODE_WRONG_ADDRESS;
       if (er.message.empty())
@@ -3996,48 +3958,21 @@ namespace tools
       { cryptonote::TESTNET, "testnet" },
       { cryptonote::STAGENET, "stagenet" },
     };
-    if (!req.any_net_type && !m_wallet) return not_open(er);
-    for (const auto &net_type: net_types)
-    {
-      if (!req.any_net_type && (!m_wallet || net_type.type != m_wallet->nettype()))
-        continue;
-      if (req.allow_openalias)
-      {
-        std::string address;
-        res.valid = get_account_address_from_str_or_url(info, net_type.type, req.address,
-          [&er, &address](const std::string &url, const std::vector<std::string> &addresses, bool dnssec_valid)->std::string {
-            if (!dnssec_valid)
-            {
-              er.message = std::string("Invalid DNSSEC for ") + url;
-              return {};
-            }
-            if (addresses.empty())
-            {
-              er.message = std::string("No Loki address found at ") + url;
-              return {};
-            }
-            address = addresses[0];
-            return address;
-          });
-        if (res.valid)
-          res.openalias_address = address;
-      }
-      else
-      {
-        res.valid = cryptonote::get_account_address_from_str(info, net_type.type, req.address);
-      }
-      if (res.valid)
-      {
-        res.integrated = info.has_payment_id;
-        res.subaddress = info.is_subaddress;
-        res.nettype = net_type.stype;
-        return true;
-      }
+    if (!req.any_net_type && !m_wallet)
+        require_open();
+
+    for (const auto& [type, type_str] : net_types) {
+        if (!req.any_net_type && (!m_wallet || type != m_wallet->nettype()))
+            continue;
+            res.valid = cryptonote::get_account_address_from_str(info, type, req.address);
+        
+        if (res.valid) {
+            res.integrated = info.has_payment_id;
+            res.subaddress = info.is_subaddress;
+            res.nettype = type_str;
+        }
     }
 
-    er.code = WALLET_RPC_ERROR_CODE_WRONG_ADDRESS;
-    er.message = std::string("Invalid address");
-    return false;
   }
   //------------------------------------------------------------------------------------------------------------------------------
   bool wallet_rpc_server::on_set_daemon(const wallet_rpc::COMMAND_RPC_SET_DAEMON::request& req, wallet_rpc::COMMAND_RPC_SET_DAEMON::response& res, epee::json_rpc::error& er, const connection_context *ctx)

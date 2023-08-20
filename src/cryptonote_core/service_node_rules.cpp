@@ -15,78 +15,21 @@ uint64_t get_staking_requirement(cryptonote::network_type m_nettype, uint64_t he
   if (m_nettype == cryptonote::TESTNET || m_nettype == cryptonote::FAKECHAIN)
       return COIN * 100;
 
-  if (hf_version >= cryptonote::network_version_13_enforce_checkpoints)
-  {
-    constexpr int64_t heights[] = {
-        385824,
-        429024,
-        472224,
-        515424,
-        558624,
-        601824,
-        645024,
-        688224,
-        731424,
-        774624,
-        817824,
-        861024,
-        1000000,
-    };
 
-    constexpr int64_t lsr[] = {
-        20458380815527,
-        19332319724305,
-        18438564443912,
-        17729190407764,
-        17166159862153,
-        16719282221956,
-        16364595203882,
-        16083079931076,
-        15859641110978,
-        15682297601941,
-        15541539965538,
-        15429820555489,
-        15000000000000,
-    };
-
-    assert(height >= heights[0]);
-    constexpr uint64_t LAST_HEIGHT      = heights[loki::array_count(heights) - 1];
-    constexpr uint64_t LAST_REQUIREMENT = lsr    [loki::array_count(lsr) - 1];
-    if (height >= LAST_HEIGHT)
-        return LAST_REQUIREMENT;
-
-    size_t i = 0;
-    for (size_t index = 1; index < loki::array_count(heights); index++)
-    {
-      if (heights[index] > static_cast<int64_t>(height))
-      {
-        i = (index - 1);
-        break;
-      }
-    }
-
-    int64_t H      = height;
-    int64_t result = lsr[i] + (H - heights[i]) * ((lsr[i + 1] - lsr[i]) / (heights[i + 1] - heights[i]));
-    return static_cast<uint64_t>(result);
-  }
-
-  uint64_t hardfork_height = m_nettype == cryptonote::MAINNET ? 101250 : 96210 /* stagenet */;
+  uint64_t hardfork_height = m_nettype == cryptonote::MAINNET ? 105 : 96210 /* stagenet */;
   if (height < hardfork_height) height = hardfork_height;
 
   uint64_t height_adjusted = height - hardfork_height;
   uint64_t base = 0, variable = 0;
   std::fesetround(FE_TONEAREST);
-  if (hf_version >= cryptonote::network_version_11_infinite_staking)
-  {
-    base     = 15000 * COIN;
-    variable = (25007.0 * COIN) / loki::exp2(height_adjusted/129600.0);
-  }
-  else
-  {
-    base      = 10000 * COIN;
-    variable  = (35000.0 * COIN) / loki::exp2(height_adjusted/129600.0);
-  }
 
+   if (height >= 133) {
+    base     = 75000 * COIN;
+    variable = (75000 * COIN) / loki::exp2(height_adjusted/129600.0);
+    } else {
+    base     = 1500 * COIN;
+    variable = (1500 * COIN) / loki::exp2(height_adjusted/129600.0);
+    }
   uint64_t result = base + variable;
   return result;
 }

@@ -33,7 +33,6 @@
 #include "wallet_manager.h"
 #include "wallet.h"
 #include "common_defines.h"
-#include "common/dns_utils.h"
 #include "common/util.h"
 #include "common/updates.h"
 #include "version.h"
@@ -334,14 +333,6 @@ bool WalletManagerImpl::stopMining()
     if (!epee::net_utils::invoke_http_json("/stop_mining", mreq, mres, m_http_client))
       return false;
     return mres.status == CORE_RPC_STATUS_OK;
-}
-
-std::string WalletManagerImpl::resolveOpenAlias(const std::string &address, bool &dnssec_valid) const
-{
-    std::vector<std::string> addresses = tools::dns_utils::addresses_from_url(address, dnssec_valid);
-    if (addresses.empty())
-        return "";
-    return addresses.front();
 }
 
 std::tuple<bool, std::string, std::string, std::string, std::string> WalletManagerBase::checkUpdates(const std::string &software, std::string subdir)

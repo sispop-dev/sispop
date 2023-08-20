@@ -45,10 +45,10 @@
 #include <tuple>
 #include <vector>
 
+#include "cryptonote_config.h"
 #include "version.h"
 #include "string_tools.h"
 #include "common/util.h"
-#include "common/dns_utils.h"
 #include "common/pruning.h"
 #include "net/error.h"
 #include "net/net_helper.h"
@@ -633,106 +633,14 @@ namespace nodetool
     else
     {
       memcpy(&m_network_id, &::config::NETWORK_ID, 16);
-      if (m_exclusive_peers.empty() && !m_offline)
-      {
-      // for each hostname in the seed nodes list, attempt to DNS resolve and
-      // add the result addresses as seed nodes
-      // TODO: at some point add IPv6 support, but that won't be relevant
-      // for some time yet.
-
-      std::vector<std::vector<std::string>> dns_results;
-      dns_results.resize(m_seed_nodes_list.size());
-
-      std::list<boost::thread> dns_threads;
-      uint64_t result_index = 0;
-      for (const std::string& addr_str : m_seed_nodes_list)
-      {
-        boost::thread th = boost::thread([=, &dns_results, &addr_str]
-        {
-          MDEBUG("dns_threads[" << result_index << "] created for: " << addr_str);
-          // TODO: care about dnssec avail/valid
-          bool avail, valid;
-          std::vector<std::string> addr_list;
-
-          try
-          {
-            addr_list = tools::DNSResolver::instance().get_ipv4(addr_str, avail, valid);
-            MDEBUG("dns_threads[" << result_index << "] DNS resolve done");
-            boost::this_thread::interruption_point();
-          }
-          catch(const boost::thread_interrupted&)
-          {
-            // thread interruption request
-            // even if we now have results, finish thread without setting
-            // result variables, which are now out of scope in main thread
-            MWARNING("dns_threads[" << result_index << "] interrupted");
-            return;
-          }
-
-          MINFO("dns_threads[" << result_index << "] addr_str: " << addr_str << "  number of results: " << addr_list.size());
-          dns_results[result_index] = addr_list;
-        });
-
-        dns_threads.push_back(std::move(th));
-        ++result_index;
-      }
-
-      MDEBUG("dns_threads created, now waiting for completion or timeout of " << CRYPTONOTE_DNS_TIMEOUT_MS << "ms");
-      boost::chrono::system_clock::time_point deadline = boost::chrono::system_clock::now() + boost::chrono::milliseconds(CRYPTONOTE_DNS_TIMEOUT_MS);
-      uint64_t i = 0;
-      for (boost::thread& th : dns_threads)
-      {
-        if (! th.try_join_until(deadline))
-        {
-          MWARNING("dns_threads[" << i << "] timed out, sending interrupt");
-          th.interrupt();
-        }
-        ++i;
-      }
-
-      i = 0;
-      for (const auto& result : dns_results)
-      {
-        MDEBUG("DNS lookup for " << m_seed_nodes_list[i] << ": " << result.size() << " results");
-        // if no results for node, thread's lookup likely timed out
-        if (result.size())
-        {
-          for (const auto& addr_string : result)
-            full_addrs.insert(addr_string + ":" + std::to_string(cryptonote::get_config(m_nettype).P2P_DEFAULT_PORT));
-        }
-        ++i;
-      }
-
-      // append the fallback nodes if we have too few seed nodes to start with
-      if (full_addrs.size() < MIN_WANTED_SEED_NODES)
-      {
-        if (full_addrs.empty())
-          MINFO("DNS seed node lookup either timed out or failed, falling back to defaults");
-        else
-          MINFO("Not enough DNS seed nodes found, using fallback defaults too");
-
-        for (const auto &peer: get_seed_nodes(cryptonote::MAINNET))
-          full_addrs.insert(peer);
-        m_fallback_seed_nodes_added = true;
-      }
-    }
     }
 
-    for (const auto& full_addr : full_addrs)
-    {
-      MDEBUG("Seed node: " << full_addr);
-      append_net_address(m_seed_nodes, full_addr, cryptonote::get_config(m_nettype).P2P_DEFAULT_PORT);
-    }
-    MDEBUG("Number of seed nodes: " << m_seed_nodes.size());
-
+//    m_config_folder = fs::u8path(command_line::get_arg(vm, cryptonote::arg_data_dir));
     m_config_folder = command_line::get_arg(vm, cryptonote::arg_data_dir);
     network_zone& public_zone = m_network_zones.at(epee::net_utils::zone::public_);
 
-    if ((m_nettype == cryptonote::MAINNET && public_zone.m_port != std::to_string(::config::P2P_DEFAULT_PORT))
-        || (m_nettype == cryptonote::TESTNET && public_zone.m_port != std::to_string(::config::testnet::P2P_DEFAULT_PORT))
-        || (m_nettype == cryptonote::STAGENET && public_zone.m_port != std::to_string(::config::stagenet::P2P_DEFAULT_PORT))) {
-      m_config_folder = m_config_folder + "/" + public_zone.m_port;
-    }
+    if (public_zone.m_port != std::to_string(cryptonote::get_config(m_nettype).P2P_DEFAULT_PORT))
+      //m_config_folder /= public_zone.m_port;
 
     res = init_config();
     CHECK_AND_ASSERT_MES(res, false, "Failed to init config.");
@@ -817,16 +725,6 @@ namespace nodetool
     }
     if(m_external_port)
       MDEBUG("External port defined as " << m_external_port);
-
-    // add UPnP port mapping
-    if(m_igd == igd)
-    {
-      add_upnp_port_mapping_v4(m_listening_port);
-      if (m_use_ipv6)
-      {
-        add_upnp_port_mapping_v6(m_listening_port_ipv6);
-      }
-    }
 
     return res;
   }
@@ -921,9 +819,6 @@ namespace nodetool
     {
       for(auto& zone : m_network_zones)
         zone.second.m_net_server.deinit_server();
-      // remove UPnP port mapping
-      if(m_igd == igd)
-        delete_upnp_port_mapping(m_listening_port);
     }
     return store_config();
   }
@@ -1765,17 +1660,9 @@ namespace nodetool
       }
       else
       {
-        if (m_igd == delayed_igd)
-        {
-          MWARNING("No incoming connections, trying to setup IGD");
-          add_upnp_port_mapping(m_listening_port);
-          m_igd = igd;
-        }
-        else
-        {
-          const el::Level level = el::Level::Warning;
-          MCLOG_RED(level, "global", "No incoming connections - check firewalls/routers allow port " << get_this_peer_port());
-        }
+        const el::Level level = el::Level::Warning;
+        MCLOG_RED(level, "global", "No incoming connections - check firewalls/routers allow port " << get_this_peer_port());
+
       }
     }
     return true;

@@ -42,7 +42,6 @@ using namespace epee;
 #include "common/base58.h"
 #include "crypto/hash.h"
 #include "int-util.h"
-#include "common/dns_utils.h"
 #include "common/loki.h"
 #include <cfenv>
 
@@ -101,7 +100,6 @@ namespace cryptonote {
 
   bool get_base_block_reward(size_t median_weight, size_t current_block_weight, uint64_t already_generated_coins, uint64_t &reward, uint64_t &reward_unpenalized, uint8_t version, uint64_t height) {
 
-    //premine reward
     if (already_generated_coins == 0)
     {
       reward = 17'592'186'044'415 * COIN;
@@ -316,7 +314,7 @@ namespace cryptonote {
     return true;
   }
   //--------------------------------------------------------------------------------
-  bool get_account_address_from_str_or_url(
+  /*bool get_account_address_from_str_or_url(
       address_parse_info& info
     , network_type nettype
     , const std::string& str_or_url
@@ -326,11 +324,10 @@ namespace cryptonote {
     if (get_account_address_from_str(info, nettype, str_or_url))
       return true;
     bool dnssec_valid;
-    std::string address_str = tools::dns_utils::get_account_address_as_str_from_url(str_or_url, dnssec_valid, dns_confirm);
-    return !address_str.empty() &&
-      get_account_address_from_str(info, nettype, address_str);
-  }
-  //--------------------------------------------------------------------------------
+    std::string address_str = tools::get_account_address_as_str_from_url(str_or_url, dnssec_valid, dns_confirm);
+    return   get_account_address_from_str(info, nettype, address_str);
+  }*/
+//-----------------------------------------------------------------------------------------------------
   bool operator ==(const cryptonote::transaction& a, const cryptonote::transaction& b) {
     return cryptonote::get_transaction_hash(a) == cryptonote::get_transaction_hash(b);
   }

@@ -31,7 +31,6 @@ add_library(common
   base32z.cpp
   base58.cpp
   command_line.cpp
-  dns_utils.cpp
   download.cpp
   error.cpp
   expect.cpp
@@ -70,7 +69,6 @@ target_link_libraries(common
     cncrypto
     lokimq::lokimq
   PRIVATE
-    libunbound
     Boost::regex
     OpenSSL::SSL
     OpenSSL::Crypto

@@ -282,6 +282,7 @@ namespace tools
 
       void check_background_mining();
 
+      void require_open();
       wallet2 *m_wallet;
       std::string m_wallet_dir;
       tools::private_file rpc_login_file;
