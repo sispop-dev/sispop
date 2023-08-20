@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c)      2018, The Sispop Project
+// Copyright (c)      2018-2023, The Oxen Project
 // 
 // All rights reserved.
 //
