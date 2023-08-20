@@ -11,3 +11,6 @@
 [submodule "external/randomx"]
 	path = external/randomx
 	url = https://github.com/sispopplatform/RandomX
+[submodule "external/sispop-mq"]
+	path = external/sispop-mq
+	url = https://github.com/sispopplatform/sispop-mq-real
