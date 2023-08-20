@@ -166,7 +166,7 @@ namespace cryptonote
     state_change,
     key_image_unlock,
     stake,
-    loki_name_system,
+    sispop_name_system,
     _count
   };
 
@@ -189,7 +189,7 @@ namespace cryptonote
     txversion version;
     txtype type;
 
-    bool is_transfer() const { return type == txtype::standard || type == txtype::stake || type == txtype::loki_name_system; }
+    bool is_transfer() const { return type == txtype::standard || type == txtype::stake || type == txtype::sispop_name_system; }
 
     // not used after version 2, but remains for compatibility
     uint64_t unlock_time;  //number of block (or time), used as a limitation like: spend this tx not early then block/time
@@ -556,7 +556,7 @@ namespace cryptonote
   inline txtype transaction_prefix::get_max_type_for_hf(uint8_t hf_version)
   {
     txtype result = txtype::standard;
-    if      (hf_version >= network_version_15_lns)              result = txtype::loki_name_system;
+    if      (hf_version >= network_version_15_lns)              result = txtype::sispop_name_system;
     else if (hf_version >= network_version_14_blink)            result = txtype::stake;
     else if (hf_version >= network_version_11_infinite_staking) result = txtype::key_image_unlock;
     else if (hf_version >= network_version_9_service_nodes)     result = txtype::state_change;
@@ -584,7 +584,7 @@ namespace cryptonote
       case txtype::state_change:            return "state_change";
       case txtype::key_image_unlock:        return "key_image_unlock";
       case txtype::stake:                   return "stake";
-      case txtype::loki_name_system:        return "loki_name_system";
+      case txtype::sispop_name_system:        return "sispop_name_system";
       default: assert(false);               return "xx_unhandled_type";
     }
   }

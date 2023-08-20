@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c)      2018, The Loki Project
+// Copyright (c)      2018, The Sispop Project
 //
 // All rights reserved.
 //
@@ -30,7 +30,7 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #ifdef _WIN32
- #define __STDC_FORMAT_MACROS // NOTE(loki): Explicitly define the PRIu64 macro on Mingw
+ #define __STDC_FORMAT_MACROS // NOTE(sispop): Explicitly define the PRIu64 macro on Mingw
 #endif
 
 #include "wallet.h"
@@ -58,8 +58,8 @@
 using namespace std;
 using namespace cryptonote;
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "WalletAPI"
+#undef SISPOP_DEFAULT_LOG_CATEGORY
+#define SISPOP_DEFAULT_LOG_CATEGORY "WalletAPI"
 
 namespace Monero {
 
@@ -75,7 +75,7 @@ namespace {
     std::string get_default_ringdb_path(cryptonote::network_type nettype)
     {
       boost::filesystem::path dir = tools::get_default_data_dir();
-      // remove .loki, replace with .shared-ringdb
+      // remove .sispop, replace with .shared-ringdb
       dir = dir.remove_filename();
       dir /= ".shared-ringdb";
       if (nettype == cryptonote::TESTNET)
@@ -411,19 +411,19 @@ void Wallet::init(const char *argv0, const char *default_log_base_name, const st
 }
 
 void Wallet::debug(const std::string &category, const std::string &str) {
-    MCDEBUG(category.empty() ? LOKI_DEFAULT_LOG_CATEGORY : category.c_str(), str);
+    MCDEBUG(category.empty() ? SISPOP_DEFAULT_LOG_CATEGORY : category.c_str(), str);
 }
 
 void Wallet::info(const std::string &category, const std::string &str) {
-    MCINFO(category.empty() ? LOKI_DEFAULT_LOG_CATEGORY : category.c_str(), str);
+    MCINFO(category.empty() ? SISPOP_DEFAULT_LOG_CATEGORY : category.c_str(), str);
 }
 
 void Wallet::warning(const std::string &category, const std::string &str) {
-    MCWARNING(category.empty() ? LOKI_DEFAULT_LOG_CATEGORY : category.c_str(), str);
+    MCWARNING(category.empty() ? SISPOP_DEFAULT_LOG_CATEGORY : category.c_str(), str);
 }
 
 void Wallet::error(const std::string &category, const std::string &str) {
-    MCERROR(category.empty() ? LOKI_DEFAULT_LOG_CATEGORY : category.c_str(), str);
+    MCERROR(category.empty() ? SISPOP_DEFAULT_LOG_CATEGORY : category.c_str(), str);
 }
 
 ///////////////////////// WalletImpl implementation ////////////////////////
@@ -1513,7 +1513,7 @@ PendingTransaction *WalletImpl::createTransaction(const string &dst_addr, const 
                   setStatusError(tools::ERR_MSG_NETWORK_VERSION_QUERY_FAILED);
                   return transaction;
                 }
-                loki_construct_tx_params tx_params = tools::wallet2::construct_params(*hf_version, txtype::standard, priority);
+                sispop_construct_tx_params tx_params = tools::wallet2::construct_params(*hf_version, txtype::standard, priority);
                 transaction->m_pending_tx = m_wallet->create_transactions_2(
                         dsts, CRYPTONOTE_DEFAULT_TX_MIXIN, 0 /* unlock_time */,
                         priority, extra, subaddr_account, subaddr_indices, tx_params);

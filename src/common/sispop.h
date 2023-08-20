@@ -1,4 +1,4 @@
-// Copyright (c) 2018, The Loki Project
+// Copyright (c) 2018, The Sispop Project
 // 
 // All rights reserved.
 // 
@@ -26,11 +26,11 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef LOKI_H
-#define LOKI_H
+#ifndef SISPOP_H
+#define SISPOP_H
 
-#define LOKI_HOUR(val) ((val) * LOKI_MINUTES(60))
-#define LOKI_MINUTES(val) val * 60
+#define SISPOP_HOUR(val) ((val) * SISPOP_MINUTES(60))
+#define SISPOP_MINUTES(val) val * 60
 
 #include <cstddef>
 #include <cstdint>
@@ -38,8 +38,8 @@
 #include <iterator>
 #include <cassert>
 
-#define LOKI_RPC_DOC_INTROSPECT
-namespace loki
+#define SISPOP_RPC_DOC_INTROSPECT
+namespace sispop
 {
 double      round           (double);
 double      exp2            (double);
@@ -76,9 +76,9 @@ struct defer_helper
   deferred<lambda_t> operator+(lambda_t lambda) { return lambda; }
 };
 
-#define LOKI_TOKEN_COMBINE2(x, y) x ## y
-#define LOKI_TOKEN_COMBINE(x, y) LOKI_TOKEN_COMBINE2(x, y)
-#define LOKI_DEFER auto const LOKI_TOKEN_COMBINE(loki_defer_, __LINE__) = loki::defer_helper() + [&]()
+#define SISPOP_TOKEN_COMBINE2(x, y) x ## y
+#define SISPOP_TOKEN_COMBINE(x, y) SISPOP_TOKEN_COMBINE2(x, y)
+#define SISPOP_DEFER auto const SISPOP_TOKEN_COMBINE(sispop_defer_, __LINE__) = sispop::defer_helper() + [&]()
 
 template <typename T, size_t N>
 constexpr size_t array_count(T (&)[N]) { return N; }
@@ -86,6 +86,6 @@ constexpr size_t array_count(T (&)[N]) { return N; }
 template <typename T, size_t N>
 constexpr size_t char_count(T (&)[N]) { return N - 1; }
 
-}; // namespace Loki
+}; // namespace Sispop
 
-#endif // LOKI_H
+#endif // SISPOP_H

@@ -34,8 +34,8 @@
 using namespace crypto;
 using namespace std;
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "ringct"
+#undef SISPOP_DEFAULT_LOG_CATEGORY
+#define SISPOP_DEFAULT_LOG_CATEGORY "ringct"
 
 namespace rct {
 

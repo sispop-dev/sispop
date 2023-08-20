@@ -83,7 +83,7 @@ namespace cryptonote
       FIELD(prev_height)
     END_SERIALIZE()
 
-   // TODO(loki): idk exactly if I want to implement this, but need for core tests to compile. Not sure I care about serializing for core tests at all.
+   // TODO(sispop): idk exactly if I want to implement this, but need for core tests to compile. Not sure I care about serializing for core tests at all.
    private:
     friend class boost::serialization::access;
     template <class Archive>

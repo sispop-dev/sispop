@@ -54,7 +54,7 @@
 PUSH_WARNINGS
 DISABLE_VS_WARNINGS(4355)
 
-#include "common/loki_integration_test_hooks.h"
+#include "common/sispop_integration_test_hooks.h"
 namespace cryptonote
 {
   using namespace std::literals;
@@ -85,7 +85,7 @@ namespace cryptonote
   extern void *(*quorumnet_new)(core &core, const std::string &bind);
   // Stops the quorumnet listener; is expected to delete the object and reset the pointer to nullptr.
   extern void (*quorumnet_delete)(void *&self);
-  // Called when a block is added to let LokiMQ update the active set of SNs
+  // Called when a block is added to let SispopMQ update the active set of SNs
   extern void (*quorumnet_refresh_sns)(void* self);
   // Relays votes via quorumnet.
   extern void (*quorumnet_relay_obligation_votes)(void *self, const std::vector<service_nodes::quorum_vote_t> &votes);
@@ -959,8 +959,8 @@ namespace cryptonote
       */
      bool set_storage_server_peer_reachable(crypto::public_key const &pubkey, bool value);
 
-     /// Time point at which the storage server and lokinet last pinged us
-     std::atomic<time_t> m_last_storage_server_ping, m_last_lokinet_ping;
+     /// Time point at which the storage server and sispopnet last pinged us
+     std::atomic<time_t> m_last_storage_server_ping, m_last_sispopnet_ping;
      std::atomic<uint16_t> m_storage_lmq_port;
 
      uint32_t sn_public_ip() const { return m_sn_public_ip; }
@@ -1145,7 +1145,7 @@ namespace cryptonote
 
      std::unique_ptr<service_node_keys> m_service_node_keys;
 
-     /// Service Node's public IP and storage server port (http and lokimq)
+     /// Service Node's public IP and storage server port (http and sispopmq)
      uint32_t m_sn_public_ip;
      uint16_t m_storage_port;
      uint16_t m_quorumnet_port;

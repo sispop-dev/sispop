@@ -232,7 +232,7 @@ namespace cryptonote
       transaction& tx,
       const blobdata& extra_nonce,
       uint8_t hard_fork_version,
-      const loki_miner_tx_context &miner_tx_context)
+      const sispop_miner_tx_context &miner_tx_context)
   {
     const network_type nettype = miner_tx_context.nettype;
 
@@ -265,14 +265,14 @@ namespace cryptonote
     txin_gen in;
     in.height = height;
 
-    loki_block_reward_context block_reward_context = {};
+    sispop_block_reward_context block_reward_context = {};
     block_reward_context.fee                       = fee;
     block_reward_context.height                    = height;
     block_reward_context.service_node_payouts      = miner_tx_context.block_winner.payouts;
     block_reward_context.batched_governance        = miner_tx_context.batched_governance;
 
     block_reward_parts reward_parts;
-    if(!get_loki_block_reward(median_weight, current_block_weight, already_generated_coins, hard_fork_version, reward_parts, block_reward_context))
+    if(!get_sispop_block_reward(median_weight, current_block_weight, already_generated_coins, hard_fork_version, reward_parts, block_reward_context))
     {
       LOG_PRINT_L0("Failed to calculate block reward");
       return false;
@@ -365,11 +365,11 @@ namespace cryptonote
     return true;
   }
 
-  bool get_loki_block_reward(size_t median_weight, size_t current_block_weight, uint64_t already_generated_coins, int hard_fork_version, block_reward_parts &result, const loki_block_reward_context &loki_context)
+  bool get_sispop_block_reward(size_t median_weight, size_t current_block_weight, uint64_t already_generated_coins, int hard_fork_version, block_reward_parts &result, const sispop_block_reward_context &sispop_context)
   {
     result = {};
     uint64_t base_reward, base_reward_unpenalized;
-    if (!get_base_block_reward(median_weight, current_block_weight, already_generated_coins, base_reward, base_reward_unpenalized, hard_fork_version, loki_context.height))
+    if (!get_base_block_reward(median_weight, current_block_weight, already_generated_coins, base_reward, base_reward_unpenalized, hard_fork_version, sispop_context.height))
     {
       MERROR("Failed to calculate base block reward");
       return false;
@@ -394,14 +394,14 @@ namespace cryptonote
         hard_fork_version >= network_version_13_enforce_checkpoints ? base_reward_unpenalized : base_reward;
 
     result.service_node_total = service_node_reward_formula(result.original_base_reward, hard_fork_version);
-    result.service_node_paid  = calculate_sum_of_portions(loki_context.service_node_payouts, result.service_node_total);
+    result.service_node_paid  = calculate_sum_of_portions(sispop_context.service_node_payouts, result.service_node_total);
 
     // There is a goverance fee due every block.  Beginning in hardfork 10 this is still subtracted
     // from the block reward as if it was paid, but the actual payments get batched into rare, large
     // accumulated payments.  (Before hardfork 10 they are included in every block, unbatched).
     result.governance_due  = governance_reward_formula(result.original_base_reward, hard_fork_version);
     result.governance_paid = hard_fork_version >= network_version_10_bulletproofs
-        ? loki_context.batched_governance
+        ? sispop_context.batched_governance
         : result.governance_due;
 
     // The base_miner amount is everything left in the base reward after subtracting off the service
@@ -409,7 +409,7 @@ namespace cryptonote
     // exceeding the block limit is already removed from base_reward, and so is paid by the miner).
     uint64_t non_miner_amounts = result.governance_due + result.service_node_paid;
     result.base_miner = base_reward > non_miner_amounts ? base_reward - non_miner_amounts : 0;
-    result.base_miner_fee = loki_context.fee;
+    result.base_miner_fee = sispop_context.fee;
 
     return true;
   }
@@ -440,7 +440,7 @@ namespace cryptonote
     return addr.m_view_public_key;
   }
   //---------------------------------------------------------------
-  bool construct_tx_with_tx_key(const account_keys& sender_account_keys, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, std::vector<tx_source_entry>& sources, std::vector<tx_destination_entry>& destinations, const boost::optional<tx_destination_entry>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time, const crypto::secret_key &tx_key, const std::vector<crypto::secret_key> &additional_tx_keys, const rct::RCTConfig &rct_config, rct::multisig_out *msout, bool shuffle_outs, loki_construct_tx_params const &tx_params)
+  bool construct_tx_with_tx_key(const account_keys& sender_account_keys, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, std::vector<tx_source_entry>& sources, std::vector<tx_destination_entry>& destinations, const boost::optional<tx_destination_entry>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time, const crypto::secret_key &tx_key, const std::vector<crypto::secret_key> &additional_tx_keys, const rct::RCTConfig &rct_config, rct::multisig_out *msout, bool shuffle_outs, sispop_construct_tx_params const &tx_params)
   {
     hw::device &hwdev = sender_account_keys.get_device();
 
@@ -692,8 +692,8 @@ namespace cryptonote
       if (tx.type == txtype::stake)
       {
         CHECK_AND_ASSERT_MES(dst_entr.addr == sender_account_keys.m_account_address, false, "A staking contribution must return back to the original sendee otherwise the pre-calculated key image is incorrect");
-        CHECK_AND_ASSERT_MES(dst_entr.is_subaddress == false, false, "Staking back to a subaddress is not allowed"); // TODO(loki): Maybe one day, revisit this
-        CHECK_AND_ASSERT_MES(need_additional_txkeys == false, false, "Staking TX's can not required additional TX Keys"); // TODO(loki): Maybe one day, revisit this
+        CHECK_AND_ASSERT_MES(dst_entr.is_subaddress == false, false, "Staking back to a subaddress is not allowed"); // TODO(sispop): Maybe one day, revisit this
+        CHECK_AND_ASSERT_MES(need_additional_txkeys == false, false, "Staking TX's can not required additional TX Keys"); // TODO(sispop): Maybe one day, revisit this
 
         if (!(change_addr && *change_addr == dst_entr))
         {
@@ -931,7 +931,7 @@ namespace cryptonote
     return true;
   }
   //---------------------------------------------------------------
-  bool construct_tx_and_get_tx_key(const account_keys& sender_account_keys, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, std::vector<tx_source_entry>& sources, std::vector<tx_destination_entry>& destinations, const boost::optional<cryptonote::tx_destination_entry>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time, crypto::secret_key &tx_key, std::vector<crypto::secret_key> &additional_tx_keys, const rct::RCTConfig &rct_config, rct::multisig_out *msout, loki_construct_tx_params const &tx_params)
+  bool construct_tx_and_get_tx_key(const account_keys& sender_account_keys, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, std::vector<tx_source_entry>& sources, std::vector<tx_destination_entry>& destinations, const boost::optional<cryptonote::tx_destination_entry>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time, crypto::secret_key &tx_key, std::vector<crypto::secret_key> &additional_tx_keys, const rct::RCTConfig &rct_config, rct::multisig_out *msout, sispop_construct_tx_params const &tx_params)
   {
     hw::device &hwdev = sender_account_keys.get_device();
     hwdev.open_tx(tx_key);
@@ -954,7 +954,7 @@ namespace cryptonote
     return r;
   }
   //---------------------------------------------------------------
-  bool construct_tx(const account_keys& sender_account_keys, std::vector<tx_source_entry> &sources, const std::vector<tx_destination_entry>& destinations, const boost::optional<cryptonote::tx_destination_entry>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time, const loki_construct_tx_params &tx_params)
+  bool construct_tx(const account_keys& sender_account_keys, std::vector<tx_source_entry> &sources, const std::vector<tx_destination_entry>& destinations, const boost::optional<cryptonote::tx_destination_entry>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time, const sispop_construct_tx_params &tx_params)
   {
      std::unordered_map<crypto::public_key, cryptonote::subaddress_index> subaddresses;
      subaddresses[sender_account_keys.m_account_address.m_spend_public_key] = {0,0};
@@ -1004,7 +1004,7 @@ namespace cryptonote
     const uint8_t hf_version          = b.major_version;
     crypto::cn_slow_hash_type cn_type = cn_slow_hash_type::heavy_v1;
 
-#if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
+#if defined(SISPOP_ENABLE_INTEGRATION_TEST_HOOKS)
     const_cast<int &>(miners) = 0;
 #endif
 

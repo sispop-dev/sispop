@@ -14,7 +14,7 @@ def hexstr(key):
     return key.encode(encoder=nacl.encoding.HexEncoder)  #.decode('utf-8')
 
 direct = None
-lokirpc = None
+sispoprpc = None
 x_key = None
 
 badargs = False
@@ -26,16 +26,16 @@ elif len(sys.argv) == 3 and re.match(r"[0-9a-fA-F]{64}", sys.argv[1]) and re.mat
 else:
     m = re.match(r"((?:[a-zA-Z0-9-]+\.)*[a-zA-Z0-9-]+):(\d{4,5})", sys.argv[1])
     if m:
-        lokirpc = "http://{}:{}/json_rpc".format(m.group(1), m.group(2))
-        r = requests.post(lokirpc, json={"jsonrpc":"2.0", "id":0, "method":"get_service_node_privkey"}).json()
+        sispoprpc = "http://{}:{}/json_rpc".format(m.group(1), m.group(2))
+        r = requests.post(sispoprpc, json={"jsonrpc":"2.0", "id":0, "method":"get_service_node_privkey"}).json()
         if "result" in r and "service_node_x25519_privkey" in r["result"]:
             x_key = PrivateKey(r["result"]["service_node_x25519_privkey"], encoder=nacl.encoding.HexEncoder)
-            print("Loaded x25519 keys (pub: {}) from lokid @ {}".format(hexstr(x_key.public_key), sys.argv[1]))
+            print("Loaded x25519 keys (pub: {}) from sispopd @ {}".format(hexstr(x_key.public_key), sys.argv[1]))
         else:
             x_key = PrivateKey.generate()
-            print("Generated x25519 key {} (lokid @ {} did not return SN privkeys)".format(hexstr(x_key.public_key), sys.argv[1]))
+            print("Generated x25519 key {} (sispopd @ {} did not return SN privkeys)".format(hexstr(x_key.public_key), sys.argv[1]))
     else:
-        print("Error: {} does not look like a valid lokid RPC host:port value".format(sys.argv[1]), sys.stderr)
+        print("Error: {} does not look like a valid sispopd RPC host:port value".format(sys.argv[1]), sys.stderr)
         badargs = True
 
     for pk in sys.argv[2:]:
@@ -56,7 +56,7 @@ if direct:
     states = [{"service_node_pubkey": direct[0], "pubkey_x25519": direct[0], "_connect": direct[1]}]
 else:
     missed = set(sys.argv[2:])
-    r = requests.post(lokirpc, json={"jsonrpc":"2.0", "id":0, "method":"get_service_nodes", "params": {
+    r = requests.post(sispoprpc, json={"jsonrpc":"2.0", "id":0, "method":"get_service_nodes", "params": {
         "service_node_pubkeys": sys.argv[2:]}}).json()
     states = r["result"]["service_node_states"] if "result" in r and "service_node_states" in r["result"] else []
 

@@ -86,7 +86,7 @@ bool do_send_money(tools::wallet2& w1, tools::wallet2& w2, size_t mix_in_factor,
   try
   {
     std::vector<tools::wallet2::pending_tx> ptx;
-    cryptonote::loki_construct_tx_params tx_params;
+    cryptonote::sispop_construct_tx_params tx_params;
     ptx = w1.create_transactions_2(dsts,
                                    mix_in_factor,
                                    0 /*unlock_time*/,

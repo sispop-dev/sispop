@@ -110,7 +110,7 @@ namespace tests
     cryptonote::difficulty_type get_block_cumulative_difficulty(uint64_t height) const { return 0; }
     uint64_t prevalidate_block_hashes(uint64_t height, const std::list<crypto::hash> &hashes) { return 0; }
     uint64_t prevalidate_block_hashes(uint64_t height, const std::vector<crypto::hash> &hashes) { return 0; }
-    // TODO(loki): Write tests
+    // TODO(sispop): Write tests
     bool add_service_node_vote(const service_nodes::quorum_vote_t& vote, cryptonote::vote_verification_context &vvc) { return false; }
     void set_service_node_votes_relayed(const std::vector<service_nodes::quorum_vote_t> &votes) {}
     bool pad_transactions() const { return false; }

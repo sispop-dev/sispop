@@ -43,12 +43,12 @@
 #include "misc_os_dependent.h"
 #include "misc_log_ex.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "logging"
+#undef SISPOP_DEFAULT_LOG_CATEGORY
+#define SISPOP_DEFAULT_LOG_CATEGORY "logging"
 
 #define MLOG_BASE_FORMAT "%datetime{%Y-%M-%d %H:%m:%s.%g}\t%thread\t%level\t%logger\t%loc\t%msg"
 
-#define MLOG_LOG(x) CINFO(el::base::Writer,el::base::DispatchAction::FileOnlyLog,LOKI_DEFAULT_LOG_CATEGORY) << x
+#define MLOG_LOG(x) CINFO(el::base::Writer,el::base::DispatchAction::FileOnlyLog,SISPOP_DEFAULT_LOG_CATEGORY) << x
 
 using namespace epee;
 
@@ -150,7 +150,7 @@ void mlog_configure(const std::string &filename_base, bool console, const std::s
   el::Configurations c;
   c.setGlobally(el::ConfigurationType::Filename, filename_base);
   c.setGlobally(el::ConfigurationType::ToFile, "true");
-  const char *log_format = getenv("LOKI_LOG_FORMAT");
+  const char *log_format = getenv("SISPOP_LOG_FORMAT");
   if (!log_format)
     log_format = MLOG_BASE_FORMAT;
   c.setGlobally(el::ConfigurationType::Format, log_format);
@@ -224,12 +224,12 @@ void mlog_configure(const std::string &filename_base, bool console, const std::s
     }
   });
   mlog_set_common_prefix();
-  const char *loki_log = getenv("LOKI_LOGS");
-  if (!loki_log)
+  const char *sispop_log = getenv("SISPOP_LOGS");
+  if (!sispop_log)
   {
-    loki_log = get_default_categories(0);
+    sispop_log = get_default_categories(0);
   }
-  mlog_set_log(loki_log);
+  mlog_set_log(sispop_log);
 #ifdef WIN32
   EnableVTMode();
 #endif
@@ -500,7 +500,7 @@ static bool mlog(el::Level level, const char *category, const char *format, va_l
 
   try
   {
-    /* TODO(loki): when pulling upstream epee changes change this to:
+    /* TODO(sispop): when pulling upstream epee changes change this to:
     MCLOG(level, category, el::Color::Default, p);
     */
     MCLOG(level, category, p);

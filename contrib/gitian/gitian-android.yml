@@ -1,5 +1,5 @@
 ---
-name: "loki-android-6.1.0"
+name: "sispop-android-6.1.0"
 enable_cache: true
 suites:
 - "bionic"
@@ -32,8 +32,8 @@ packages:
 - "python3-zmq"
 - "unzip"
 remotes:
-- "url": "https://github.com/loki-project/loki.git"
-  "dir": "loki"
+- "url": "https://github.com/sispopplatform/sispop.git"
+  "dir": "sispop"
 files: []
 script: |
 
@@ -76,7 +76,7 @@ script: |
     then
       ABI=$i"eabi"
     fi
-    NDKDIR="${BUILD_DIR}/loki/contrib/depends/$i/native/bin"
+    NDKDIR="${BUILD_DIR}/sispop/contrib/depends/$i/native/bin"
     for prog in ${FAKETIME_HOST_PROGS}; do
         WRAPPER=${WRAP_DIR}/${ABI}-${prog}
         echo '#!/usr/bin/env bash' > ${WRAPPER}
@@ -99,7 +99,7 @@ script: |
   export SOURCE_DATE_EPOCH=`date -d "$DUMMYTIME" +%s`
 
   git config --global core.abbrev 9
-  cd loki
+  cd sispop
   # Set the version string that gets added to the tar archive name
   version="`git describe`"
   if [[ $version == *"-"*"-"* ]]; then
@@ -124,7 +124,7 @@ script: |
     mkdir build && cd build
     cmake .. -DCMAKE_TOOLCHAIN_FILE=${BASEPREFIX}/${i}/share/toolchain.cmake -DCMAKE_BUILD_TYPE=Release
     make ${MAKEOPTS}
-    DISTNAME=loki-${i}
+    DISTNAME=sispop-${i}
     mv bin ${DISTNAME}
     find ${DISTNAME}/ | sort | tar --no-recursion --mode='u+rw,go+r-w,a+X' --owner=0 --group=0 -c -T - | bzip2 -9 > ${OUTDIR}/${DISTNAME}.tar.bz2
     cd ..

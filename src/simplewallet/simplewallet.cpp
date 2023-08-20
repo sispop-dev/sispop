@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c) 2018-2019, The Loki Project
+// Copyright (c) 2018-2019, The Sispop Project
 // 
 // All rights reserved.
 // 
@@ -36,7 +36,7 @@
  */
 
 #ifdef _WIN32
- #define __STDC_FORMAT_MACROS // NOTE(loki): Explicitly define the PRIu64 macro on Mingw
+ #define __STDC_FORMAT_MACROS // NOTE(sispop): Explicitly define the PRIu64 macro on Mingw
 #endif
 
 #include <thread>
@@ -50,19 +50,19 @@
 #include <boost/format.hpp>
 #include <boost/regex.hpp>
 #include <boost/range/adaptor/transformed.hpp>
-#include <lokimq/hex.h>
-#include <lokimq/string_view.h>
+#include <sispopmq/hex.h>
+#include <sispopmq/string_view.h>
 #include "include_base_utils.h"
 #include "common/i18n.h"
 #include "common/command_line.h"
 #include "common/util.h"
 #include "common/base58.h"
 #include "common/scoped_message_writer.h"
-#include "common/loki_integration_test_hooks.h"
+#include "common/sispop_integration_test_hooks.h"
 #include "cryptonote_protocol/cryptonote_protocol_handler.h"
 #include "cryptonote_core/service_node_voting.h"
 #include "cryptonote_core/service_node_list.h"
-#include "cryptonote_core/loki_name_system.h"
+#include "cryptonote_core/sispop_name_system.h"
 #include "simplewallet.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "storages/http_abstract_invoke.h"
@@ -106,12 +106,12 @@ using boost::lexical_cast;
 namespace po = boost::program_options;
 typedef cryptonote::simple_wallet sw;
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "wallet.simplewallet"
+#undef SISPOP_DEFAULT_LOG_CATEGORY
+#define SISPOP_DEFAULT_LOG_CATEGORY "wallet.simplewallet"
 
 #define EXTENDED_LOGS_FILE "wallet_details.log"
 
-#define OUTPUT_EXPORT_FILE_MAGIC "Loki output export\003"
+#define OUTPUT_EXPORT_FILE_MAGIC "Sispop output export\003"
 
 #define LOCK_IDLE_SCOPE() \
   bool auto_refresh_enabled = m_auto_refresh_enabled.load(std::memory_order_relaxed); \
@@ -162,7 +162,7 @@ namespace
   const command_line::arg_descriptor<bool> arg_allow_mismatched_daemon_version = {"allow-mismatched-daemon-version", sw::tr("Allow communicating with a daemon that uses a different RPC version"), false};
   const command_line::arg_descriptor<uint64_t> arg_restore_height = {"restore-height", sw::tr("Restore from specific blockchain height"), 0};
   const command_line::arg_descriptor<std::string> arg_restore_date = {"restore-date", sw::tr("Restore from estimated blockchain height on specified date"), ""};
-  const command_line::arg_descriptor<bool> arg_do_not_relay = {"do-not-relay", sw::tr("The newly created transaction will not be relayed to the loki network"), false};
+  const command_line::arg_descriptor<bool> arg_do_not_relay = {"do-not-relay", sw::tr("The newly created transaction will not be relayed to the sispop network"), false};
   const command_line::arg_descriptor<bool> arg_create_address_file = {"create-address-file", sw::tr("Create an address file for new wallets"), false};
   const command_line::arg_descriptor<std::string> arg_subaddress_lookahead = {"subaddress-lookahead", tools::wallet2::tr("Set subaddress lookahead sizes to <major>:<minor>"), ""};
   const command_line::arg_descriptor<bool> arg_use_english_language_names = {"use-english-language-names", sw::tr("Display English language names"), false};
@@ -232,7 +232,7 @@ namespace
   const char* USAGE_MMS("mms [<subcommand> [<subcommand_parameters>]]");
   const char* USAGE_MMS_INIT("mms init <required_signers>/<authorized_signers> <own_label> <own_transport_address>");
   const char* USAGE_MMS_INFO("mms info");
-  const char* USAGE_MMS_SIGNER("mms signer [<number> <label> [<transport_address> [<loki_address>]]]");
+  const char* USAGE_MMS_SIGNER("mms signer [<number> <label> [<transport_address> [<sispop_address>]]]");
   const char* USAGE_MMS_LIST("mms list");
   const char* USAGE_MMS_NEXT("mms next [sync]");
   const char* USAGE_MMS_SYNC("mms sync");
@@ -264,7 +264,7 @@ namespace
   const char* USAGE_HELP("help [<command>]");
 
   //
-  // Loki
+  // Sispop
   //
   const char* USAGE_REGISTER_SERVICE_NODE("register_service_node [index=<N1>[,<N2>,...]] [<priority>] <operator cut> <address1> <fraction1> [<address2> <fraction2> [...]] <expiration timestamp> <pubkey> <signature>");
   const char* USAGE_STAKE("stake [index=<N1>[,<N2>,...]] [<priority>] <service node pubkey> <amount|percent%>");
@@ -274,12 +274,12 @@ namespace
   const char* USAGE_LNS_BUY_MAPPING("lns_buy_mapping [index=<N1>[,<N2>,...]] [<priority>] [owner=<value>] [backup_owner=<value>] <name> <value>");
   const char* USAGE_LNS_UPDATE_MAPPING("lns_update_mapping [index=<N1>[,<N2>,...]] [<priority>] [owner=<value>] [backup_owner=<value>] [value=<lns_value>] [signature=<hex_signature>] <name>");
 
-  // TODO(loki): Currently defaults to session, in future allow specifying Lokinet and Wallet when they are enabled
+  // TODO(sispop): Currently defaults to session, in future allow specifying Sispopnet and Wallet when they are enabled
   const char* USAGE_LNS_MAKE_UPDATE_MAPPING_SIGNATURE("lns_make_update_mapping_signature [owner=<value>] [backup_owner=<value>] [value=<lns_value>] <name>");
   const char* USAGE_LNS_PRINT_OWNERS_TO_NAMES("lns_print_owners_to_names [<owner>, ...]");
   const char* USAGE_LNS_PRINT_NAME_TO_OWNERS("lns_print_name_to_owners [type=<N1|all>[,<N2>...]] <name>");
 
-#if defined (LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
+#if defined (SISPOP_ENABLE_INTEGRATION_TEST_HOOKS)
   std::string input_line(const std::string &prompt, bool yesno = false)
   {
     if (yesno) std::cout << prompt << " (Y/Yes/N/No): ";
@@ -288,7 +288,7 @@ namespace
     std::string buf = integration_test::read_from_pipe();
     return epee::string_tools::trim(buf);
   }
-#else // LOKI_ENABLE_INTEGRATION_TEST_HOOKS
+#else // SISPOP_ENABLE_INTEGRATION_TEST_HOOKS
   std::string input_line(const std::string& prompt, bool yesno = false)
   {
     std::string buf;
@@ -309,11 +309,11 @@ namespace
 
     return epee::string_tools::trim(buf);
   }
-#endif // LOKI_ENABLE_INTEGRATION_TEST_HOOKS
+#endif // SISPOP_ENABLE_INTEGRATION_TEST_HOOKS
 
   epee::wipeable_string input_secure_line(const char *prompt)
   {
-#if defined (LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
+#if defined (SISPOP_ENABLE_INTEGRATION_TEST_HOOKS)
     std::cout << prompt;
     integration_test::write_buffered_stdout();
     epee::wipeable_string buf = integration_test::read_from_pipe();
@@ -338,8 +338,8 @@ namespace
 
   boost::optional<tools::password_container> password_prompter(const char *prompt, bool verify)
   {
-#if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
-    std::cout << prompt << ": NOTE(loki): Passwords not supported, defaulting to empty password";
+#if defined(SISPOP_ENABLE_INTEGRATION_TEST_HOOKS)
+    std::cout << prompt << ": NOTE(sispop): Passwords not supported, defaulting to empty password";
     integration_test::write_buffered_stdout();
     tools::password_container pwd_container(std::string(""));
 #else
@@ -500,7 +500,7 @@ namespace
     std::stringstream prompt;
     prompt << sw::tr("For URL: ") << url
            << ", " << dnssec_str << std::endl
-           << sw::tr(" Loki Address = ") << addresses[0]
+           << sw::tr(" Sispop Address = ") << addresses[0]
            << std::endl
            << sw::tr("Is this OK?")
     ;
@@ -656,9 +656,9 @@ namespace
 
   void print_secret_key(const crypto::secret_key &k)
   {
-    lokimq::string_view data{reinterpret_cast<const char*>(k.data), sizeof(k.data)};
+    sispopmq::string_view data{reinterpret_cast<const char*>(k.data), sizeof(k.data)};
     std::ostream_iterator<char> osi{std::cout};
-    lokimq::to_hex(data.begin(), data.end(), osi);
+    sispopmq::to_hex(data.begin(), data.end(), osi);
   }
 }
 
@@ -1618,7 +1618,7 @@ bool simple_wallet::export_raw_multisig(const std::vector<std::string> &args)
     for (auto &ptx: txs.m_ptx)
     {
       const crypto::hash txid = cryptonote::get_transaction_hash(ptx.tx);
-      const std::string filename = std::string("raw_multisig_loki_tx_") + epee::string_tools::pod_to_hex(txid);
+      const std::string filename = std::string("raw_multisig_sispop_tx_") + epee::string_tools::pod_to_hex(txid);
       if (!filenames.empty())
         filenames += ", ";
       filenames += filename;
@@ -2146,25 +2146,25 @@ bool simple_wallet::net_stats(const std::vector<std::string> &args)
 
 bool simple_wallet::welcome(const std::vector<std::string> &args)
 {
-  message_writer() << tr("Welcome to Loki, the private cryptocurrency based on Monero");
+  message_writer() << tr("Welcome to Sispop, the private cryptocurrency based on Monero");
   message_writer() << "";
-  message_writer() << tr("Loki, like Bitcoin, is a cryptocurrency. That is, it is digital money.");
-  message_writer() << tr("Unlike Bitcoin, your Loki transactions and balance stay private, and not visible to the world by default.");
+  message_writer() << tr("Sispop, like Bitcoin, is a cryptocurrency. That is, it is digital money.");
+  message_writer() << tr("Unlike Bitcoin, your Sispop transactions and balance stay private, and not visible to the world by default.");
   message_writer() << tr("However, you have the option of making those available to select parties, if you choose to.");
   message_writer() << "";
-  message_writer() << tr("Loki protects your privacy on the blockchain, and while Loki strives to improve all the time,");
-  message_writer() << tr("no privacy technology can be 100% perfect, Monero and consequently Loki included.");
-  message_writer() << tr("Loki cannot protect you from malware, and it may not be as effective as we hope against powerful adversaries.");
-  message_writer() << tr("Flaws in Loki may be discovered in the future, and attacks may be developed to peek under some");
-  message_writer() << tr("of the layers of privacy Loki provides. Be safe and practice defense in depth.");
+  message_writer() << tr("Sispop protects your privacy on the blockchain, and while Sispop strives to improve all the time,");
+  message_writer() << tr("no privacy technology can be 100% perfect, Monero and consequently Sispop included.");
+  message_writer() << tr("Sispop cannot protect you from malware, and it may not be as effective as we hope against powerful adversaries.");
+  message_writer() << tr("Flaws in Sispop may be discovered in the future, and attacks may be developed to peek under some");
+  message_writer() << tr("of the layers of privacy Sispop provides. Be safe and practice defense in depth.");
   message_writer() << "";
-  message_writer() << tr("Welcome to Loki and financial privacy. For more information, see https://loki.network");
+  message_writer() << tr("Welcome to Sispop and financial privacy. For more information, see https://sispop.site");
   return true;
 }
 
 bool simple_wallet::version(const std::vector<std::string> &args)
 {
-  message_writer() << "Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")";
+  message_writer() << "Sispop '" << SISPOP_RELEASE_NAME << "' (v" << SISPOP_VERSION_FULL << ")";
   return true;
 }
 
@@ -2340,7 +2340,7 @@ bool simple_wallet::set_unit(const std::vector<std::string> &args/* = std::vecto
   const std::string &unit = args[1];
   unsigned int decimal_point = CRYPTONOTE_DISPLAY_DECIMAL_POINT;
 
-  if (unit == "loki")
+  if (unit == "sispop")
     decimal_point = CRYPTONOTE_DISPLAY_DECIMAL_POINT;
   else if (unit == "megarok")
     decimal_point = CRYPTONOTE_DISPLAY_DECIMAL_POINT - 3;
@@ -2744,8 +2744,8 @@ simple_wallet::simple_wallet()
  ask-password <never|action|decrypt>
    action: ask the password before many actions such as transfer, etc
    decrypt: same as action, but keeps the spend key encrypted in memory when not needed
- unit <loki|megarok|kilorok|rok>
-   Set the default loki (sub-)unit.
+ unit <sispop|megarok|kilorok|rok>
+   Set the default sispop (sub-)unit.
  min-outputs-count [n]
    Try to keep at least that many outputs of value at least min-outputs-value.
  min-outputs-value [n]
@@ -2755,9 +2755,9 @@ simple_wallet::simple_wallet()
  refresh-from-block-height [n]
    Set the height before which to ignore blocks.
  segregate-pre-fork-outputs <1|0>
-   Set this if you intend to spend outputs on both Loki AND a key reusing fork.
+   Set this if you intend to spend outputs on both Sispop AND a key reusing fork.
  key-reuse-mitigation2 <1|0>
-   Set this if you are not sure whether you will spend on a key reusing Loki fork later.
+   Set this if you are not sure whether you will spend on a key reusing Sispop fork later.
  subaddress-lookahead <major>:<minor>
    Set the lookahead sizes for the subaddress hash table.
  segregation-height <n>
@@ -2953,7 +2953,7 @@ Pending or Failed: "failed"|"pending",  "out", Time, Amount*, Transaction Hash, 
   m_cmd_binder.set_handler("mms signer",
                            boost::bind(&simple_wallet::mms, this, _1),
                            tr(USAGE_MMS_SIGNER),
-                           tr("Set or modify authorized signer info (single-word label, transport address, Loki address), or list all signers"));
+                           tr("Set or modify authorized signer info (single-word label, transport address, Sispop address), or list all signers"));
   m_cmd_binder.set_handler("mms list",
                            boost::bind(&simple_wallet::mms, this, _1),
                            tr(USAGE_MMS_LIST),
@@ -3077,12 +3077,12 @@ Pending or Failed: "failed"|"pending",  "out", Time, Amount*, Transaction Hash, 
                            tr("Show the help section or the documentation about a <command>."));
 
   //
-  // Loki
+  // Sispop
   //
   m_cmd_binder.set_handler("register_service_node",
                            boost::bind(&simple_wallet::register_service_node, this, _1),
                            tr(USAGE_REGISTER_SERVICE_NODE),
-                           tr("Send <amount> to this wallet's main account and lock it as an operator stake for a new Service Node. This command is typically generated on the Service Node via the `prepare_registration' lokid command. The optional index= and <priority> parameters work as in the `transfer' command."));
+                           tr("Send <amount> to this wallet's main account and lock it as an operator stake for a new Service Node. This command is typically generated on the Service Node via the `prepare_registration' sispopd command. The optional index= and <priority> parameters work as in the `transfer' command."));
   m_cmd_binder.set_handler("stake",
                            boost::bind(&simple_wallet::stake, this, _1),
                            tr(USAGE_STAKE),
@@ -3109,12 +3109,12 @@ Pending or Failed: "failed"|"pending",  "out", Time, Amount*, Transaction Hash, 
   m_cmd_binder.set_handler("lns_print_owners_to_names",
                            boost::bind(&simple_wallet::lns_print_owners_to_names, this, _1),
                            tr(USAGE_LNS_PRINT_OWNERS_TO_NAMES),
-                           tr("Query the Loki Name Service names that the keys have purchased. If no keys are specified, it defaults to the current wallet."));
+                           tr("Query the Sispop Name Service names that the keys have purchased. If no keys are specified, it defaults to the current wallet."));
 
   m_cmd_binder.set_handler("lns_print_name_to_owners",
                            boost::bind(&simple_wallet::lns_print_name_to_owners, this, _1),
                            tr(USAGE_LNS_PRINT_NAME_TO_OWNERS),
-                           tr("Query the ed25519 public keys that own the Loki Name System names."));
+                           tr("Query the ed25519 public keys that own the Sispop Name System names."));
 
   m_cmd_binder.set_handler("lns_make_update_mapping_signature",
                            boost::bind(&simple_wallet::lns_make_update_mapping_signature, this, _1),
@@ -3176,7 +3176,7 @@ bool simple_wallet::set_variable(const std::vector<std::string> &args)
     success_msg_writer() << "segregation-height = " << m_wallet->segregation_height();
     success_msg_writer() << "ignore-fractional-outputs = " << m_wallet->ignore_fractional_outputs();
     success_msg_writer() << "track-uses = " << m_wallet->track_uses();
-    success_msg_writer() << "setup-background-mining = " << setup_background_mining_string + tr(" (set this to support the network and to get a chance to receive new Loki)");
+    success_msg_writer() << "setup-background-mining = " << setup_background_mining_string + tr(" (set this to support the network and to get a chance to receive new Sispop)");
     success_msg_writer() << "device_name = " << m_wallet->device_name();
     return true;
   }
@@ -3217,7 +3217,7 @@ bool simple_wallet::set_variable(const std::vector<std::string> &args)
     CHECK_SIMPLE_VARIABLE("refresh-type", set_refresh_type, tr("full (slowest, no assumptions); optimize-coinbase (fast, assumes the whole coinbase is paid to a single address); no-coinbase (fastest, assumes we receive no coinbase transaction), default (same as optimize-coinbase)"));
     CHECK_SIMPLE_VARIABLE("priority", set_default_priority, tr("0-5 or one of ") << join_priority_strings(", "));
     CHECK_SIMPLE_VARIABLE("ask-password", set_ask_password, tr("0|1|2 (or never|action|decrypt)"));
-    CHECK_SIMPLE_VARIABLE("unit", set_unit, tr("loki, megarok, kilorok, rok"));
+    CHECK_SIMPLE_VARIABLE("unit", set_unit, tr("sispop, megarok, kilorok, rok"));
     CHECK_SIMPLE_VARIABLE("min-outputs-count", set_min_output_count, tr("unsigned integer"));
     CHECK_SIMPLE_VARIABLE("min-outputs-value", set_min_output_value, tr("amount"));
     CHECK_SIMPLE_VARIABLE("merge-destinations", set_merge_destinations, tr("0 or 1"));
@@ -4005,7 +4005,7 @@ bool simple_wallet::init(const boost::program_options::variables_map& vm)
   m_wallet->callback(this);
 
   if (welcome)
-    message_writer(console_color_yellow, true) << tr("If you are new to Loki, type \"welcome\" for a brief overview.");
+    message_writer(console_color_yellow, true) << tr("If you are new to Sispop, type \"welcome\" for a brief overview.");
 
   if (m_long_payment_id_support)
   {
@@ -4229,7 +4229,7 @@ boost::optional<epee::wipeable_string> simple_wallet::new_wallet(const boost::pr
     "To start synchronizing with the daemon, use the \"refresh\" command.\n"
     "Use the \"help\" command to see the list of available commands.\n"
     "Use \"help <command>\" to see a command's documentation.\n"
-    "Always use the \"exit\" command when closing loki-wallet-cli to save \n"
+    "Always use the \"exit\" command when closing sispop-wallet-cli to save \n"
     "your current session's state. Otherwise, you might need to synchronize \n"
     "your wallet again (your wallet keys are NOT at risk in any case).\n")
   ;
@@ -4595,7 +4595,7 @@ void simple_wallet::start_background_mining()
       return;
     }
   }
-  success_msg_writer() << tr("Background mining enabled. Thank you for supporting the Loki network.");
+  success_msg_writer() << tr("Background mining enabled. Thank you for supporting the Sispop network.");
 }
 //----------------------------------------------------------------------------------------------------
 void simple_wallet::stop_background_mining()
@@ -4664,7 +4664,7 @@ void simple_wallet::check_background_mining(const epee::wipeable_string &passwor
   {
     message_writer() << tr("The daemon is not set up to background mine.");
     message_writer() << tr("With background mining enabled, the daemon will mine when idle and not on batttery.");
-    message_writer() << tr("Enabling this supports the network you are using, and makes you eligible for receiving new Loki");
+    message_writer() << tr("Enabling this supports the network you are using, and makes you eligible for receiving new Sispop");
     std::string accepted = input_line(tr("Do you want to do it now? (Y/Yes/N/No)"));
     if (std::cin.eof() || !command_line::is_yes(accepted)) {
       m_wallet->setup_background_mining(tools::wallet2::BackgroundMiningNo);
@@ -5691,7 +5691,7 @@ bool simple_wallet::confirm_and_send_tx(std::vector<cryptonote::address_parse_in
   }
   else if (m_wallet->multisig())
   {
-    bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_loki_tx");
+    bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_sispop_tx");
     if (!r)
     {
       fail_msg_writer() << tr("Failed to write transaction(s) to file");
@@ -5699,7 +5699,7 @@ bool simple_wallet::confirm_and_send_tx(std::vector<cryptonote::address_parse_in
     }
     else
     {
-      success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_loki_tx";
+      success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_sispop_tx";
     }
   }
   else if (m_wallet->get_account().get_device().has_tx_cold_sign())
@@ -5728,7 +5728,7 @@ bool simple_wallet::confirm_and_send_tx(std::vector<cryptonote::address_parse_in
   }
   else if (m_wallet->watch_only())
   {
-    bool r = m_wallet->save_tx(ptx_vector, "unsigned_loki_tx");
+    bool r = m_wallet->save_tx(ptx_vector, "unsigned_sispop_tx");
     if (!r)
     {
       fail_msg_writer() << tr("Failed to write transaction(s) to file");
@@ -5736,7 +5736,7 @@ bool simple_wallet::confirm_and_send_tx(std::vector<cryptonote::address_parse_in
     }
     else
     {
-      success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_loki_tx";
+      success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_sispop_tx";
     }
   }
   else
@@ -5852,7 +5852,7 @@ bool simple_wallet::transfer_main(Transfer transfer_type, const std::vector<std:
     }
     else
     {
-      if (boost::starts_with(local_args[i], "loki:"))
+      if (boost::starts_with(local_args[i], "sispop:"))
         fail_msg_writer() << tr("Invalid last argument: ") << local_args.back() << ": " << error;
       else
         fail_msg_writer() << tr("Invalid last argument: ") << local_args.back();
@@ -5932,7 +5932,7 @@ bool simple_wallet::transfer_main(Transfer transfer_type, const std::vector<std:
       return false;
     }
 
-    loki_construct_tx_params tx_params = tools::wallet2::construct_params(*hf_version, txtype::standard, priority);
+    sispop_construct_tx_params tx_params = tools::wallet2::construct_params(*hf_version, txtype::standard, priority);
     ptx_vector = m_wallet->create_transactions_2(dsts, CRYPTONOTE_DEFAULT_TX_MIXIN, unlock_block, priority, extra, m_current_subaddress_account, subaddr_indices, tx_params);
 
     if (ptx_vector.empty())
@@ -6176,8 +6176,8 @@ bool simple_wallet::request_stake_unlock(const std::vector<std::string> &args_)
   std::vector<tools::wallet2::pending_tx> ptx_vector = {unlock_result.ptx};
   if (m_wallet->watch_only())
   {
-    if (m_wallet->save_tx(ptx_vector, "unsigned_loki_tx"))
-      success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_loki_tx";
+    if (m_wallet->save_tx(ptx_vector, "unsigned_sispop_tx"))
+      success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_sispop_tx";
     else
       fail_msg_writer() << tr("Failed to write transaction(s) to file");
 
@@ -6385,8 +6385,8 @@ bool simple_wallet::lns_buy_mapping(const std::vector<std::string>& args)
   std::set<uint32_t> subaddr_indices  = {};
   if (!parse_subaddr_indices_and_priority(*m_wallet, local_args, subaddr_indices, priority)) return false;
 
-  std::string owner        = eat_named_argument(local_args, LNS_OWNER_PREFIX, loki::char_count(LNS_OWNER_PREFIX));
-  std::string backup_owner = eat_named_argument(local_args, LNS_BACKUP_OWNER_PREFIX, loki::char_count(LNS_BACKUP_OWNER_PREFIX));
+  std::string owner        = eat_named_argument(local_args, LNS_OWNER_PREFIX, sispop::char_count(LNS_OWNER_PREFIX));
+  std::string backup_owner = eat_named_argument(local_args, LNS_BACKUP_OWNER_PREFIX, sispop::char_count(LNS_BACKUP_OWNER_PREFIX));
 
   if (local_args.size() != 2)
   {
@@ -6448,10 +6448,10 @@ bool simple_wallet::lns_update_mapping(const std::vector<std::string>& args)
   if (!parse_subaddr_indices_and_priority(*m_wallet, local_args, subaddr_indices, priority)) return false;
 
 
-  std::string owner        = eat_named_argument(local_args, LNS_OWNER_PREFIX, loki::char_count(LNS_OWNER_PREFIX));
-  std::string backup_owner = eat_named_argument(local_args, LNS_BACKUP_OWNER_PREFIX, loki::char_count(LNS_BACKUP_OWNER_PREFIX));
-  std::string value        = eat_named_argument(local_args, LNS_VALUE_PREFIX, loki::char_count(LNS_VALUE_PREFIX));
-  std::string signature    = eat_named_argument(local_args, LNS_SIGNATURE_PREFIX, loki::char_count(LNS_SIGNATURE_PREFIX));
+  std::string owner        = eat_named_argument(local_args, LNS_OWNER_PREFIX, sispop::char_count(LNS_OWNER_PREFIX));
+  std::string backup_owner = eat_named_argument(local_args, LNS_BACKUP_OWNER_PREFIX, sispop::char_count(LNS_BACKUP_OWNER_PREFIX));
+  std::string value        = eat_named_argument(local_args, LNS_VALUE_PREFIX, sispop::char_count(LNS_VALUE_PREFIX));
+  std::string signature    = eat_named_argument(local_args, LNS_SIGNATURE_PREFIX, sispop::char_count(LNS_SIGNATURE_PREFIX));
 
   if (local_args.empty())
   {
@@ -6510,9 +6510,9 @@ bool simple_wallet::lns_make_update_mapping_signature(const std::vector<std::str
     return true;
 
   std::vector<std::string> local_args = args;
-  std::string owner        = eat_named_argument(local_args, LNS_OWNER_PREFIX, loki::char_count(LNS_OWNER_PREFIX));
-  std::string backup_owner = eat_named_argument(local_args, LNS_BACKUP_OWNER_PREFIX, loki::char_count(LNS_BACKUP_OWNER_PREFIX));
-  std::string value        = eat_named_argument(local_args, LNS_VALUE_PREFIX, loki::char_count(LNS_VALUE_PREFIX));
+  std::string owner        = eat_named_argument(local_args, LNS_OWNER_PREFIX, sispop::char_count(LNS_OWNER_PREFIX));
+  std::string backup_owner = eat_named_argument(local_args, LNS_BACKUP_OWNER_PREFIX, sispop::char_count(LNS_BACKUP_OWNER_PREFIX));
+  std::string value        = eat_named_argument(local_args, LNS_VALUE_PREFIX, sispop::char_count(LNS_VALUE_PREFIX));
 
   if (local_args.empty())
   {
@@ -6558,10 +6558,10 @@ bool simple_wallet::lns_print_name_to_owners(const std::vector<std::string>& arg
     std::string const &first = args[0];
     char const type_prefix[] = "type=";
 
-    if (first.size() >= loki::char_count(type_prefix) && strncmp(first.data(), type_prefix, loki::char_count(type_prefix)) == 0)
+    if (first.size() >= sispop::char_count(type_prefix) && strncmp(first.data(), type_prefix, sispop::char_count(type_prefix)) == 0)
     {
       name_index = 1;
-      std::string type_substr = first.substr(loki::char_count(type_prefix), first.size() - loki::char_count(type_prefix));
+      std::string type_substr = first.substr(sispop::char_count(type_prefix), first.size() - sispop::char_count(type_prefix));
       std::vector<std::string> split_types;
       boost::split(split_types, type_substr, boost::is_any_of(","));
 
@@ -6604,7 +6604,7 @@ bool simple_wallet::lns_print_name_to_owners(const std::vector<std::string>& arg
   {
     lns::mapping_value encrypted_value = {};
     encrypted_value.len                = mapping.encrypted_value.size() / 2;
-    lokimq::from_hex(mapping.encrypted_value.begin(), mapping.encrypted_value.end(), encrypted_value.buffer.begin());
+    sispopmq::from_hex(mapping.encrypted_value.begin(), mapping.encrypted_value.end(), encrypted_value.buffer.begin());
 
     lns::mapping_value value = {};
     if (!lns::decrypt_mapping_value(name, encrypted_value, value))
@@ -6655,7 +6655,7 @@ bool simple_wallet::lns_print_owners_to_names(const std::vector<std::string>& ar
         fail_msg_writer() << "arg too long, fails basic size sanity check max length = " << MAX_LEN << ", arg = " << arg;
         return false;
       }
-      if (!lokimq::is_hex(arg))
+      if (!sispopmq::is_hex(arg))
       {
         fail_msg_writer() << "arg contains non-hex characters: " << arg;
         return false;
@@ -6760,26 +6760,26 @@ bool simple_wallet::sweep_unmixable(const std::vector<std::string> &args_)
     // actually commit the transactions
     if (m_wallet->multisig())
     {
-      bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_loki_tx");
+      bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_sispop_tx");
       if (!r)
       {
         fail_msg_writer() << tr("Failed to write transaction(s) to file");
       }
       else
       {
-        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_loki_tx";
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_sispop_tx";
       }
     }
     else if (m_wallet->watch_only())
     {
-      bool r = m_wallet->save_tx(ptx_vector, "unsigned_loki_tx");
+      bool r = m_wallet->save_tx(ptx_vector, "unsigned_sispop_tx");
       if (!r)
       {
         fail_msg_writer() << tr("Failed to write transaction(s) to file");
       }
       else
       {
-        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_loki_tx";
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_sispop_tx";
       }
     }
     else
@@ -6887,14 +6887,14 @@ bool simple_wallet::sweep_main_internal(sweep_type_t sweep_type, std::vector<too
   bool submitted_to_network = false;
   if (m_wallet->multisig())
   {
-    bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_loki_tx");
+    bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_sispop_tx");
     if (!r)
     {
       fail_msg_writer() << tr("Failed to write transaction(s) to file");
     }
     else
     {
-      success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_loki_tx";
+      success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_sispop_tx";
     }
   }
   else if (m_wallet->get_account().get_device().has_tx_cold_sign())
@@ -6924,14 +6924,14 @@ bool simple_wallet::sweep_main_internal(sweep_type_t sweep_type, std::vector<too
   }
   else if (m_wallet->watch_only())
   {
-    bool r = m_wallet->save_tx(ptx_vector, "unsigned_loki_tx");
+    bool r = m_wallet->save_tx(ptx_vector, "unsigned_sispop_tx");
     if (!r)
     {
       fail_msg_writer() << tr("Failed to write transaction(s) to file");
     }
     else
     {
-      success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_loki_tx";
+      success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_sispop_tx";
     }
   }
   else
@@ -7443,7 +7443,7 @@ bool simple_wallet::sign_transfer(const std::vector<std::string> &args_)
   std::vector<tools::wallet2::pending_tx> ptx;
   try
   {
-    bool r = m_wallet->sign_tx("unsigned_loki_tx", "signed_loki_tx", ptx, [&](const tools::wallet2::unsigned_tx_set &tx){ return accept_loaded_tx(tx); }, export_raw);
+    bool r = m_wallet->sign_tx("unsigned_sispop_tx", "signed_sispop_tx", ptx, [&](const tools::wallet2::unsigned_tx_set &tx){ return accept_loaded_tx(tx); }, export_raw);
     if (!r)
     {
       fail_msg_writer() << tr("Failed to sign transaction");
@@ -7463,7 +7463,7 @@ bool simple_wallet::sign_transfer(const std::vector<std::string> &args_)
       txids_as_text += (", ");
     txids_as_text += epee::string_tools::pod_to_hex(get_transaction_hash(t.tx));
   }
-  success_msg_writer(true) << tr("Transaction successfully signed to file ") << "signed_loki_tx" << ", txid " << txids_as_text;
+  success_msg_writer(true) << tr("Transaction successfully signed to file ") << "signed_sispop_tx" << ", txid " << txids_as_text;
   if (export_raw)
   {
     std::string rawfiles_as_text;
@@ -7471,7 +7471,7 @@ bool simple_wallet::sign_transfer(const std::vector<std::string> &args_)
     {
       if (i > 0)
         rawfiles_as_text += ", ";
-      rawfiles_as_text += "signed_loki_tx_raw" + (ptx.size() == 1 ? "" : ("_" + std::to_string(i)));
+      rawfiles_as_text += "signed_sispop_tx_raw" + (ptx.size() == 1 ? "" : ("_" + std::to_string(i)));
     }
     success_msg_writer(true) << tr("Transaction raw hex data exported to ") << rawfiles_as_text;
   }
@@ -7491,14 +7491,14 @@ bool simple_wallet::submit_transfer(const std::vector<std::string> &args_)
   try
   {
     std::vector<tools::wallet2::pending_tx> ptx_vector;
-    bool r = m_wallet->load_tx("signed_loki_tx", ptx_vector, [&](const tools::wallet2::signed_tx_set &tx){ return accept_loaded_tx(tx); });
+    bool r = m_wallet->load_tx("signed_sispop_tx", ptx_vector, [&](const tools::wallet2::signed_tx_set &tx){ return accept_loaded_tx(tx); });
     if (!r)
     {
       fail_msg_writer() << tr("Failed to load transaction from file");
       return true;
     }
 
-    // FIXME: store the blink status in the signed_loki_tx somehow?
+    // FIXME: store the blink status in the signed_sispop_tx somehow?
     constexpr bool FIXME_blink = false;
 
     commit_or_save(ptx_vector, false, FIXME_blink);
@@ -7644,7 +7644,7 @@ bool simple_wallet::get_tx_proof(const std::vector<std::string> &args)
   try
   {
     std::string sig_str = m_wallet->get_tx_proof(txid, info.address, info.is_subaddress, args.size() == 3 ? args[2] : "");
-    const std::string filename = "loki_tx_proof";
+    const std::string filename = "sispop_tx_proof";
     if (epee::file_io_utils::save_string_to_file(filename, sig_str))
       success_msg_writer() << tr("signature file saved to: ") << filename;
     else
@@ -7856,7 +7856,7 @@ bool simple_wallet::get_spend_proof(const std::vector<std::string> &args)
   try
   {
     const std::string sig_str = m_wallet->get_spend_proof(txid, args.size() == 2 ? args[1] : "");
-    const std::string filename = "loki_spend_proof";
+    const std::string filename = "sispop_spend_proof";
     if (epee::file_io_utils::save_string_to_file(filename, sig_str))
       success_msg_writer() << tr("signature file saved to: ") << filename;
     else
@@ -7945,7 +7945,7 @@ bool simple_wallet::get_reserve_proof(const std::vector<std::string> &args)
   try
   {
     const std::string sig_str = m_wallet->get_reserve_proof(account_minreserve, args.size() == 2 ? args[1] : "");
-    const std::string filename = "loki_reserve_proof";
+    const std::string filename = "sispop_reserve_proof";
     if (epee::file_io_utils::save_string_to_file(filename, sig_str))
       success_msg_writer() << tr("signature file saved to: ") << filename;
     else
@@ -8496,13 +8496,13 @@ std::string simple_wallet::get_prompt() const
 }
 //----------------------------------------------------------------------------------------------------
 
-#if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
+#if defined(SISPOP_ENABLE_INTEGRATION_TEST_HOOKS)
 #include <thread>
 #endif
 
 bool simple_wallet::run()
 {
-#if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
+#if defined(SISPOP_ENABLE_INTEGRATION_TEST_HOOKS)
   integration_test::use_redirected_cout();
 #endif
   // check and display warning, but go on anyway
@@ -8531,7 +8531,7 @@ bool simple_wallet::run()
 
   message_writer(console_color_green, false) << "Background refresh thread started";
 
-#if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
+#if defined(SISPOP_ENABLE_INTEGRATION_TEST_HOOKS)
   for (;;)
   {
     integration_test::write_buffered_stdout();
@@ -9630,7 +9630,7 @@ void simple_wallet::interrupt()
 void simple_wallet::commit_or_save(std::vector<tools::wallet2::pending_tx>& ptx_vector, bool do_not_relay, bool blink)
 {
   size_t i = 0;
-  std::string msg_buf; // NOTE(loki): Buffer output so integration tests read the entire output
+  std::string msg_buf; // NOTE(sispop): Buffer output so integration tests read the entire output
   msg_buf.reserve(128);
 
   while (!ptx_vector.empty())
@@ -9643,7 +9643,7 @@ void simple_wallet::commit_or_save(std::vector<tools::wallet2::pending_tx>& ptx_
       cryptonote::blobdata blob;
       tx_to_blob(ptx.tx, blob);
       const std::string blob_hex = epee::string_tools::buff_to_hex_nodelimer(blob);
-      const std::string filename = "raw_loki_tx" + (ptx_vector.size() == 1 ? "" : ("_" + std::to_string(i++)));
+      const std::string filename = "raw_sispop_tx" + (ptx_vector.size() == 1 ? "" : ("_" + std::to_string(i++)));
       bool success = epee::file_io_utils::save_string_to_file(filename, blob_hex);
 
       if (success) msg_buf += tr("Transaction successfully saved to ");
@@ -9714,12 +9714,12 @@ int main(int argc, char* argv[])
   bool should_terminate = false;
   std::tie(vm, should_terminate) = wallet_args::main(
    argc, argv,
-   "loki-wallet-cli [--wallet-file=<filename>|--generate-new-wallet=<filename>] [<COMMAND>]",
-    sw::tr("This is the command line Loki wallet. It needs to connect to a Loki\ndaemon to work correctly.\n\nWARNING: Do not reuse your Loki keys on a contentious fork, doing so will harm your privacy.\n Only consider reusing your key on a contentious fork if the fork has key reuse mitigations built in."),
+   "sispop-wallet-cli [--wallet-file=<filename>|--generate-new-wallet=<filename>] [<COMMAND>]",
+    sw::tr("This is the command line Sispop wallet. It needs to connect to a Sispop\ndaemon to work correctly.\n\nWARNING: Do not reuse your Sispop keys on a contentious fork, doing so will harm your privacy.\n Only consider reusing your key on a contentious fork if the fork has key reuse mitigations built in."),
     desc_params,
     positional_options,
     [](const std::string &s, bool emphasis){ tools::scoped_message_writer(emphasis ? epee::console_color_white : epee::console_color_default, true) << s; },
-    "loki-wallet-cli.log"
+    "sispop-wallet-cli.log"
   );
 
   if (!vm)
@@ -9898,7 +9898,7 @@ void simple_wallet::list_mms_messages(const std::vector<mms::message> &messages)
 void simple_wallet::list_signers(const std::vector<mms::authorized_signer> &signers)
 {
   message_writer() << boost::format("%2s %-20s %-s") % tr("#") % tr("Label") % tr("Transport Address");
-  message_writer() << boost::format("%2s %-20s %-s") % "" % tr("Auto-Config Token") % tr("Loki Address");
+  message_writer() << boost::format("%2s %-20s %-s") % "" % tr("Auto-Config Token") % tr("Sispop Address");
   for (size_t i = 0; i < signers.size(); ++i)
   {
     const mms::authorized_signer &signer = signers[i];
@@ -10104,7 +10104,7 @@ void simple_wallet::mms_signer(const std::vector<std::string> &args)
   }
   if ((args.size() < 2) || (args.size() > 4))
   {
-    fail_msg_writer() << tr("mms signer [<number> <label> [<transport_address> [<loki_address>]]]");
+    fail_msg_writer() << tr("mms signer [<number> <label> [<transport_address> [<sispop_address>]]]");
     return;
   }
 
@@ -10123,14 +10123,14 @@ void simple_wallet::mms_signer(const std::vector<std::string> &args)
     bool ok = cryptonote::get_account_address_from_str(info, m_wallet->nettype(), args[3]);
     if (!ok)
     {
-      fail_msg_writer() << tr("Invalid Loki address");
+      fail_msg_writer() << tr("Invalid Sispop address");
       return;
     }
     monero_address = info.address;
     const std::vector<mms::message> &messages = ms.get_all_messages();
     if ((messages.size() > 0) || state.multisig)
     {
-      fail_msg_writer() << tr("Wallet state does not allow changing Loki addresses anymore");
+      fail_msg_writer() << tr("Wallet state does not allow changing Sispop addresses anymore");
       return;
     }
   }

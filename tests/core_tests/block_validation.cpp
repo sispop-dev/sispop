@@ -334,7 +334,7 @@ bool gen_block_miner_tx_has_2_in::generate(std::vector<test_event_entry>& events
 
   transaction tmp_tx;
 
-  if (!loki_tx_builder(events, tmp_tx, blk_0r, miner_account, miner_account.get_keys().m_account_address, blk_0.miner_tx.vout[0].amount, cryptonote::network_version_7).build())
+  if (!sispop_tx_builder(events, tmp_tx, blk_0r, miner_account, miner_account.get_keys().m_account_address, blk_0.miner_tx.vout[0].amount, cryptonote::network_version_7).build())
     return false;
 
   MAKE_MINER_TX_MANUALLY(miner_tx, blk_0r);
@@ -361,7 +361,7 @@ bool gen_block_miner_tx_with_txin_to_key::generate(std::vector<test_event_entry>
   REWIND_BLOCKS(events, blk_1r, blk_1, miner_account);
 
   transaction tmp_tx;
-  if (!loki_tx_builder(events, tmp_tx, blk_1r, miner_account, miner_account.get_keys().m_account_address, blk_1.miner_tx.vout[0].amount, cryptonote::network_version_7).build())
+  if (!sispop_tx_builder(events, tmp_tx, blk_1r, miner_account, miner_account.get_keys().m_account_address, blk_1.miner_tx.vout[0].amount, cryptonote::network_version_7).build())
     return false;
 
   MAKE_MINER_TX_MANUALLY(miner_tx, blk_1);
@@ -438,7 +438,7 @@ static bool construct_miner_tx_with_extra_output(cryptonote::transaction& tx,
     tx.vin.push_back(in);
 
     // This will work, until size of constructed block is less then CRYPTONOTE_BLOCK_GRANTED_FULL_REWARD_ZONE
-    const int hard_fork_version = 7; // NOTE(loki): We know this test doesn't need the new block reward formula
+    const int hard_fork_version = 7; // NOTE(sispop): We know this test doesn't need the new block reward formula
     uint64_t block_reward, block_reward_unpenalized;
     if (!get_base_block_reward(0, 0, already_generated_coins, block_reward, block_reward_unpenalized, 1, 0)) {
         LOG_PRINT_L0("Block is too big");
@@ -570,8 +570,8 @@ bool gen_block_is_too_big::generate(std::vector<test_event_entry>& events) const
 bool gen_block_invalid_binary_format::generate(std::vector<test_event_entry>& events) const
 {
 #if 1
-  std::vector<std::pair<uint8_t, uint64_t>> hard_forks = loki_generate_sequential_hard_fork_table();
-  loki_chain_generator gen(events, hard_forks);
+  std::vector<std::pair<uint8_t, uint64_t>> hard_forks = sispop_generate_sequential_hard_fork_table();
+  sispop_chain_generator gen(events, hard_forks);
 
   gen.add_blocks_until_version(hard_forks.back().first);
   gen.add_n_blocks(10);
@@ -579,12 +579,12 @@ bool gen_block_invalid_binary_format::generate(std::vector<test_event_entry>& ev
 
   uint64_t last_valid_height = gen.height();
   cryptonote::transaction tx  = gen.create_and_add_tx(gen.first_miner_, gen.first_miner_.get_keys().m_account_address, MK_COINS(30));
-  loki_blockchain_entry entry = gen.create_next_block({tx});
+  sispop_blockchain_entry entry = gen.create_next_block({tx});
 
   serialized_block block(t_serializable_object_to_blob(entry.block));
   // Generate some corrupt blocks
   {
-    loki_blockchain_addable<serialized_block> entry(block, false /*can_be_added_to_blockchain*/, "Corrupt block can't be added to blockchaain");
+    sispop_blockchain_addable<serialized_block> entry(block, false /*can_be_added_to_blockchain*/, "Corrupt block can't be added to blockchaain");
     serialized_block &corrupt_block = entry.data;
     for (size_t i = 0; i < corrupt_block.data.size() - 1; ++i)
       corrupt_block.data[i] ^= corrupt_block.data[i + 1];
@@ -592,7 +592,7 @@ bool gen_block_invalid_binary_format::generate(std::vector<test_event_entry>& ev
   }
 
   {
-    loki_blockchain_addable<serialized_block> entry(block, false /*can_be_added_to_blockchain*/, "Corrupt block can't be added to blockchaain");
+    sispop_blockchain_addable<serialized_block> entry(block, false /*can_be_added_to_blockchain*/, "Corrupt block can't be added to blockchaain");
     serialized_block &corrupt_block = entry.data;
     for (size_t i = 0; i < corrupt_block.data.size() - 2; ++i)
       corrupt_block.data[i] ^= corrupt_block.data[i + 2];
@@ -600,14 +600,14 @@ bool gen_block_invalid_binary_format::generate(std::vector<test_event_entry>& ev
   }
 
   {
-    loki_blockchain_addable<serialized_block> entry(block, false /*can_be_added_to_blockchain*/, "Corrupt block can't be added to blockchaain");
+    sispop_blockchain_addable<serialized_block> entry(block, false /*can_be_added_to_blockchain*/, "Corrupt block can't be added to blockchaain");
     serialized_block &corrupt_block = entry.data;
     for (size_t i = 0; i < corrupt_block.data.size() - 3; ++i)
       corrupt_block.data[i] ^= corrupt_block.data[i + 3];
     events.push_back(entry);
   }
 
-  loki_register_callback(events, "check_blocks_arent_accepted", [&events, last_valid_height](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_blocks_arent_accepted", [&events, last_valid_height](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_blocks_arent_accepted");
     CHECK_EQ(c.get_pool().get_transactions_count(), 1);
@@ -615,7 +615,7 @@ bool gen_block_invalid_binary_format::generate(std::vector<test_event_entry>& ev
     return true;
   });
 
-  // TODO(loki): I don't know why difficulty has to be high for this test? Just generate some blocks and randomize the bytes???
+  // TODO(sispop): I don't know why difficulty has to be high for this test? Just generate some blocks and randomize the bytes???
 #else
   BLOCK_VALIDATION_INIT_GENERATE();
 

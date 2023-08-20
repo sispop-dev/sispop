@@ -35,7 +35,7 @@
 #include "serialization/variant.h"
 #include "crypto/crypto.h"
 #include <boost/variant.hpp>
-#include "loki_economy.h"
+#include "sispop_economy.h"
 #include "cryptonote_basic.h"
 
 
@@ -57,7 +57,7 @@
 #define TX_EXTRA_TAG_TX_KEY_IMAGE_UNLOCK        0x77
 #define TX_EXTRA_TAG_SERVICE_NODE_STATE_CHANGE  0x78
 #define TX_EXTRA_TAG_BURN                       0x79
-#define TX_EXTRA_TAG_LOKI_NAME_SYSTEM           0x7A
+#define TX_EXTRA_TAG_SISPOP_NAME_SYSTEM           0x7A
 
 #define TX_EXTRA_MYSTERIOUS_MINERGATE_TAG       0xDE
 
@@ -463,7 +463,7 @@ namespace cryptonote
     END_SERIALIZE()
   };
 
-  struct tx_extra_loki_name_system
+  struct tx_extra_sispop_name_system
   {
     uint8_t                 version = 0;
     lns::mapping_type       type;
@@ -481,9 +481,9 @@ namespace cryptonote
     bool is_updating() const { return field_is_set(lns::extra_field::signature) && field_any_set(lns::extra_field::updatable_fields); }
     bool is_buying()   const { return (fields == lns::extra_field::buy || fields == lns::extra_field::buy_no_backup); }
 
-    static tx_extra_loki_name_system make_buy(lns::generic_owner const &owner, lns::generic_owner const *backup_owner, lns::mapping_type type, crypto::hash const &name_hash, std::string const &encrypted_value, crypto::hash const &prev_txid)
+    static tx_extra_sispop_name_system make_buy(lns::generic_owner const &owner, lns::generic_owner const *backup_owner, lns::mapping_type type, crypto::hash const &name_hash, std::string const &encrypted_value, crypto::hash const &prev_txid)
     {
-      tx_extra_loki_name_system result = {};
+      tx_extra_sispop_name_system result = {};
       result.fields                    = lns::extra_field::buy;
       result.owner                     = owner;
 
@@ -499,7 +499,7 @@ namespace cryptonote
       return result;
     }
 
-    static tx_extra_loki_name_system make_update(lns::generic_signature const &signature,
+    static tx_extra_sispop_name_system make_update(lns::generic_signature const &signature,
                                                  lns::mapping_type type,
                                                  crypto::hash const &name_hash,
                                                  epee::span<const uint8_t> encrypted_value,
@@ -507,7 +507,7 @@ namespace cryptonote
                                                  lns::generic_owner const *backup_owner,
                                                  crypto::hash const &prev_txid)
     {
-      tx_extra_loki_name_system result = {};
+      tx_extra_sispop_name_system result = {};
       result.signature                 = signature;
       result.type                      = type;
       result.name_hash                 = name_hash;
@@ -568,7 +568,7 @@ namespace cryptonote
                          tx_extra_tx_key_image_proofs,
                          tx_extra_tx_key_image_unlock,
                          tx_extra_burn,
-                         tx_extra_loki_name_system
+                         tx_extra_sispop_name_system
                         > tx_extra_field;
 }
 
@@ -591,4 +591,4 @@ VARIANT_TAG(binary_archive, cryptonote::tx_extra_tx_secret_key,               TX
 VARIANT_TAG(binary_archive, cryptonote::tx_extra_tx_key_image_proofs,         TX_EXTRA_TAG_TX_KEY_IMAGE_PROOFS);
 VARIANT_TAG(binary_archive, cryptonote::tx_extra_tx_key_image_unlock,         TX_EXTRA_TAG_TX_KEY_IMAGE_UNLOCK);
 VARIANT_TAG(binary_archive, cryptonote::tx_extra_burn,                        TX_EXTRA_TAG_BURN);
-VARIANT_TAG(binary_archive, cryptonote::tx_extra_loki_name_system,            TX_EXTRA_TAG_LOKI_NAME_SYSTEM);
+VARIANT_TAG(binary_archive, cryptonote::tx_extra_sispop_name_system,            TX_EXTRA_TAG_SISPOP_NAME_SYSTEM);

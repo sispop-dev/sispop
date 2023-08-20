@@ -35,8 +35,8 @@
 #include <array>
 #include "storages/portable_storage_base.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "serialization"
+#undef SISPOP_DEFAULT_LOG_CATEGORY
+#define SISPOP_DEFAULT_LOG_CATEGORY "serialization"
 
 namespace epee
 {

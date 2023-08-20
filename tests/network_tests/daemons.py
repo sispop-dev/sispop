@@ -126,7 +126,7 @@ class Daemon(RPCDaemon):
     base_args = ('--dev-allow-local-ips', '--fixed-difficulty=1', '--regtest', '--non-interactive', '--rpc-ssl=disabled', '--rpc-long-poll-connections=0')
 
     def __init__(self, *,
-            lokid='lokid',
+            sispopd='sispopd',
             listen_ip=None, p2p_port=None, rpc_port=None, zmq_port=None, qnet_port=None, ss_port=None,
             name=None,
             datadir=None,
@@ -135,7 +135,7 @@ class Daemon(RPCDaemon):
             peers=()):
         self.rpc_port = rpc_port or next_port()
         if name is None:
-            name = 'lokid@{}'.format(self.rpc_port)
+            name = 'sispopd@{}'.format(self.rpc_port)
         super().__init__(name)
         self.listen_ip = listen_ip or LISTEN_IP
         self.p2p_port = p2p_port or next_port()
@@ -144,11 +144,11 @@ class Daemon(RPCDaemon):
         self.ss_port = ss_port or next_port()
         self.peers = []
 
-        self.args = [lokid] + list(self.__class__.base_args)
+        self.args = [sispopd] + list(self.__class__.base_args)
         self.args += (
-                '--data-dir={}/loki-{}-{}'.format(datadir or '.', self.listen_ip, self.rpc_port),
+                '--data-dir={}/sispop-{}-{}'.format(datadir or '.', self.listen_ip, self.rpc_port),
                 '--log-level={}'.format(log_level),
-                '--log-file=loki.log'.format(self.listen_ip, self.p2p_port),
+                '--log-file=sispop.log'.format(self.listen_ip, self.p2p_port),
                 '--p2p-bind-ip={}'.format(self.listen_ip),
                 '--p2p-bind-port={}'.format(self.p2p_port),
                 '--rpc-bind-ip={}'.format(self.listen_ip),
@@ -214,12 +214,12 @@ class Daemon(RPCDaemon):
         return [x['id_hash'] for x in self.rpc("/get_transaction_pool").json()['transactions']]
 
 
-    def ping(self, *, storage=True, lokinet=True):
-        """Sends fake storage server and lokinet pings to the running lokid"""
+    def ping(self, *, storage=True, sispopnet=True):
+        """Sends fake storage server and sispopnet pings to the running sispopd"""
         if storage:
             self.json_rpc("storage_server_ping", { "version_major": 9, "version_minor": 9, "version_patch": 9 })
-        if lokinet:
-            self.json_rpc("lokinet_ping", { "version": [9,9,9] })
+        if sispopnet:
+            self.json_rpc("sispopnet_ping", { "version": [9,9,9] })
 
 
     def p2p_resync(self):
@@ -236,7 +236,7 @@ class Wallet(RPCDaemon):
             self,
             node,
             *,
-            rpc_wallet='loki-wallet-rpc',
+            rpc_wallet='sispop-wallet-rpc',
             name=None,
             datadir=None,
             listen_ip=None,

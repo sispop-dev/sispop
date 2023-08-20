@@ -38,7 +38,7 @@ add_executable(core_tests
   integer_overflow.cpp
   multisig.cpp
   ring_signature_1.cpp
-  loki_tests.cpp
+  sispop_tests.cpp
   transaction_tests.cpp
   tx_validation.cpp
   v2_tests.cpp

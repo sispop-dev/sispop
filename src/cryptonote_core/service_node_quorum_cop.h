@@ -1,4 +1,4 @@
-// Copyright (c)      2018, The Loki Project
+// Copyright (c)      2018, The Sispop Project
 //
 // All rights reserved.
 //
@@ -33,7 +33,7 @@
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "cryptonote_core/service_node_voting.h"
 
-#include "common/loki.h"
+#include "common/sispop.h"
 
 namespace cryptonote
 {

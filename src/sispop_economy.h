@@ -1,7 +1,7 @@
 #pragma once
 #include <cstdint>
 
-constexpr uint64_t COIN                       = (uint64_t)1000000000; // 1 LOKI = pow(10, 9)
+constexpr uint64_t COIN                       = (uint64_t)1000000000; // 1 SISPOP = pow(10, 9)
 constexpr uint64_t MONEY_SUPPLY               = ((uint64_t)(-1)); // MONEY_SUPPLY - total number coins to be generated
 constexpr uint64_t EMISSION_LINEAR_BASE       = ((uint64_t)(1) << 58);
 constexpr uint64_t EMISSION_SUPPLY_MULTIPLIER = 19;
@@ -19,7 +19,7 @@ constexpr uint64_t BLOCK_REWARD_HF16      = 2100 * COIN + 1 /* TODO - see below 
 constexpr uint64_t SN_REWARD_HF16         = BLOCK_REWARD_HF16 * 90 / 100;
 constexpr uint64_t FOUNDATION_REWARD_HF16 = BLOCK_REWARD_HF16 * 10 / 100;
 
-// TODO: For now we add 1 extra atomic loki to the HF16 block reward, above; ultimately with pulse
+// TODO: For now we add 1 extra atomic sispop to the HF16 block reward, above; ultimately with pulse
 // we want to just drop the miner reward output entirely when a tx has no transactions, but we don't
 // support that yet in the current code and if we put an output of 0 it currently breaks the test
 // suite (which assumes an output of 0 means ringct, which this is not).  Thus this +1 hack for now,
@@ -60,10 +60,10 @@ enum struct mapping_type : uint16_t
 {
   session,
   wallet,
-  lokinet_1year,
-  lokinet_2years,
-  lokinet_5years,
-  lokinet_10years,
+  sispopnet_1year,
+  sispopnet_2years,
+  sispopnet_5years,
+  sispopnet_10years,
   _count,
   update_record_internal,
 };
@@ -77,16 +77,16 @@ constexpr uint64_t burn_needed(uint8_t /*hf_version*/, mapping_type type)
       result = 0;
       break;
 
-    case mapping_type::lokinet_1year: /* FALLTHRU */
+    case mapping_type::sispopnet_1year: /* FALLTHRU */
     case mapping_type::session: /* FALLTHRU */
     case mapping_type::wallet: /* FALLTHRU */
     default:
       result = 2000 * COIN;
       break;
 
-    case mapping_type::lokinet_2years: result = 4000 * COIN; break;
-    case mapping_type::lokinet_5years: result = 8000 * COIN; break;
-    case mapping_type::lokinet_10years: result = 12000 * COIN; break;
+    case mapping_type::sispopnet_2years: result = 4000 * COIN; break;
+    case mapping_type::sispopnet_5years: result = 8000 * COIN; break;
+    case mapping_type::sispopnet_10years: result = 12000 * COIN; break;
   }
   return result;
 }

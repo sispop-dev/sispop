@@ -615,7 +615,7 @@ TEST(Serialization, serializes_ringct_types)
   ASSERT_EQ(bp0, bp1);
 }
 
-// TODO(loki): These tests are broken because they rely on testnet which has
+// TODO(sispop): These tests are broken because they rely on testnet which has
 // since been restarted, and so the genesis block of these predefined wallets
 // are broken
 //             - 2019-02-25 Doyle
@@ -750,7 +750,7 @@ TEST(Serialization, portability_wallet)
   }
 }
 
-#define OUTPUT_EXPORT_FILE_MAGIC "Loki output export\003"
+#define OUTPUT_EXPORT_FILE_MAGIC "Sispop output export\003"
 TEST(Serialization, portability_outputs)
 {
   const bool restricted = false;
@@ -885,7 +885,7 @@ TEST(Serialization, portability_outputs)
   ASSERT_TRUE(td2.m_pk_index == 0);
 }
 
-#define UNSIGNED_TX_PREFIX "Loki unsigned tx set\004"
+#define UNSIGNED_TX_PREFIX "Sispop unsigned tx set\004"
 struct unsigned_tx_set
 {
   std::vector<tools::wallet2::tx_construction_data> txes;
@@ -899,11 +899,11 @@ inline void serialize(Archive &a, unsigned_tx_set &x, const boost::serialization
 }
 TEST(Serialization, portability_unsigned_tx)
 {
-  // TODO(loki): We updated testnet genesis, is broken
+  // TODO(sispop): We updated testnet genesis, is broken
   const bool restricted = false;
   tools::wallet2 w(cryptonote::TESTNET, restricted);
 
-  const boost::filesystem::path filename    = unit_test::data_dir / "unsigned_loki_tx";
+  const boost::filesystem::path filename    = unit_test::data_dir / "unsigned_sispop_tx";
   const boost::filesystem::path wallet_file = unit_test::data_dir / "wallet_testnet";
   const string password = "test";
   w.load(wallet_file.string(), password);
@@ -1096,13 +1096,13 @@ TEST(Serialization, portability_unsigned_tx)
   ASSERT_TRUE(td2.m_pk_index == 0);
 }
 
-#define SIGNED_TX_PREFIX "Loki signed tx set\004"
+#define SIGNED_TX_PREFIX "Sispop signed tx set\004"
 TEST(Serialization, portability_signed_tx)
 {
   const bool restricted = false;
   tools::wallet2 w(cryptonote::TESTNET, restricted);
 
-  const boost::filesystem::path filename    = unit_test::data_dir / "signed_loki_tx";
+  const boost::filesystem::path filename    = unit_test::data_dir / "signed_sispop_tx";
   const boost::filesystem::path wallet_file = unit_test::data_dir / "wallet_testnet";
   const string password = "test";
   w.load(wallet_file.string(), password);

@@ -1,4 +1,4 @@
-// Copyright (c) 2018, The Loki Project
+// Copyright (c) 2018, The Sispop Project
 //
 // All rights reserved.
 //
@@ -80,7 +80,7 @@ namespace service_nodes
   {
     // Note: This type has various padding and alignment and was mistakingly serialized as a blob
     // (padding and all, and not portable).  To remain compatible, we have to reproduce the blob
-    // data byte-for-byte as expected in the loki 5.x struct memory layout on AMD64, via the
+    // data byte-for-byte as expected in the sispop 5.x struct memory layout on AMD64, via the
     // vote_to_blob functions below.
 
     uint8_t           version = 0;
@@ -114,7 +114,7 @@ namespace service_nodes
       }
     END_KV_SERIALIZE_MAP()
 
-   // TODO(loki): idk exactly if I want to implement this, but need for core tests to compile. Not sure I care about serializing for core tests at all.
+   // TODO(sispop): idk exactly if I want to implement this, but need for core tests to compile. Not sure I care about serializing for core tests at all.
    private:
     friend class boost::serialization::access;
     template <class Archive>
@@ -173,7 +173,7 @@ namespace service_nodes
     // return: The vector of votes if the vote is valid (and even if it is not unique) otherwise nullptr
     std::vector<pool_vote_entry> add_pool_vote_if_unique(const quorum_vote_t &vote, cryptonote::vote_verification_context &vvc);
 
-    // TODO(loki): Review relay behaviour and all the cases when it should be triggered
+    // TODO(sispop): Review relay behaviour and all the cases when it should be triggered
     void                         set_relayed         (const std::vector<quorum_vote_t>& votes);
     void                         remove_expired_votes(uint64_t height);
     void                         remove_used_votes   (std::vector<cryptonote::transaction> const &txs, uint8_t hard_fork_version);

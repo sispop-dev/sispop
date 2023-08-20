@@ -1,11 +1,11 @@
-#ifndef LOKI_NAME_SYSTEM_H
-#define LOKI_NAME_SYSTEM_H
+#ifndef SISPOP_NAME_SYSTEM_H
+#define SISPOP_NAME_SYSTEM_H
 
 #include "crypto/crypto.h"
 #include "cryptonote_config.h"
 #include "span.h"
 #include "cryptonote_basic/tx_extra.h"
-#include <lokimq/hex.h>
+#include <sispopmq/hex.h>
 
 #include <string>
 
@@ -17,7 +17,7 @@ struct checkpoint_t;
 struct block;
 class transaction;
 struct account_address;
-struct tx_extra_loki_name_system;
+struct tx_extra_sispop_name_system;
 class Blockchain;
 }; // namespace cryptonote
 
@@ -26,8 +26,8 @@ namespace lns
 
 constexpr size_t WALLET_NAME_MAX                  = 96;
 constexpr size_t WALLET_ACCOUNT_BINARY_LENGTH     = 2 * sizeof(crypto::public_key);
-constexpr size_t LOKINET_DOMAIN_NAME_MAX          = 253;
-constexpr size_t LOKINET_ADDRESS_BINARY_LENGTH    = sizeof(crypto::ed25519_public_key);
+constexpr size_t SISPOPNET_DOMAIN_NAME_MAX          = 253;
+constexpr size_t SISPOPNET_ADDRESS_BINARY_LENGTH    = sizeof(crypto::ed25519_public_key);
 constexpr size_t SESSION_DISPLAY_NAME_MAX         = 64;
 constexpr size_t SESSION_PUBLIC_KEY_BINARY_LENGTH = 1 + sizeof(crypto::ed25519_public_key); // Session keys at prefixed with 0x05 + ed25519 key
 
@@ -43,16 +43,16 @@ struct mapping_value
   bool operator==(mapping_value const &other) const { return other.len    == len && memcmp(buffer.data(), other.buffer.data(), len) == 0; }
   bool operator==(std::string   const &other) const { return other.size() == len && memcmp(buffer.data(), other.data(), len) == 0; }
 };
-inline std::ostream &operator<<(std::ostream &os, mapping_value const &v) { return os << lokimq::to_hex({reinterpret_cast<char const *>(v.buffer.data()), v.len}); }
+inline std::ostream &operator<<(std::ostream &os, mapping_value const &v) { return os << sispopmq::to_hex({reinterpret_cast<char const *>(v.buffer.data()), v.len}); }
 
 inline char const *mapping_type_str(mapping_type type)
 {
   switch(type)
   {
-    case mapping_type::lokinet_1year:   return "lokinet_1year";
-    case mapping_type::lokinet_2years:  return "lokinet_2years";
-    case mapping_type::lokinet_5years:  return "lokinet_5years";
-    case mapping_type::lokinet_10years: return "lokinet_10years";
+    case mapping_type::sispopnet_1year:   return "sispopnet_1year";
+    case mapping_type::sispopnet_2years:  return "sispopnet_2years";
+    case mapping_type::sispopnet_5years:  return "sispopnet_5years";
+    case mapping_type::sispopnet_10years: return "sispopnet_10years";
     case mapping_type::session:         return "session";
     case mapping_type::wallet:          return "wallet";
     default: assert(false);             return "xx_unhandled_type";
@@ -60,8 +60,8 @@ inline char const *mapping_type_str(mapping_type type)
 }
 inline std::ostream &operator<<(std::ostream &os, mapping_type type) { return os << mapping_type_str(type); }
 constexpr bool mapping_type_allowed(uint8_t hf_version, mapping_type type) { return type == mapping_type::session; }
-constexpr bool is_lokinet_type     (lns::mapping_type type)                { return type >= mapping_type::lokinet_1year && type <= mapping_type::lokinet_10years; }
-sqlite3       *init_loki_name_system(char const *file_path, bool read_only);
+constexpr bool is_sispopnet_type     (lns::mapping_type type)                { return type >= mapping_type::sispopnet_1year && type <= mapping_type::sispopnet_10years; }
+sqlite3       *init_sispop_name_system(char const *file_path, bool read_only);
 
 uint64_t constexpr NO_EXPIRY = static_cast<uint64_t>(-1);
 // return: The number of blocks until expiry from the registration height, if there is no expiration NO_EXPIRY is returned.
@@ -77,7 +77,7 @@ crypto::hash       tx_extra_signature_hash(epee::span<const uint8_t> value, gene
 
 // Validate a human readable mapping value representation in 'value' and write the binary form into 'blob'.
 // value: if type is session, 66 character hex string of an ed25519 public key
-//                   lokinet, 52 character base32z string of an ed25519 public key
+//                   sispopnet, 52 character base32z string of an ed25519 public key
 //                   wallet,  the wallet public address string
 // blob: (optional) if function returns true, validate_mapping_value will convert the 'value' into a binary format suitable for encryption in encrypt_mapping_value(...)
 bool         validate_mapping_value(cryptonote::network_type nettype, mapping_type type, std::string const &value, mapping_value *blob = nullptr, std::string *reason = nullptr);
@@ -170,7 +170,7 @@ public:
 
   /// Attempts to prepare the given statement.  MERRORs and returns false on failure.  If the object
   /// already has a prepare statement then it is finalized first.
-  bool compile(lokimq::string_view query, bool optimise_for_multiple_usage = true);
+  bool compile(sispopmq::string_view query, bool optimise_for_multiple_usage = true);
 
   template <size_t N>
   bool compile(const char (&query)[N], bool optimise_for_multiple_usage = true)
@@ -194,7 +194,7 @@ struct name_system_db
   // Signifies the blockchain has reorganized commences the rollback and pruning procedures.
   void                        block_detach   (cryptonote::Blockchain const &blockchain, uint64_t new_blockchain_height);
   bool                        save_owner     (generic_owner const &owner, int64_t *row_id);
-  bool                        save_mapping   (crypto::hash const &tx_hash, cryptonote::tx_extra_loki_name_system const &src, uint64_t height, int64_t owner_id, int64_t backup_owner_id = 0);
+  bool                        save_mapping   (crypto::hash const &tx_hash, cryptonote::tx_extra_sispop_name_system const &src, uint64_t height, int64_t owner_id, int64_t backup_owner_id = 0);
   bool                        save_settings  (uint64_t top_height, crypto::hash const &top_hash, int version);
 
   // Delete all mappings that are registered on height or newer followed by deleting all owners no longer referenced in the DB
@@ -208,8 +208,8 @@ struct name_system_db
   std::vector<mapping_record> get_mappings_by_owners(std::vector<generic_owner> const &keys);
   settings_record             get_settings          ();
 
-  // entry: (optional) if function returns true, the Loki Name System entry in the TX extra is copied into 'entry'
-  bool                        validate_lns_tx       (uint8_t hf_version, uint64_t blockchain_height, cryptonote::transaction const &tx, cryptonote::tx_extra_loki_name_system *entry = nullptr, std::string *reason = nullptr);
+  // entry: (optional) if function returns true, the Sispop Name System entry in the TX extra is copied into 'entry'
+  bool                        validate_lns_tx       (uint8_t hf_version, uint64_t blockchain_height, cryptonote::transaction const &tx, cryptonote::tx_extra_sispop_name_system *entry = nullptr, std::string *reason = nullptr);
 
   // Destructor; closes the sqlite3 database if one is open
   ~name_system_db();
@@ -234,4 +234,4 @@ private:
 };
 
 }; // namespace service_nodes
-#endif // LOKI_NAME_SYSTEM_H
+#endif // SISPOP_NAME_SYSTEM_H

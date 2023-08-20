@@ -34,8 +34,8 @@
 
 #include "easylogging++.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "default"
+#undef SISPOP_DEFAULT_LOG_CATEGORY
+#define SISPOP_DEFAULT_LOG_CATEGORY "default"
 
 #define MAX_LOG_FILE_SIZE 104850000 // 100 MB - 7600 bytes
 #define MAX_LOG_FILES 50
@@ -64,20 +64,20 @@
 #define MCLOG_MAGENTA(level,cat,x) MCLOG_COLOR(level,cat,"35",x)
 #define MCLOG_CYAN(level,cat,x) MCLOG_COLOR(level,cat,"36",x)
 
-#define MLOG_RED(level,x) MCLOG_RED(level,LOKI_DEFAULT_LOG_CATEGORY,x)
-#define MLOG_GREEN(level,x) MCLOG_GREEN(level,LOKI_DEFAULT_LOG_CATEGORY,x)
-#define MLOG_YELLOW(level,x) MCLOG_YELLOW(level,LOKI_DEFAULT_LOG_CATEGORY,x)
-#define MLOG_BLUE(level,x) MCLOG_BLUE(level,LOKI_DEFAULT_LOG_CATEGORY,x)
-#define MLOG_MAGENTA(level,x) MCLOG_MAGENTA(level,LOKI_DEFAULT_LOG_CATEGORY,x)
-#define MLOG_CYAN(level,x) MCLOG_CYAN(level,LOKI_DEFAULT_LOG_CATEGORY,x)
+#define MLOG_RED(level,x) MCLOG_RED(level,SISPOP_DEFAULT_LOG_CATEGORY,x)
+#define MLOG_GREEN(level,x) MCLOG_GREEN(level,SISPOP_DEFAULT_LOG_CATEGORY,x)
+#define MLOG_YELLOW(level,x) MCLOG_YELLOW(level,SISPOP_DEFAULT_LOG_CATEGORY,x)
+#define MLOG_BLUE(level,x) MCLOG_BLUE(level,SISPOP_DEFAULT_LOG_CATEGORY,x)
+#define MLOG_MAGENTA(level,x) MCLOG_MAGENTA(level,SISPOP_DEFAULT_LOG_CATEGORY,x)
+#define MLOG_CYAN(level,x) MCLOG_CYAN(level,SISPOP_DEFAULT_LOG_CATEGORY,x)
 
-#define MFATAL(x) MCFATAL(LOKI_DEFAULT_LOG_CATEGORY,x)
-#define MERROR(x) MCERROR(LOKI_DEFAULT_LOG_CATEGORY,x)
-#define MWARNING(x) MCWARNING(LOKI_DEFAULT_LOG_CATEGORY,x)
-#define MINFO(x) MCINFO(LOKI_DEFAULT_LOG_CATEGORY,x)
-#define MDEBUG(x) MCDEBUG(LOKI_DEFAULT_LOG_CATEGORY,x)
-#define MTRACE(x) MCTRACE(LOKI_DEFAULT_LOG_CATEGORY,x)
-#define MLOG(level,x) MCLOG(level,LOKI_DEFAULT_LOG_CATEGORY,x)
+#define MFATAL(x) MCFATAL(SISPOP_DEFAULT_LOG_CATEGORY,x)
+#define MERROR(x) MCERROR(SISPOP_DEFAULT_LOG_CATEGORY,x)
+#define MWARNING(x) MCWARNING(SISPOP_DEFAULT_LOG_CATEGORY,x)
+#define MINFO(x) MCINFO(SISPOP_DEFAULT_LOG_CATEGORY,x)
+#define MDEBUG(x) MCDEBUG(SISPOP_DEFAULT_LOG_CATEGORY,x)
+#define MTRACE(x) MCTRACE(SISPOP_DEFAULT_LOG_CATEGORY,x)
+#define MLOG(level,x) MCLOG(level,SISPOP_DEFAULT_LOG_CATEGORY,x)
 
 #define MGINFO(x) MCINFO("global",x)
 #define MGINFO_RED(x) MCLOG_RED(el::Level::Info, "global",x)
@@ -94,7 +94,7 @@
       el::base::Writer(level, __FILE__, __LINE__, ELPP_FUNC, type).construct(cat) << x; \
     } \
   } while(0)
-#define MIDEBUG(init, x) IFLOG(el::Level::Debug, LOKI_DEFAULT_LOG_CATEGORY, el::base::DispatchAction::NormalLog, init, x)
+#define MIDEBUG(init, x) IFLOG(el::Level::Debug, SISPOP_DEFAULT_LOG_CATEGORY, el::base::DispatchAction::NormalLog, init, x)
 
 
 #define LOG_ERROR(x) MERROR(x)

@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c)      2018, The Loki Project
+// Copyright (c)      2018, The Sispop Project
 // 
 // All rights reserved.
 // 
@@ -33,10 +33,10 @@
 #include "string_tools.h"
 #include "daemon/command_server.h"
 
-#include "common/loki_integration_test_hooks.h"
+#include "common/sispop_integration_test_hooks.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "daemon"
+#undef SISPOP_DEFAULT_LOG_CATEGORY
+#define SISPOP_DEFAULT_LOG_CATEGORY "daemon"
 
 namespace daemonize {
 
@@ -311,7 +311,7 @@ t_command_server::t_command_server(
     , "bc_dyn_stats <last_block_count>"
     , "Print the information about current blockchain dynamic state."
     );
-    // TODO(loki): Implement
+    // TODO(sispop): Implement
 #if 0
     m_command_lookup.set_handler(
       "update"
@@ -342,7 +342,7 @@ t_command_server::t_command_server(
     , std::bind(&t_command_parser_executor::version, &m_parser, p::_1)
     , "Print version information."
     );
-#if 0 // TODO(loki): Pruning not supported because of Service Node List
+#if 0 // TODO(sispop): Pruning not supported because of Service Node List
     m_command_lookup.set_handler(
       "prune_blockchain"
     , std::bind(&t_command_parser_executor::prune_blockchain, &m_parser, p::_1)
@@ -366,7 +366,7 @@ t_command_server::t_command_server(
     , "print_sn_state_changes <start_height> [end height]"
     , "Query the state changes between the range, omit the last argument to scan until the current block"
     );
-#if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
+#if defined(SISPOP_ENABLE_INTEGRATION_TEST_HOOKS)
     m_command_lookup.set_handler(
       "relay_votes_and_uptime", std::bind([rpc_server](std::vector<std::string> const &args) {
         rpc_server->on_relay_uptime_and_votes();
@@ -440,7 +440,7 @@ bool t_command_server::process_command_vec(const std::vector<std::string>& cmd)
   return result;
 }
 
-#if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
+#if defined(SISPOP_ENABLE_INTEGRATION_TEST_HOOKS)
 #include <thread>
 #endif
 
@@ -448,7 +448,7 @@ bool t_command_server::start_handling(std::function<void(void)> exit_handler)
 {
   if (m_is_rpc) return false;
 
-#if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
+#if defined(SISPOP_ENABLE_INTEGRATION_TEST_HOOKS)
   auto handle_pipe = [&]()
   {
     // TODO(doyle): Hack, don't hook into input until the daemon has completely initialised, i.e. you can print the status
@@ -506,7 +506,7 @@ bool t_command_server::help(const std::vector<std::string>& args)
 std::string t_command_server::get_commands_str()
 {
   std::stringstream ss;
-  ss << "Loki '" << LOKI_RELEASE_NAME << "' (v" << LOKI_VERSION_FULL << ")" << std::endl;
+  ss << "Sispop '" << SISPOP_RELEASE_NAME << "' (v" << SISPOP_VERSION_FULL << ")" << std::endl;
   ss << "Commands: " << std::endl;
   std::string usage = m_command_lookup.get_usage();
   boost::replace_all(usage, "\n", "\n  ");

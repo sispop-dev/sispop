@@ -1,4 +1,4 @@
-# Copyright (c) 2018, The Loki Project
+# Copyright (c) 2018, The Sispop Project
 # Copyright (c) 2014-2019, The Monero Project
 #
 # All rights reserved.
@@ -27,7 +27,7 @@
 # STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-loki_add_executable(daemon "lokid"
+sispop_add_executable(daemon "sispopd"
   command_parser_executor.cpp
   command_server.cpp
   daemon.cpp

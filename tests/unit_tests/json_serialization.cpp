@@ -60,7 +60,7 @@ namespace
 
             int num_outputs_to_use = static_cast<int>(source.vout.size());
             if (num_outputs_to_use > 0 && is_miner_tx)
-              --num_outputs_to_use; // NOTE:(loki): Don't try to transfer the governance reward which is always the last one
+              --num_outputs_to_use; // NOTE:(sispop): Don't try to transfer the governance reward which is always the last one
 
             for (int output_index = 0; output_index < num_outputs_to_use; ++output_index)
             {
@@ -89,7 +89,7 @@ namespace
         std::unordered_map<crypto::public_key, cryptonote::subaddress_index> subaddresses;
         subaddresses[from.m_account_address.m_spend_public_key] = {0,0};
 
-        cryptonote::loki_construct_tx_params tx_params;
+        cryptonote::sispop_construct_tx_params tx_params;
         tx_params.hf_version = cryptonote::network_version_10_bulletproofs - 1;
         if (bulletproof) tx_params.hf_version = cryptonote::network_version_count - 1;
         if (!cryptonote::construct_tx_and_get_tx_key(from, subaddresses, actual_sources, to, boost::none, {}, tx, 0, tx_key, extra_keys, { bulletproof ? rct::RangeProofBulletproof : rct::RangeProofBorromean, bulletproof ? 2 : 0 }, nullptr, tx_params))

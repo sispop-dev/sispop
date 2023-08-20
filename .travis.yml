@@ -83,7 +83,7 @@ script:
     fi
   - if [ -n "$RUN_TESTS" ]; then make ARGS="-E libwallet_api_tests" test; fi
     # Test that we can invoke the binaries (e.g. to test against linking failure):
-  - ./bin/lokid --version
-  - ./bin/loki-wallet-cli --version
+  - ./bin/sispopd --version
+  - ./bin/sispop-wallet-cli --version
 before_cache:
   - if [ "${TRAVIS_OS_NAME}" = "osx" ]; then brew cleanup; fi

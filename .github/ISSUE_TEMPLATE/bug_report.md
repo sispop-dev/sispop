@@ -25,4 +25,4 @@ If applicable, add screenshots or logs to help explain your problem.
 **Additional Information (please complete the following information):**
  - Operating System: [e.g. Ubuntu 16.04, Windows 10]
 -  Local or Remote node
- - Version of Loki daemon, or most recent commit hash.
+ - Version of Sispop daemon, or most recent commit hash.

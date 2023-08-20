@@ -62,7 +62,7 @@ class SNNetwork:
 
         vprint("Using '{}' for data files and logs".format(datadir))
 
-        nodeopts = dict(lokid=self.binpath+'/lokid', datadir=datadir)
+        nodeopts = dict(sispopd=self.binpath+'/sispopd', datadir=datadir)
 
         self.sns = [Daemon(service_node=True, **nodeopts) for _ in range(sns)]
         self.nodes = [Daemon(**nodeopts) for _ in range(nodes)]
@@ -74,7 +74,7 @@ class SNNetwork:
             self.wallets.append(Wallet(
                 node=self.nodes[len(self.wallets) % len(self.nodes)],
                 name=name,
-                rpc_wallet=self.binpath+'/loki-wallet-rpc',
+                rpc_wallet=self.binpath+'/sispop-wallet-rpc',
                 datadir=datadir))
 
         self.alice, self.bob, self.mike = self.wallets
@@ -86,22 +86,22 @@ class SNNetwork:
                 if i != k:
                     self.all_nodes[i].add_peer(self.all_nodes[k])
 
-        vprint("Starting new lokid service nodes with RPC on {} ports".format(self.sns[0].listen_ip), end="")
+        vprint("Starting new sispopd service nodes with RPC on {} ports".format(self.sns[0].listen_ip), end="")
         for sn in self.sns:
             vprint(" {}".format(sn.rpc_port), end="", flush=True, timestamp=False)
             sn.start()
         vprint(timestamp=False)
-        vprint("Starting new regular lokid nodes with RPC on {} ports".format(self.nodes[0].listen_ip), end="")
+        vprint("Starting new regular sispopd nodes with RPC on {} ports".format(self.nodes[0].listen_ip), end="")
         for d in self.nodes:
             vprint(" {}".format(d.rpc_port), end="", flush=True, timestamp=False)
             d.start()
         vprint(timestamp=False)
 
-        vprint("Waiting for all lokid's to get ready")
+        vprint("Waiting for all sispopd's to get ready")
         for d in self.all_nodes:
             d.wait_for_json_rpc("get_info")
 
-        vprint("Lokids are ready. Starting wallets")
+        vprint("Sispopds are ready. Starting wallets")
 
         for w in self.wallets:
             vprint("Starting new RPC wallet {w.name} at {w.listen_ip}:{w.rpc_port}".format(w=w))
@@ -148,7 +148,7 @@ class SNNetwork:
 
         self.print_wallet_balances()
 
-        vprint("Sending fake lokinet/ss pings")
+        vprint("Sending fake sispopnet/ss pings")
         for sn in self.sns:
             sn.ping()
 
@@ -311,22 +311,22 @@ def chuck(net):
     nodes will not have received proofs (and so can't be used to submit blinks).
     """
 
-    chuck = Wallet(node=net.nodes[0], name='Chuck', rpc_wallet=net.binpath+'/loki-wallet-rpc', datadir=net.datadir)
+    chuck = Wallet(node=net.nodes[0], name='Chuck', rpc_wallet=net.binpath+'/sispop-wallet-rpc', datadir=net.datadir)
     chuck.ready(wallet="chuck")
 
-    hidden_node = Daemon(lokid=net.binpath+'/lokid', datadir=net.datadir)
-    bridge_node = Daemon(lokid=net.binpath+'/lokid', datadir=net.datadir)
+    hidden_node = Daemon(sispopd=net.binpath+'/sispopd', datadir=net.datadir)
+    bridge_node = Daemon(sispopd=net.binpath+'/sispopd', datadir=net.datadir)
     for x in (4, 7):
         bridge_node.add_peer(net.all_nodes[x])
     bridge_node.add_peer(hidden_node)
     hidden_node.add_peer(bridge_node)
 
-    vprint("Starting new chuck lokid bridge node with RPC on {}:{}".format(bridge_node.listen_ip, bridge_node.rpc_port))
+    vprint("Starting new chuck sispopd bridge node with RPC on {}:{}".format(bridge_node.listen_ip, bridge_node.rpc_port))
     bridge_node.start()
     bridge_node.wait_for_json_rpc("get_info")
     net.sync(extra_nodes=[bridge_node], extra_wallets=[chuck])
 
-    vprint("Starting new chuck lokid hidden node with RPC on {}:{}".format(hidden_node.listen_ip, hidden_node.rpc_port))
+    vprint("Starting new chuck sispopd hidden node with RPC on {}:{}".format(hidden_node.listen_ip, hidden_node.rpc_port))
     hidden_node.start()
     hidden_node.wait_for_json_rpc("get_info")
     net.sync(extra_nodes=[hidden_node, bridge_node], extra_wallets=[chuck])
@@ -336,7 +336,7 @@ def chuck(net):
     # wallet then copy the underlying wallet file.
     chuck.refresh()
     chuck.stop()
-    chuck.hidden = Wallet(node=hidden_node, name='Chuck (hidden)', rpc_wallet=net.binpath+'/loki-wallet-rpc', datadir=net.datadir)
+    chuck.hidden = Wallet(node=hidden_node, name='Chuck (hidden)', rpc_wallet=net.binpath+'/sispop-wallet-rpc', datadir=net.datadir)
 
     import shutil
     import os

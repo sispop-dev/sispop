@@ -1,5 +1,5 @@
 #include "cryptonote_config.h"
-#include "common/loki.h"
+#include "common/sispop.h"
 #include "int-util.h"
 #include <vector>
 #include <boost/lexical_cast.hpp>
@@ -9,7 +9,7 @@
 
 namespace service_nodes {
 
-// TODO(loki): Move to loki_economy, this will also need access to loki::exp2
+// TODO(sispop): Move to sispop_economy, this will also need access to sispop::exp2
 uint64_t get_staking_requirement(cryptonote::network_type m_nettype, uint64_t height, uint8_t hf_version)
 {
   if (m_nettype == cryptonote::TESTNET || m_nettype == cryptonote::FAKECHAIN)
@@ -25,10 +25,10 @@ uint64_t get_staking_requirement(cryptonote::network_type m_nettype, uint64_t he
 
    if (height >= 133) {
     base     = 75000 * COIN;
-    variable = (75000 * COIN) / loki::exp2(height_adjusted/129600.0);
+    variable = (75000 * COIN) / sispop::exp2(height_adjusted/129600.0);
     } else {
     base     = 1500 * COIN;
-    variable = (1500 * COIN) / loki::exp2(height_adjusted/129600.0);
+    variable = (1500 * COIN) / sispop::exp2(height_adjusted/129600.0);
     }
   uint64_t result = base + variable;
   return result;

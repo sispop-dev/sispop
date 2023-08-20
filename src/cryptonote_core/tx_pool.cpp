@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c)      2018, The Loki Project
+// Copyright (c)      2018, The Sispop Project
 //
 // All rights reserved.
 //
@@ -49,8 +49,8 @@
 #include "common/perf_timer.h"
 #include "crypto/hash.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "txpool"
+#undef SISPOP_DEFAULT_LOG_CATEGORY
+#define SISPOP_DEFAULT_LOG_CATEGORY "txpool"
 
 DISABLE_VS_WARNINGS(4244 4345 4503) //'boost::foreach_detail_::or_' : decorated name length exceeded, name was truncated
 
@@ -215,10 +215,10 @@ namespace cryptonote
       }
 
     }
-    else if (tx.type == txtype::loki_name_system)
+    else if (tx.type == txtype::sispop_name_system)
     {
-      tx_extra_loki_name_system data;
-      if (!cryptonote::get_loki_name_system_from_tx_extra(tx.extra, data))
+      tx_extra_sispop_name_system data;
+      if (!cryptonote::get_sispop_name_system_from_tx_extra(tx.extra, data))
       {
         MERROR("Could not get acquire name service from tx: " << get_transaction_hash(tx) << ", tx to add is possibly invalid, rejecting");
         return true;
@@ -231,8 +231,8 @@ namespace cryptonote
         if (pool_tx.type != tx.type)
           continue;
 
-        tx_extra_loki_name_system pool_data;
-        if (!cryptonote::get_loki_name_system_from_tx_extra(pool_tx.extra, pool_data))
+        tx_extra_sispop_name_system pool_data;
+        if (!cryptonote::get_sispop_name_system_from_tx_extra(pool_tx.extra, pool_data))
         {
           LOG_PRINT_L1("Could not get acquire name service from tx: " << get_transaction_hash(tx) << ", possibly corrupt tx in the pool");
           return true;
@@ -249,7 +249,7 @@ namespace cryptonote
     {
       if (tx.type != txtype::standard && tx.type != txtype::stake)
       {
-        // NOTE(loki): This is a developer error. If we come across this in production, be conservative and just reject
+        // NOTE(sispop): This is a developer error. If we come across this in production, be conservative and just reject
         MERROR("Unrecognised transaction type: " << tx.type << " for tx: " << get_transaction_hash(tx));
         return true;
       }
@@ -1459,7 +1459,7 @@ namespace cryptonote
       if (pool_tx.type == txtype::state_change &&
           get_service_node_state_change_from_tx_extra(pool_tx.extra, state_change, blk.major_version))
       {
-        // TODO(loki): PERF(loki): On pop_blocks we return all the TXs to the
+        // TODO(sispop): PERF(sispop): On pop_blocks we return all the TXs to the
         // pool. The greater the pop_blocks, the more txs that are queued in the
         // pool, and for every subsequent block you sync, get_transactions has
         // to allocate these transactions and we have to search every
@@ -1806,7 +1806,7 @@ end:
     fee = 0;
     
     //baseline empty block
-    loki_block_reward_context block_reward_context = {};
+    sispop_block_reward_context block_reward_context = {};
     block_reward_context.height                    = height;
     if (!m_blockchain.calc_batched_governance_reward(height, block_reward_context.batched_governance))
     {
@@ -1815,7 +1815,7 @@ end:
     }
 
     block_reward_parts reward_parts = {};
-    get_loki_block_reward(median_weight, total_weight, already_generated_coins, version, reward_parts, block_reward_context);
+    get_sispop_block_reward(median_weight, total_weight, already_generated_coins, version, reward_parts, block_reward_context);
     best_coinbase = reward_parts.base_miner;
 
     size_t max_total_weight = 2 * median_weight - CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE;
@@ -1843,11 +1843,11 @@ end:
         continue;
       }
 
-      if (true /* version >= 5 -- always true for Loki */)
+      if (true /* version >= 5 -- always true for Sispop */)
       {
         // If we're getting lower coinbase tx, stop including more tx
         block_reward_parts reward_parts_other = {};
-        if(!get_loki_block_reward(median_weight, total_weight + meta.weight, already_generated_coins, version, reward_parts_other, block_reward_context))
+        if(!get_sispop_block_reward(median_weight, total_weight + meta.weight, already_generated_coins, version, reward_parts_other, block_reward_context))
         {
           LOG_PRINT_L2("  would exceed maximum block weight");
           continue;

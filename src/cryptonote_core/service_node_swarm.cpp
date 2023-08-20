@@ -1,8 +1,8 @@
 #include "service_node_swarm.h"
 #include "common/random.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "service_nodes"
+#undef SISPOP_DEFAULT_LOG_CATEGORY
+#define SISPOP_DEFAULT_LOG_CATEGORY "service_nodes"
 
 #ifdef UNIT_TEST
   #define prod_static

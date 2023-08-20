@@ -43,7 +43,7 @@
 
 #include "cryptonote_core/service_node_quorum_cop.h"
 #include "cryptonote_core/service_node_list.h"
-#include "common/loki.h"
+#include "common/sispop.h"
 
 namespace
 {
@@ -98,7 +98,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
 #define MAKE_CORE_RPC_VERSION(major,minor) (((major)<<16)|(minor))
 #define CORE_RPC_VERSION MAKE_CORE_RPC_VERSION(CORE_RPC_VERSION_MAJOR, CORE_RPC_VERSION_MINOR)
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get the node's current height.
   struct COMMAND_RPC_GET_HEIGHT
   {
@@ -130,7 +130,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get all blocks info. Binary request.
   struct COMMAND_RPC_GET_BLOCKS_FAST
   {
@@ -190,7 +190,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get blocks by height. Binary request.
   struct COMMAND_RPC_GET_BLOCKS_BY_HEIGHT
   {
@@ -220,7 +220,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
   };
 
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get the known blocks hashes which are not on the main chain.
   struct COMMAND_RPC_GET_ALT_BLOCKS_HASHES
   {
@@ -246,7 +246,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get hashes. Binary request.
   struct COMMAND_RPC_GET_HASHES_FAST
   {
@@ -282,7 +282,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   struct COMMAND_RPC_GET_RANDOM_OUTS
   {
       struct request_t
@@ -334,7 +334,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // TODO: Undocumented light wallet RPC call
   struct COMMAND_RPC_SUBMIT_RAW_TX
   {
@@ -368,7 +368,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // TODO: Undocumented light wallet RPC call
   struct COMMAND_RPC_LOGIN
   {
@@ -401,7 +401,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // TODO: Undocumented light wallet RPC call
   struct COMMAND_RPC_IMPORT_WALLET_REQUEST
   {
@@ -438,7 +438,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Look up one or more transactions by hash.
   struct COMMAND_RPC_GET_TRANSACTIONS
   {
@@ -523,7 +523,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Check if outputs have been spent using the key image associated with the output.
   struct COMMAND_RPC_IS_KEY_IMAGE_SPENT
   {
@@ -561,7 +561,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
   };
 
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get global outputs of transactions. Binary request.
   struct COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES
   {
@@ -591,10 +591,10 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   struct get_outputs_out
   {
-    uint64_t amount; // Amount of Loki in TXID.
+    uint64_t amount; // Amount of Sispop in TXID.
     uint64_t index;  
 
     BEGIN_KV_SERIALIZE_MAP()
@@ -603,7 +603,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     END_KV_SERIALIZE_MAP()
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get outputs. Binary request.
   struct COMMAND_RPC_GET_OUTPUTS_BIN
   {
@@ -651,7 +651,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   struct COMMAND_RPC_GET_OUTPUTS
   {
     struct request_t
@@ -698,7 +698,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Broadcast a raw transaction to the network.
   struct COMMAND_RPC_SEND_RAW_TX
   {
@@ -741,7 +741,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Start mining on the daemon.
   struct COMMAND_RPC_START_MINING
   {
@@ -776,7 +776,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Retrieve general information about the state of your node and the network.
   struct COMMAND_RPC_GET_INFO
   {
@@ -816,7 +816,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       uint64_t block_weight_median;         // Median block weight of latest 100 blocks.
       uint64_t start_time;                  // Start time of the daemon, as UNIX time.
       uint64_t last_storage_server_ping;    // Last ping time of the storage server (0 if never or not running as a service node)
-      uint64_t last_lokinet_ping;           // Last ping time of lokinet (0 if never or not running as a service node)
+      uint64_t last_sispopnet_ping;           // Last ping time of sispopnet (0 if never or not running as a service node)
       uint64_t free_space;                  // Available disk space on the node.
       bool offline;                         // States if the node is offline (`true`) or online (`false`).
       bool untrusted;                       // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
@@ -855,7 +855,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
         KV_SERIALIZE_OPT(block_weight_median, (uint64_t)0)
         KV_SERIALIZE(start_time)
         KV_SERIALIZE(last_storage_server_ping)
-        KV_SERIALIZE(last_lokinet_ping)
+        KV_SERIALIZE(last_sispopnet_ping)
         KV_SERIALIZE(free_space)
         KV_SERIALIZE(offline)
         KV_SERIALIZE(untrusted)
@@ -871,7 +871,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
   };
 
   //-----------------------------------------------
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   struct COMMAND_RPC_GET_NET_STATS
   {
     struct request_t
@@ -904,7 +904,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Stop mining on the daemon.
   struct COMMAND_RPC_STOP_MINING
   {
@@ -926,7 +926,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get the mining status of the daemon.
   struct COMMAND_RPC_MINING_STATUS
   {
@@ -975,7 +975,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Save the blockchain. The blockchain does not need saving and is always saved when modified, 
   // however it does a sync to flush the filesystem cache onto the disk for safety purposes against Operating System or Hardware crashes.
   struct COMMAND_RPC_SAVE_BC
@@ -998,7 +998,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Look up how many blocks are in the longest chain known to the node.
   struct COMMAND_RPC_GETBLOCKCOUNT
   {
@@ -1017,7 +1017,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Look up a block's hash by its height.
   struct COMMAND_RPC_GETBLOCKHASH
   {
@@ -1025,7 +1025,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef std::string response;          // Block hash (string).
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get a block template on which mining a new block.
   struct COMMAND_RPC_GETBLOCKTEMPLATE
   {
@@ -1074,7 +1074,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Submit a mined block to the network.
   struct COMMAND_RPC_SUBMITBLOCK
   {
@@ -1090,7 +1090,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Developer only.
   struct COMMAND_RPC_GENERATEBLOCKS
   {
@@ -1125,22 +1125,22 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   struct block_header_response
   {
-      uint8_t major_version;                  // The major version of the loki protocol at this block height.
-      uint8_t minor_version;                  // The minor version of the loki protocol at this block height.
+      uint8_t major_version;                  // The major version of the sispop protocol at this block height.
+      uint8_t minor_version;                  // The minor version of the sispop protocol at this block height.
       uint64_t timestamp;                     // The unix time at which the block was recorded into the blockchain.
       std::string prev_hash;                  // The hash of the block immediately preceding this block in the chain.
-      uint32_t nonce;                         // A cryptographic random one-time number used in mining a Loki block.
+      uint32_t nonce;                         // A cryptographic random one-time number used in mining a Sispop block.
       bool orphan_status;                     // Usually `false`. If `true`, this block is not part of the longest chain.
       uint64_t height;                        // The number of blocks preceding this block on the blockchain.
       uint64_t depth;                         // The number of blocks succeeding this block on the blockchain. A larger number means an older block.
       std::string hash;                       // The hash of this block.
-      difficulty_type difficulty;             // The strength of the Loki network based on mining power.
-      difficulty_type cumulative_difficulty;  // The cumulative strength of the Loki network based on mining power.
-      uint64_t reward;                        // The amount of new generated in this block and rewarded to the miner, foundation and service Nodes. Note: 1 LOKI = 1e12 atomic units.
-      uint64_t miner_reward;                  // The amount of new generated in this block and rewarded to the miner. Note: 1 LOKI = 1e12 atomic units. 
+      difficulty_type difficulty;             // The strength of the Sispop network based on mining power.
+      difficulty_type cumulative_difficulty;  // The cumulative strength of the Sispop network based on mining power.
+      uint64_t reward;                        // The amount of new generated in this block and rewarded to the miner, foundation and service Nodes. Note: 1 SISPOP = 1e12 atomic units.
+      uint64_t miner_reward;                  // The amount of new generated in this block and rewarded to the miner. Note: 1 SISPOP = 1e12 atomic units. 
       uint64_t block_size;                    // The block size in bytes.
       uint64_t block_weight;                  // The block weight in bytes.
       uint64_t num_txes;                      // Number of transactions in the block, not counting the coinbase tx.
@@ -1173,7 +1173,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       END_KV_SERIALIZE_MAP()
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Block header information for the most recent block is easily retrieved with this method. No inputs are needed.
   struct COMMAND_RPC_GET_LAST_BLOCK_HEADER
   {
@@ -1202,7 +1202,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Block header information can be retrieved using either a block's hash or height. This method includes a block's hash as an input parameter to retrieve basic information about the block.
   struct COMMAND_RPC_GET_BLOCK_HEADER_BY_HASH
   {
@@ -1233,7 +1233,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Similar to get_block_header_by_hash above, this method includes a block's height as an input parameter to retrieve basic information about the block.
   struct COMMAND_RPC_GET_BLOCK_HEADER_BY_HEIGHT
   {
@@ -1264,7 +1264,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Full block information can be retrieved by either block height or hash, like with the above block header calls. 
   // For full block information, both lookups use the same method, but with different input parameters.
   struct COMMAND_RPC_GET_BLOCK
@@ -1306,13 +1306,13 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   struct peer 
   {
     uint64_t id;           // Peer id.
     std::string host;      // IP address in string format.
     uint32_t ip;           // IP address in integer format.
-    uint16_t port;         // TCP port the peer is using to connect to loki network.
+    uint16_t port;         // TCP port the peer is using to connect to sispop network.
     uint16_t rpc_port;     // RPC port the peer is using
     uint64_t last_seen;    // Unix time at which the peer has been seen for the last time
     uint32_t pruning_seed; //
@@ -1340,7 +1340,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     END_KV_SERIALIZE_MAP()
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get the known peers list.
   struct COMMAND_RPC_GET_PEER_LIST
   {
@@ -1366,7 +1366,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Set the log hash rate display mode.
   struct COMMAND_RPC_SET_LOG_HASH_RATE
   {
@@ -1390,7 +1390,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Set the daemon log level. By default, log level is set to `0`.
   struct COMMAND_RPC_SET_LOG_LEVEL
   {
@@ -1414,7 +1414,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Set the daemon log categories. Categories are represented as a comma separated list of `<Category>:<level>` (similarly to syslog standard `<Facility>:<Severity-level>`), where:
   // Category is one of the following: * (all facilities), default, net, net.http, net.p2p, logging, net.trottle, blockchain.db, blockchain.db.lmdb, bcutil, checkpoints, net.dns, net.dl,
   // i18n, perf,stacktrace, updates, account, cn ,difficulty, hardfork, miner, blockchain, txpool, cn.block_queue, net.cn, daemon, debugtools.deserialize, debugtools.objectsizes, device.ledger, 
@@ -1449,7 +1449,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   struct tx_info
   {
     std::string id_hash;                // The transaction ID hash.
@@ -1490,7 +1490,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     END_KV_SERIALIZE_MAP()
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   struct spent_key_image_info
   {
     std::string id_hash;                 // Key image.
@@ -1502,7 +1502,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     END_KV_SERIALIZE_MAP()
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Show information about valid transactions seen by the node but not yet mined into a block, 
   // as well as spent key image information for the txpool in the node's memory.
   struct COMMAND_RPC_GET_TRANSACTION_POOL
@@ -1531,7 +1531,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get hashes from transaction pool. Binary request.
   struct COMMAND_RPC_GET_TRANSACTION_POOL_HASHES_BIN
   {
@@ -1561,7 +1561,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get hashes from transaction pool.
   struct COMMAND_RPC_GET_TRANSACTION_POOL_HASHES
   {
@@ -1587,15 +1587,15 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   struct tx_backlog_entry
   {
     uint64_t weight;       // 
-    uint64_t fee;          // Fee in Loki measured in atomic units.
+    uint64_t fee;          // Fee in Sispop measured in atomic units.
     uint64_t time_in_pool;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get all transaction pool backlog.
   struct COMMAND_RPC_GET_TRANSACTION_POOL_BACKLOG
   {
@@ -1621,7 +1621,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   struct txpool_histo
   {
     uint32_t txs;   // Number of transactions.
@@ -1633,7 +1633,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     END_KV_SERIALIZE_MAP()
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   struct txpool_stats
   {
     uint64_t bytes_total;            // Total size of all transactions in pool.
@@ -1669,7 +1669,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     END_KV_SERIALIZE_MAP()
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get the transaction pool statistics.
   struct COMMAND_RPC_GET_TRANSACTION_POOL_STATS
   {
@@ -1695,7 +1695,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Retrieve information about incoming and outgoing connections to your node.
   struct COMMAND_RPC_GET_CONNECTIONS
   {
@@ -1719,7 +1719,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Similar to get_block_header_by_height above, but for a range of blocks. 
   // This method includes a starting block height and an ending block height as 
   // parameters to retrieve basic information about the range of blocks.
@@ -1754,7 +1754,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Send a command to the daemon to safely disconnect and shut down.
   struct COMMAND_RPC_STOP_DAEMON
   {
@@ -1776,7 +1776,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get daemon bandwidth limits.
   struct COMMAND_RPC_GET_LIMIT
   {
@@ -1804,7 +1804,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Set daemon bandwidth limits.
   struct COMMAND_RPC_SET_LIMIT
   {
@@ -1835,7 +1835,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Limit number of Outgoing peers.
   struct COMMAND_RPC_OUT_PEERS
   {
@@ -1859,7 +1859,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Limit number of Incoming peers.
   struct COMMAND_RPC_IN_PEERS
   {
@@ -1883,7 +1883,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Look up information regarding hard fork voting and readiness.
   struct COMMAND_RPC_HARD_FORK_INFO
   {
@@ -1926,7 +1926,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get list of banned IPs.
   struct COMMAND_RPC_GETBANS
   {
@@ -1963,7 +1963,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Ban another node by IP.
   struct COMMAND_RPC_SETBANS
   {
@@ -2003,7 +2003,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Determine whether a given IP address is banned
   struct COMMAND_RPC_BANNED
   {
@@ -2032,7 +2032,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Flush tx ids from transaction pool..
   struct COMMAND_RPC_FLUSH_TRANSACTION_POOL
   {
@@ -2057,7 +2057,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get a histogram of output amounts. For all amounts (possibly filtered by parameters), 
   // gives the number of outputs on the chain for that amount. RingCT outputs counts as 0 amount.
   struct COMMAND_RPC_GET_OUTPUT_HISTOGRAM
@@ -2114,7 +2114,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get node current version.
   struct COMMAND_RPC_GET_VERSION
   {
@@ -2140,7 +2140,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get the coinbase amount and the fees amount for n last blocks starting at particular height.
   struct COMMAND_RPC_GET_COINBASE_TX_SUM
   {
@@ -2161,7 +2161,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       std::string status;       // General RPC error code. "OK" means everything looks good.
       uint64_t emission_amount; // Amount of coinbase reward in atomic units.
       uint64_t fee_amount;      // Amount of fees in atomic units.
-      uint64_t burn_amount;      // Amount of burnt loki.
+      uint64_t burn_amount;      // Amount of burnt sispop.
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(status)
@@ -2173,7 +2173,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Gives an estimation of per-output + per-byte fees
   struct COMMAND_RPC_GET_BASE_FEE_ESTIMATE
   {
@@ -2206,7 +2206,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Display alternative chains seen by the node.
   struct COMMAND_RPC_GET_ALTERNATE_CHAINS
   {
@@ -2249,7 +2249,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Update daemon.
   struct COMMAND_RPC_UPDATE
   {
@@ -2288,7 +2288,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Relay a list of transaction IDs.
   struct COMMAND_RPC_RELAY_TX
   {
@@ -2313,7 +2313,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get synchronisation information.
   struct COMMAND_RPC_SYNC_INFO
   {
@@ -2377,7 +2377,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   struct COMMAND_RPC_GET_OUTPUT_DISTRIBUTION
   {
     struct request_t
@@ -2457,7 +2457,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   struct COMMAND_RPC_POP_BLOCKS
   {
     struct request_t
@@ -2483,7 +2483,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   struct COMMAND_RPC_PRUNE_BLOCKCHAIN
   {
     struct request_t
@@ -2512,7 +2512,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
   };
 
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get the quorum state which is the list of public keys of the nodes who are voting, and the list of public keys of the nodes who are being tested.
   struct COMMAND_RPC_GET_QUORUM_STATE
   {
@@ -2581,7 +2581,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   struct COMMAND_RPC_GET_SERVICE_NODE_REGISTRATION_CMD_RAW
   {
     struct request_t
@@ -2611,13 +2611,13 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   struct COMMAND_RPC_GET_SERVICE_NODE_REGISTRATION_CMD
   {
     struct contribution_t
     {
       std::string address; // The wallet address for the contributor
-      uint64_t amount;     // The amount that the contributor will reserve in Loki atomic units towards the staking requirement
+      uint64_t amount;     // The amount that the contributor will reserve in Sispop atomic units towards the staking requirement
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(address)
@@ -2652,7 +2652,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get the service node public keys of the queried daemon, encoded in hex.
   // The daemon must be started in --service-node mode otherwise this RPC command will fail.
   struct COMMAND_RPC_GET_SERVICE_NODE_KEY
@@ -2681,7 +2681,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get the service node private keys of the queried daemon, encoded in hex.  Do not ever share
   // these keys: they would allow someone to impersonate your service node.
   // The daemon must be started in --service-node mode otherwise this RPC command will fail.
@@ -2711,7 +2711,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // TODO: Undocumented, -- unused
   struct COMMAND_RPC_PERFORM_BLOCKCHAIN_TEST
   {
@@ -2738,7 +2738,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     };
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   struct service_node_contribution
   {
     std::string key_image;         // The contribution's key image that is locked on the network.
@@ -2752,11 +2752,11 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     END_KV_SERIALIZE_MAP()
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   struct service_node_contributor
   {
-    uint64_t amount;                                             // The total amount of locked Loki in atomic units for this contributor.
-    uint64_t reserved;                                           // The amount of Loki in atomic units reserved by this contributor for this Service Node.
+    uint64_t amount;                                             // The total amount of locked Sispop in atomic units for this contributor.
+    uint64_t reserved;                                           // The amount of Sispop in atomic units reserved by this contributor for this Service Node.
     std::string address;                                         // The wallet address for this contributor rewards are sent to and contributions came from.
     std::vector<service_node_contribution> locked_contributions; // Array of contributions from this contributor.
 
@@ -2768,7 +2768,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     END_KV_SERIALIZE_MAP()
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get information on Service Nodes.
   struct COMMAND_RPC_GET_SERVICE_NODES
   {
@@ -2801,15 +2801,15 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
         int64_t                               earned_downtime_blocks;        // The number of blocks earned towards decommissioning, or the number of blocks remaining until deregistration if currently decommissioned
         std::array<uint16_t, 3>               service_node_version;          // The major, minor, patch version of the Service Node respectively.
         std::vector<service_node_contributor> contributors;                  // Array of contributors, contributing to this Service Node.
-        uint64_t                              total_contributed;             // The total amount of Loki in atomic units contributed to this Service Node.
-        uint64_t                              total_reserved;                // The total amount of Loki in atomic units reserved in this Service Node.
+        uint64_t                              total_contributed;             // The total amount of Sispop in atomic units contributed to this Service Node.
+        uint64_t                              total_reserved;                // The total amount of Sispop in atomic units reserved in this Service Node.
         uint64_t                              staking_requirement;           // The staking requirement in atomic units that is required to be contributed to become a Service Node.
         uint64_t                              portions_for_operator;         // The operator percentage cut to take from each reward expressed in portions, see cryptonote_config.h's STAKING_PORTIONS.
         uint64_t                              swarm_id;                      // The identifier of the Service Node's current swarm.
         std::string                           operator_address;              // The wallet address of the operator to which the operator cut of the staking reward is sent to.
         std::string                           public_ip;                     // The public ip address of the service node
         uint16_t                              storage_port;                  // The port number associated with the storage server
-        uint16_t                              storage_lmq_port;              // The port number associated with the storage server (lokimq interface)
+        uint16_t                              storage_lmq_port;              // The port number associated with the storage server (sispopmq interface)
         uint16_t                              quorumnet_port;                // The port for direct SN-to-SN communication
         std::string                           pubkey_ed25519;                // The service node's ed25519 public key for auxiliary services
         std::string                           pubkey_x25519;                 // The service node's x25519 public key for auxiliary services
@@ -2879,7 +2879,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get information on the queried daemon's Service Node state.
   struct COMMAND_RPC_GET_SERVICE_NODE_STATUS
   {
@@ -2917,7 +2917,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
   #define KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(var) \
   if (this_ref.requested_fields.var || !this_ref.requested_fields.explicitly_set) KV_SERIALIZE(var)
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get information on a all (or optionally a random subset) of Service Nodes.
   struct COMMAND_RPC_GET_N_SERVICE_NODES
   {
@@ -3049,15 +3049,15 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
         int64_t                               earned_downtime_blocks;        // The number of blocks earned towards decommissioning, or the number of blocks remaining until deregistration if currently decommissioned
         std::array<uint16_t, 3>               service_node_version;          // The major, minor, patch version of the Service Node respectively.
         std::vector<service_node_contributor> contributors;                  // Array of contributors, contributing to this Service Node.
-        uint64_t                              total_contributed;             // The total amount of Loki in atomic units contributed to this Service Node.
-        uint64_t                              total_reserved;                // The total amount of Loki in atomic units reserved in this Service Node.
+        uint64_t                              total_contributed;             // The total amount of Sispop in atomic units contributed to this Service Node.
+        uint64_t                              total_reserved;                // The total amount of Sispop in atomic units reserved in this Service Node.
         uint64_t                              staking_requirement;           // The staking requirement in atomic units that is required to be contributed to become a Service Node.
         uint64_t                              portions_for_operator;         // The operator percentage cut to take from each reward expressed in portions, see cryptonote_config.h's STAKING_PORTIONS.
         uint64_t                              swarm_id;                      // The identifier of the Service Node's current swarm.
         std::string                           operator_address;              // The wallet address of the operator to which the operator cut of the staking reward is sent to.
         std::string                           public_ip;                     // The public ip address of the service node
         uint16_t                              storage_port;                  // The port number associated with the storage server
-        uint16_t                              storage_lmq_port;              // The port number associated with the storage server (lokimq interface)
+        uint16_t                              storage_lmq_port;              // The port number associated with the storage server (sispopmq interface)
         uint16_t                              quorumnet_port;                // The port for direct SN-to-SN communication
         std::string                           pubkey_ed25519;                // The service node's ed25519 public key for auxiliary services
         std::string                           pubkey_x25519;                 // The service node's x25519 public key for auxiliary services
@@ -3108,8 +3108,8 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
         END_KV_SERIALIZE_MAP()
       };
 
-      requested_fields_t fields; // @NoLokiRPCDocGen Internal use only, not serialized
-      bool polling_mode;         // @NoLokiRPCDocGen Internal use only, not serialized
+      requested_fields_t fields; // @NoSispopRPCDocGen Internal use only, not serialized
+      bool polling_mode;         // @NoSispopRPCDocGen Internal use only, not serialized
 
       std::vector<entry> service_node_states; // Array of service node registration information
       uint64_t    height;                     // Current block's height.
@@ -3144,7 +3144,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   struct COMMAND_RPC_STORAGE_SERVER_PING
   {
     struct request
@@ -3170,12 +3170,12 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     };
   };
 
-  LOKI_RPC_DOC_INTROSPECT
-  struct COMMAND_RPC_LOKINET_PING
+  SISPOP_RPC_DOC_INTROSPECT
+  struct COMMAND_RPC_SISPOPNET_PING
   {
     struct request
     {
-      std::array<int, 3> version; // Lokinet version
+      std::array<int, 3> version; // Sispopnet version
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(version);
       END_KV_SERIALIZE_MAP()
@@ -3190,8 +3190,8 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     };
   };
 
-  LOKI_RPC_DOC_INTROSPECT
-  // Get the required amount of Loki to become a Service Node at the queried height. 
+  SISPOP_RPC_DOC_INTROSPECT
+  // Get the required amount of Sispop to become a Service Node at the queried height. 
   // For stagenet and testnet values, ensure the daemon is started with the 
   // `--stagenet` or `--testnet` flags respectively.
   struct COMMAND_RPC_GET_STAKING_REQUIREMENT
@@ -3208,7 +3208,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
 
     struct response_t
     {
-      uint64_t staking_requirement; // The staking requirement in Loki, in atomic units.
+      uint64_t staking_requirement; // The staking requirement in Sispop, in atomic units.
       uint64_t height;              // The height requested (or current height if 0 was requested)
       std::string status;           // Generic RPC error code. "OK" is the success value.
 
@@ -3221,7 +3221,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get information on blacklisted Service Node key images.
   struct COMMAND_RPC_GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES
   {
@@ -3236,7 +3236,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     {
       std::string key_image;  // The key image of the transaction that is blacklisted on the network.
       uint64_t unlock_height; // The height at which the key image is removed from the blacklist and becomes spendable.
-      uint64_t amount;        // The total amount of locked Loki in atomic units in this blacklisted stake.
+      uint64_t amount;        // The total amount of locked Sispop in atomic units in this blacklisted stake.
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(key_image)
@@ -3258,7 +3258,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get information on output blacklist.
   struct COMMAND_RPC_GET_OUTPUT_BLACKLIST
   {
@@ -3284,7 +3284,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Query hardcoded/service node checkpoints stored for the blockchain. Omit all arguments to retrieve the latest "count" checkpoints.
   struct COMMAND_RPC_GET_CHECKPOINTS
   {
@@ -3381,7 +3381,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Query hardcoded/service node checkpoints stored for the blockchain. Omit all arguments to retrieve the latest "count" checkpoints.
   struct COMMAND_RPC_GET_SN_STATE_CHANGES
   {
@@ -3427,7 +3427,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
   };
 
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   struct COMMAND_RPC_REPORT_PEER_SS_STATUS
   {
     struct request
@@ -3464,8 +3464,8 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     };
   };
 
-  LOKI_RPC_DOC_INTROSPECT
-  // Get the name mapping for a Loki Name Service entry. Loki currently supports mappings
+  SISPOP_RPC_DOC_INTROSPECT
+  // Get the name mapping for a Sispop Name Service entry. Sispop currently supports mappings
   // for Session.
   struct COMMAND_RPC_LNS_NAMES_TO_OWNERS
   {
@@ -3473,7 +3473,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     static size_t const MAX_TYPE_REQUEST_ENTRIES = 8;
     struct request_entry
     {
-      std::string name_hash; // The name hashed using libsodium's crypto_generichash_blake2b in base64 to resolve to a public key via Loki Name Service
+      std::string name_hash; // The name hashed using libsodium's crypto_generichash_blake2b in base64 to resolve to a public key via Sispop Name Service
       std::vector<uint16_t> types; // If empty, query all types. Currently only Session(0). In future updates more mapping types will be available.
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(name_hash)
@@ -3491,14 +3491,14 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
 
     struct response_entry
     {
-      uint64_t entry_index;     // The index in request_entry's `entries` array that was resolved via Loki Name Service.
-      uint16_t type;            // The type of Loki Name Service entry that the owner owns.
+      uint64_t entry_index;     // The index in request_entry's `entries` array that was resolved via Sispop Name Service.
+      uint16_t type;            // The type of Sispop Name Service entry that the owner owns.
       std::string name_hash;    // The hash of the name that was queried in base64
-      std::string owner;        // The public key that purchased the Loki Name Service entry.
-      std::string backup_owner; // The backup public key that the owner specified when purchasing the Loki Name Service entry.
+      std::string owner;        // The public key that purchased the Sispop Name Service entry.
+      std::string backup_owner; // The backup public key that the owner specified when purchasing the Sispop Name Service entry.
       std::string encrypted_value; // The encrypted value that the name maps to. This value is encrypted using the name (not the hash) as the secret.
-      uint64_t register_height; // The height that this Loki Name Service entry was purchased on the Blockchain.
-      uint64_t update_height;   // The last height that this Loki Name Service entry was updated on the Blockchain.
+      uint64_t register_height; // The height that this Sispop Name Service entry was purchased on the Blockchain.
+      uint64_t update_height;   // The last height that this Sispop Name Service entry was updated on the Blockchain.
       std::string txid;         // The txid of who purchased the mapping, null hash if not applicable.
       std::string prev_txid;    // The previous txid that purchased the mapping, null hash if not applicable.
       BEGIN_KV_SERIALIZE_MAP()
@@ -3526,7 +3526,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     };
   };
 
-  LOKI_RPC_DOC_INTROSPECT
+  SISPOP_RPC_DOC_INTROSPECT
   // Get all the name mappings for the queried owner. The owner can be either a ed25519 public key or Monero style
   // public key; by default purchases are owned by the spend public key of the purchasing wallet.
   struct COMMAND_RPC_LNS_OWNERS_TO_NAMES
@@ -3534,7 +3534,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     static size_t const MAX_REQUEST_ENTRIES = 256;
     struct request
     {
-      std::vector<std::string> entries; // The owner's public key to find all Loki Name Service entries for.
+      std::vector<std::string> entries; // The owner's public key to find all Sispop Name Service entries for.
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(entries)
       END_KV_SERIALIZE_MAP()
@@ -3542,14 +3542,14 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
 
     struct response_entry
     {
-      uint64_t    request_index;   // (Deprecated) The index in request's `entries` array that was resolved via Loki Name Service.
-      uint16_t    type;            // The category the Loki Name Service entry belongs to, currently only Session whose value is 0.
-      std::string name_hash;       // The hash of the name that the owner purchased via Loki Name Service in base64
-      std::string owner;           // The backup public key specified by the owner that purchased the Loki Name Service entry.
-      std::string backup_owner;    // The backup public key specified by the owner that purchased the Loki Name Service entry.
+      uint64_t    request_index;   // (Deprecated) The index in request's `entries` array that was resolved via Sispop Name Service.
+      uint16_t    type;            // The category the Sispop Name Service entry belongs to, currently only Session whose value is 0.
+      std::string name_hash;       // The hash of the name that the owner purchased via Sispop Name Service in base64
+      std::string owner;           // The backup public key specified by the owner that purchased the Sispop Name Service entry.
+      std::string backup_owner;    // The backup public key specified by the owner that purchased the Sispop Name Service entry.
       std::string encrypted_value; // The encrypted value that the name maps to. This value is encrypted using the name (not the hash) as the secret.
-      uint64_t    register_height; // The height that this Loki Name Service entry was purchased on the Blockchain.
-      uint64_t    update_height;   // The last height that this Loki Name Service entry was updated on the Blockchain.
+      uint64_t    register_height; // The height that this Sispop Name Service entry was purchased on the Blockchain.
+      uint64_t    update_height;   // The last height that this Sispop Name Service entry was updated on the Blockchain.
       std::string txid;            // The txid of who purchases the mapping.
       std::string prev_txid;       // The previous txid that purchased the mapping, null hash if not applicable.
       BEGIN_KV_SERIALIZE_MAP()

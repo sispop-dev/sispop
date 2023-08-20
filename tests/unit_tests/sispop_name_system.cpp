@@ -1,9 +1,9 @@
 #include "gtest/gtest.h"
 
-#include "common/loki.h"
-#include "cryptonote_core/loki_name_system.h"
+#include "common/sispop.h"
+#include "cryptonote_core/sispop_name_system.h"
 
-TEST(loki_name_system, name_tests)
+TEST(sispop_name_system, name_tests)
 {
   struct name_test
   {
@@ -11,22 +11,22 @@ TEST(loki_name_system, name_tests)
     bool allowed;
   };
 
-  name_test const lokinet_names[] = {
-      {"a.loki", true},
-      {"domain.loki", true},
-      {"xn--tda.loki", true},
-      {"xn--Mchen-Ost-9db-u6b.loki", true},
+  name_test const sispopnet_names[] = {
+      {"a.sispop", true},
+      {"domain.sispop", true},
+      {"xn--tda.sispop", true},
+      {"xn--Mchen-Ost-9db-u6b.sispop", true},
 
-      {"abc.domain.loki", false},
+      {"abc.domain.sispop", false},
       {"a", false},
       {"a.loko", false},
-      {"a domain name.loki", false},
-      {"-.loki", false},
-      {"a_b.loki", false},
-      {" a.loki", false},
-      {"a.loki ", false},
-      {" a.loki ", false},
-      {"localhost.loki", false},
+      {"a domain name.sispop", false},
+      {"-.sispop", false},
+      {"a_b.sispop", false},
+      {" a.sispop", false},
+      {"a.sispop ", false},
+      {" a.sispop ", false},
+      {"localhost.sispop", false},
       {"localhost", false},
   };
 
@@ -61,8 +61,8 @@ TEST(loki_name_system, name_tests)
   for (uint16_t type16 = 0; type16 < static_cast<uint16_t>(lns::mapping_type::_count); type16++)
   {
     auto type = static_cast<lns::mapping_type>(type16);
-    name_test const *names = lns::is_lokinet_type(type) ? lokinet_names : session_wallet_names;
-    size_t names_count     = lns::is_lokinet_type(type) ? loki::char_count(lokinet_names) : loki::char_count(session_wallet_names);
+    name_test const *names = lns::is_sispopnet_type(type) ? sispopnet_names : session_wallet_names;
+    size_t names_count     = lns::is_sispopnet_type(type) ? sispop::char_count(sispopnet_names) : sispop::char_count(session_wallet_names);
 
     for (size_t i = 0; i < names_count; i++)
     {
@@ -72,7 +72,7 @@ TEST(loki_name_system, name_tests)
   }
 }
 
-TEST(loki_name_system, value_encrypt_and_decrypt)
+TEST(sispop_name_system, value_encrypt_and_decrypt)
 {
   std::string name         = "my lns name";
   lns::mapping_value value = {};

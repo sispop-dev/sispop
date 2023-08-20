@@ -1,4 +1,4 @@
-# Copyright (c) 2018, The Loki Project
+# Copyright (c) 2018, The Sispop Project
 # Copyright (c) 2014-2019, The Monero Project
 #
 # All rights reserved.
@@ -52,7 +52,7 @@ target_link_libraries(wallet
     OpenSSL::SSL
     extra)
 
-loki_add_executable(wallet_rpc_server "loki-wallet-rpc"
+sispop_add_executable(wallet_rpc_server "sispop-wallet-rpc"
   wallet_rpc_server.cpp
   )
 
