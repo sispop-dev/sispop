@@ -38,6 +38,7 @@ target_link_libraries(simplewallet
     cryptonote_core
     mnemonics
     epee_readline
+    qrcodegen
     Boost::chrono
     Boost::program_options
     Boost::filesystem

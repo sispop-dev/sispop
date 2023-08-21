@@ -268,6 +268,7 @@ namespace cryptonote
     bool net_stats(const std::vector<std::string>& args);
     bool welcome(const std::vector<std::string>& args);
     bool version(const std::vector<std::string>& args);
+    bool show_qr_code(const std::vector<std::string> &args);
 
     bool register_service_node_main(
         const std::vector<std::string>& service_node_key_as_str,

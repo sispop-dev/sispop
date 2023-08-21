@@ -646,7 +646,8 @@ void wallet_rpc_server::require_open() {
     }
     return true;
   }
-  //------------------------------------------------------------------------------------------------------------------------------
+
+//------------------------------------------------------------------------------------------------------------------------------
   bool wallet_rpc_server::validate_transfer(const std::list<transfer_destination>& destinations, const std::string& payment_id, std::vector<cryptonote::tx_destination_entry>& dsts, std::vector<uint8_t>& extra, bool at_least_one_destination, epee::json_rpc::error& er)
   {
     crypto::hash8 integrated_payment_id = crypto::null_hash8;
@@ -655,13 +656,6 @@ void wallet_rpc_server::require_open() {
     {
       cryptonote::address_parse_info info;
       cryptonote::tx_destination_entry de;
-      er.message = "";
-      {
-        er.code = WALLET_RPC_ERROR_CODE_WRONG_ADDRESS;
-        if (er.message.empty())
-          er.message = std::string("WALLET_RPC_ERROR_CODE_WRONG_ADDRESS: ") + it->address;
-        return false;
-      }
 
       de.original = it->address;
       de.addr = info.address;

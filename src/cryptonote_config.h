@@ -200,8 +200,8 @@ namespace config
   uint64_t const GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS = ((60 * 60 * 24 * 7) / DIFFICULTY_TARGET_V2);
   std::string const GOVERNANCE_WALLET_ADDRESS[] =
   {
-    "4ArTgBdXgymepppKqhnBCS7FUEDr3VqZMaZ4At4yJKtK8DmAQ61DNdoN1PwVmHHruUgmH9rpqW5nvCrgngKmU7d6ThtKbHu",
-    "4ArTgBdXgymepppKqhnBCS7FUEDr3VqZMaZ4At4yJKtK8DmAQ61DNdoN1PwVmHHruUgmH9rpqW5nvCrgngKmU7d6ThtKbHu",
+    "49HsfhWTvKZgc4qH1hwcEpM99Ng2TqmcxVHJoSkSQvV3N9iVJP1NT6gJTWRvuTWMNqeDgHNUcrpYVdnXW5Ep33W33YfwqRe",
+    "49HsfhWTvKZgc4qH1hwcEpM99Ng2TqmcxVHJoSkSQvV3N9iVJP1NT6gJTWRvuTWMNqeDgHNUcrpYVdnXW5Ep33W33YfwqRe",
   };
 
   namespace testnet
