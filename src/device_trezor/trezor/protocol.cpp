@@ -555,7 +555,7 @@ namespace tx {
     tsx_data.set_mixin(static_cast<google::protobuf::uint32>(tx.sources[0].outputs.size() - 1));
     tsx_data.set_account(tx.subaddr_account);
 //fromT
-    tsx_data.set_monero_version(std::string(SISPOP_VERSION) + "|" + SISPOP_VERSION_TAG);
+    tsx_data.set_client_version(std::string(SISPOP_VERSION) + "|" + SISPOP_VERSION_TAG);
     tsx_data.set_hard_fork(m_aux_data->hard_fork ? m_aux_data->hard_fork.get() : 0);
 
     if (client_version() <= 1){
