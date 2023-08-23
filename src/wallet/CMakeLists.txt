@@ -62,6 +62,7 @@ target_link_libraries(wallet_rpc_server
     rpc_base
     daemonizer
     epee_readline
+    device_trezor
     Boost::program_options
     Boost::regex
     extra)
