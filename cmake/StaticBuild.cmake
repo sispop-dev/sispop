@@ -26,11 +26,11 @@ set(UNBOUND_HASH SHA256=b73677c21a71cf92f15cc8cfe76a3d875e40f65b6150081c39620b28
     CACHE STRING "unbound source hash")
 
 set(BOOST_VERSION 1.73.0 CACHE STRING "boost version")
-set(BOOST_MIRROR ${LOCAL_MIRROR} https://dl.bintray.com/boostorg/release/${BOOST_VERSION}/source
+set(BOOST_MIRROR ${LOCAL_MIRROR} https://boostorg.jfrog.io/artifactory/main/release/${BOOST_VERSION}/source
     CACHE STRING "boost download mirror(s)")
 string(REPLACE "." "_" BOOST_VERSION_ ${BOOST_VERSION})
-set(BOOST_SOURCE boost_${BOOST_VERSION_}.tar.bz2)
-set(BOOST_HASH SHA256=4eb3b8d442b426dc35346235c8733b5ae35ba431690e38c6a8263dce9fcbb402
+set(BOOST_SOURCE boost_${BOOST_VERSION_}.tar.gz)
+set(BOOST_HASH SHA256=9995e192e68528793755692917f9eb6422f3052a53c5e13ba278a228af6c7acf
     CACHE STRING "boost source hash")
 
 set(NCURSES_VERSION 6.2 CACHE STRING "ncurses version")

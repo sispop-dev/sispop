@@ -13,6 +13,7 @@
    Last Modified: January 16, 2011
 */
 #pragma once
+#include <stddef.h>
 
 typedef unsigned char BitSequence;
 typedef size_t DataLength;

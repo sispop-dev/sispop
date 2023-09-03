@@ -40,29 +40,35 @@
 #include <windows.h>
 
 namespace windows {
+  namespace
+  {
+    std::vector<char> vecstring(std::string const & str)
+    {
+      std::vector<char> result{str.begin(), str.end()};
+      result.push_back('\0');
+      return result;
+    }
+  }
 
-  template <typename Application>
-  class service_runner final
+  template <typename T_handler>
+  class t_service_runner final
   {
   private:
     SERVICE_STATUS_HANDLE m_status_handle{nullptr};
     SERVICE_STATUS m_status{};
     boost::mutex m_lock{};
     std::string m_name;
-    Application app;
+    T_handler m_handler;
 
-    static service_runner*& get_instance() { static service_runner* instance{nullptr}; return instance; }
-
+    static std::unique_ptr<t_service_runner<T_handler>> sp_instance;
   public:
-    template <typename... Args>
-    service_runner(std::string name, Args&&... args)
-        : m_name{std::move(name)}, app{std::forward<Args>(args)...}
+    t_service_runner(
+        std::string name
+      , T_handler handler
+      )
+      : m_name{std::move(name)}
+      , m_handler{std::move(handler)}
     {
-      // This limitation is crappy, but imposed on us by Windows
-      auto& instance = get_instance();
-      if (instance) throw std::runtime_error("Only one service_runner<T> may exist at a time");
-      instance = this;
-
       m_status.dwServiceType = SERVICE_WIN32;
       m_status.dwCurrentState = SERVICE_STOPPED;
       m_status.dwControlsAccepted = 0;
@@ -72,20 +78,42 @@ namespace windows {
       m_status.dwWaitHint = 0;
     }
 
-    ~service_runner() { get_instance() = nullptr; }
-
-    // Non-copyable and non-moveable
-    service_runner &operator=(service_runner&&) = delete;
-    service_runner &operator=(const service_runner&) = delete;
-    service_runner(service_runner&&) = delete;
-    service_runner(const service_runner&) = delete;
-
-    void run()
+    t_service_runner & operator=(t_service_runner && other)
     {
-      SERVICE_TABLE_ENTRY const table[] = {{&m_name[0], &service_main}, {0, 0}};
+      if (this != &other)
+      {
+        m_status_handle = std::move(other.m_status_handle);
+        m_status = std::move(other.m_status);
+        m_name = std::move(other.m_name);
+        m_handler = std::move(other.m_handler);
+      }
+      return *this;
+    }
+
+    static void run(
+        std::string name
+      , T_handler handler
+      )
+    {
+      sp_instance.reset(new t_service_runner<T_handler>{
+        std::move(name)
+      , std::move(handler)
+      });
+
+      sp_instance->run_();
+    }
+
+  private:
+    void run_()
+    {
+      SERVICE_TABLE_ENTRY table[] =
+      {
+        { vecstring(m_name).data(), &service_main }
+      , { 0, 0 }
+      };
+
       StartServiceCtrlDispatcher(table);
     }
-  private:
 
     void report_status(DWORD status)
     {
@@ -103,7 +131,7 @@ namespace windows {
 
     static void WINAPI service_main(DWORD argc, LPSTR * argv)
     {
-      get_instance()->service_main_(argc, argv);
+      sp_instance->service_main_(argc, argv);
     }
 
     void service_main_(DWORD argc, LPSTR * argv)
@@ -115,17 +143,17 @@ namespace windows {
 
       report_status(SERVICE_RUNNING);
 
-      app.run(false /*not interactive*/);
+      m_handler.run();
 
       on_state_change_request_(SERVICE_CONTROL_STOP);
 
       // Ensure that the service is uninstalled
-      uninstall_service(m_name.c_str());
+      uninstall_service(m_name);
     }
 
     static void WINAPI on_state_change_request(DWORD control_code)
     {
-      get_instance()->on_state_change_request_(control_code);
+      sp_instance->on_state_change_request_(control_code);
     }
 
     void on_state_change_request_(DWORD control_code)
@@ -137,7 +165,7 @@ namespace windows {
         case SERVICE_CONTROL_SHUTDOWN:
         case SERVICE_CONTROL_STOP:
           report_status(SERVICE_STOP_PENDING);
-          app.stop();
+          m_handler.stop();
           report_status(SERVICE_STOPPED);
           break;
         case SERVICE_CONTROL_PAUSE:
@@ -149,6 +177,9 @@ namespace windows {
       }
     }
   };
+
+  template <typename T_handler>
+  std::unique_ptr<t_service_runner<T_handler>> t_service_runner<T_handler>::sp_instance;
 }
 
 #endif
