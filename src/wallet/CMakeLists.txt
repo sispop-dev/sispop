@@ -44,10 +44,10 @@ target_link_libraries(wallet
     device_trezor
     net
     lmdb
-    Boost::chrono
-    Boost::serialization
-    Boost::filesystem
-    Boost::thread
+      ${Boost_CHRONO_LIBRARY}
+      ${Boost_PROGRAM_OPTIONS_LIBRARY}
+      ${Boost_FILESYSTEM_LIBRARY}
+      ${Boost_THREAD_LIBRARY}
   PRIVATE
     OpenSSL::SSL
     extra)
@@ -117,8 +117,9 @@ if (BUILD_GUI_DEPS AND STATIC)
 
     install(FILES ${TREZOR_DEP_LIBS}
             DESTINATION ${lib_folder})
-    file(WRITE "trezor_link_flags.txt" ${TREZOR_DEP_LINKER})
-    install(FILES "trezor_link_flags.txt"
+    set(TREZOR_LINK_FLAGS_FILE "${CMAKE_BINARY_DIR}/${CMAKE_FILES_DIRECTORY}/trezor_link_flags.txt")
+    file(WRITE ${TREZOR_LINK_FLAGS_FILE} ${TREZOR_DEP_LINKER})
+    install(FILES ${TREZOR_LINK_FLAGS_FILE}
             DESTINATION ${lib_folder})
 endif()
 
