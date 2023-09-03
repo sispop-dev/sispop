@@ -12,13 +12,23 @@ file(MAKE_DIRECTORY ${LIBSODIUM_PREFIX}/include)
 
 include(ExternalProject)
 include(ProcessorCount)
+ProcessorCount(PROCESSOR_COUNT)
+if(PROCESSOR_COUNT EQUAL 0)
+  set(PROCESSOR_COUNT 1)
+endif()
 
-set(SODIUM_CONFIGURE ./configure --prefix=${LIBSODIUM_PREFIX} CC=${CMAKE_C_COMPILER})
+set(SODIUM_CONFIGURE ./configure --prefix=${LIBSODIUM_PREFIX})
 if (LIBSODIUM_CROSS_TARGET)
   set(SODIUM_CONFIGURE ${SODIUM_CONFIGURE} --target=${LIBSODIUM_CROSS_TARGET} --host=${LIBSODIUM_CROSS_TARGET})
 endif()
 
-set(SODIUM_CONFIGURE ${SODIUM_CONFIGURE} --enable-static --disable-shared)
+set(SODIUM_CONFIGURE ${SODIUM_CONFIGURE} --enable-static --disable-shared --with-pic --quiet)
+
+if(CMAKE_C_COMPILER_LAUNCHER)
+  set(SODIUM_CONFIGURE ${SODIUM_CONFIGURE} "CC=${CMAKE_C_COMPILER_LAUNCHER} ${CMAKE_C_COMPILER}")
+else()
+  set(SODIUM_CONFIGURE ${SODIUM_CONFIGURE} "CC=${CMAKE_C_COMPILER}")
+endif()
 
 ExternalProject_Add(libsodium_external
     BUILD_IN_SOURCE ON
@@ -27,12 +37,12 @@ ExternalProject_Add(libsodium_external
     URL_HASH ${LIBSODIUM_HASH}
     CONFIGURE_COMMAND ${SODIUM_CONFIGURE}
     BUILD_COMMAND make -j${PROCESSOR_COUNT}
-    INSTALL_COMMAND ${MAKE}
+    INSTALL_COMMAND make install
     BUILD_BYPRODUCTS ${LIBSODIUM_PREFIX}/lib/libsodium.a ${LIBSODIUM_PREFIX}/include
     )
 
 add_library(sodium_vendor STATIC IMPORTED GLOBAL)
 add_dependencies(sodium_vendor libsodium_external)
-set_target_properties(sodium_vendor PROPERTIES INTERFACE_INCLUDE_DIRECTORIES ${LIBSODIUM_PREFIX}/include)
-
-set_property(TARGET sodium_vendor PROPERTY IMPORTED_LOCATION ${LIBSODIUM_PREFIX}/lib/libsodium.a)
+set_target_properties(sodium_vendor PROPERTIES
+  IMPORTED_LOCATION ${LIBSODIUM_PREFIX}/lib/libsodium.a
+  INTERFACE_INCLUDE_DIRECTORIES ${LIBSODIUM_PREFIX}/include)

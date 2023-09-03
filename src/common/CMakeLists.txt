@@ -37,6 +37,7 @@ add_library(common
   sispop.cpp
   util.cpp
   i18n.cpp
+  ${PROJECT_BINARY_DIR}/translations/translation_files.cpp
   rules.cpp
   notify.cpp
   password.cpp
@@ -51,6 +52,9 @@ add_library(common
   timings.cc
   combinator.cpp)
 
+set_source_files_properties(${PROJECT_BINARY_DIR}/translations/translation_files.cpp PROPERTIES GENERATED 1)
+add_dependencies(common generate_translation_data)
+
 if (STACK_TRACE)
   target_sources(common PRIVATE stack_trace.cpp)
   if(WIN32 OR STATIC)
@@ -62,7 +66,6 @@ if (BACKCOMPAT)
   target_sources(common PRIVATE compat/glibc_compat.cpp)
 endif()
 
-add_dependencies(common generate_translations_header)
 
 target_link_libraries(common
   PUBLIC
@@ -74,8 +77,6 @@ target_link_libraries(common
     OpenSSL::Crypto
     epee_readline
     extra)
-
-target_include_directories(common PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/../../translations")
 
 option(STACK_TRACE "Install a hook that dumps stack on exception" OFF)
 

@@ -35,11 +35,9 @@
 # ...except for FreeBSD, because FreeBSD is a special case that doesn't play well with
 # others.
 
-find_package(PkgConfig REQUIRED)
-
-if(NOT STATIC)
+if(NOT STATIC AND NOT BUILD_STATIC_DEPS)
+  find_package(PkgConfig REQUIRED)
   pkg_check_modules(MINIUPNPC miniupnpc>=2.1)
-  pkg_check_modules(UNBOUND libunbound)
   pkg_check_modules(SISPOPMQ libsispopmq>=1.1.4)
 endif()
 
@@ -62,30 +60,6 @@ else()
   target_link_libraries(miniupnpc INTERFACE libminiupnpc-static)
 endif()
 
-
-if(NOT UNBOUND_FOUND)
-  # NOTE: If STATIC is true, CMAKE_FIND_LIBRARY_SUFFIXES has been reordered.
-  # unbound has config tests which used OpenSSL libraries, so -ldl may need to
-  # be set in this case.
-  # The unbound CMakeLists.txt can set it, since it's also needed for the
-  # static OpenSSL libraries set up there after with target_link_libraries.
-  message(STATUS "Using in-tree unbound")
-  if(STATIC AND NOT IOS)
-    if(UNIX)
-      set(OPENSSL_LIBRARIES "${OPENSSL_LIBRARIES};${CMAKE_DL_LIBS};${CMAKE_THREAD_LIBS_INIT}")
-    elseif(MINGW)
-      set(OPENSSL_LIBRARIES "${OPENSSL_LIBRARIES};extra")
-    endif()
-  endif()
-else()
-  message(STATUS "Found libunbound include (unbound.h) in ${UNBOUND_INCLUDE_DIRS}")
-  if(NOT UNBOUND_LIBRARIES)
-    message(FATAL_ERROR "Found libunbound includes, but could not find libunbound library. Please make sure you have installed libunbound or libunbound-dev or the equivalent")
-  endif()
-
-  link_dep_libs(libunbound INTERFACE "${UNBOUND_LIBRARY_DIRS}" ${UNBOUND_LIBRARIES})
-  target_include_directories(libunbound INTERFACE ${UNBOUND_INCLUDE_DIRS})
-endif()
 
 if(NOT SISPOPMQ_FOUND)
   message(STATUS "Using in-tree sispopmq")

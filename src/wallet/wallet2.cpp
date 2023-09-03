@@ -11463,7 +11463,7 @@ bool wallet2::use_fork_rules(uint8_t version, uint64_t early_blocks) const
   // TODO: How to get fork rule info from light wallet node?
   if(m_light_wallet)
     return true;
-  uint64_t height, earliest_height;
+  uint64_t height, earliest_height{0};
   boost::optional<std::string> result = m_node_rpc_proxy.get_height(height);
   throw_on_rpc_response_error(result, "get_info");
   result = m_node_rpc_proxy.get_earliest_height(version, earliest_height);

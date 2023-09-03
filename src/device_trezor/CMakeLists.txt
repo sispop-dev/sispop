@@ -58,8 +58,8 @@ if(DEVICE_TREZOR_READY)
             sodium
             Boost::chrono
             Boost::regex
-            ${Protobuf_LIBRARY}
-            ${TREZOR_LIBUSB_LIBRARIES}
+            libusb
+            protobuf
             extra)
 
 else()

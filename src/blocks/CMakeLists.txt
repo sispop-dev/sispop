@@ -27,6 +27,7 @@
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 add_library(blocks blocks.cpp)
+target_link_libraries(blocks PRIVATE Boost::boost)
 
 target_link_libraries(blocks PRIVATE extra)
 

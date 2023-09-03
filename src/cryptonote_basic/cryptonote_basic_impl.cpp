@@ -222,7 +222,7 @@ namespace cryptonote {
     if (2 * sizeof(public_address_outer_blob) != str.size())
     {
       blobdata data;
-      uint64_t prefix;
+      uint64_t prefix{0};
       if (!tools::base58::decode_addr(str, prefix, data))
       {
         LOG_PRINT_L2("Invalid address format");

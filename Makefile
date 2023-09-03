@@ -47,10 +47,6 @@ endif
 
 all: release-all
 
-depends:
-	cd contrib/depends && $(MAKE) HOST=$(target) && cd ../.. && mkdir -p build/$(target)/release
-	cd build/$(target)/release && cmake -DCMAKE_TOOLCHAIN_FILE=$(CURDIR)/contrib/depends/$(target)/share/toolchain.cmake ../../.. && $(MAKE)
-
 cmake-debug:
 	mkdir -p $(builddir)/debug
 	cd $(builddir)/debug && cmake -D CMAKE_BUILD_TYPE=Debug $(topdir)
@@ -97,15 +93,20 @@ release: cmake-release
 
 release-test:
 	mkdir -p $(builddir)/release
-	cd $(builddir)/release && cmake -D BUILD_TESTS=ON -D CMAKE_BUILD_TYPE=release -D WARNINGS_AS_ERRORS=ON $(topdir) && $(MAKE) && $(MAKE) test
+	cd $(builddir)/release && cmake -D BUILD_TESTS=ON -D CMAKE_BUILD_TYPE=Release -D WARNINGS_AS_ERRORS=ON $(topdir) && $(MAKE) && $(MAKE) test
 
 release-all:
 	mkdir -p $(builddir)/release
-	cd $(builddir)/release && cmake -D BUILD_TESTS=ON -D CMAKE_BUILD_TYPE=release -D WARNINGS_AS_ERRORS=ON $(topdir) && $(MAKE)
+	cd $(builddir)/release && cmake -D BUILD_TESTS=ON -D CMAKE_BUILD_TYPE=Release -D WARNINGS_AS_ERRORS=ON $(topdir) && $(MAKE)
 
 release-static:
 	mkdir -p $(builddir)/release
-	cd $(builddir)/release && cmake -D STATIC=ON -D ARCH="x86-64" -D BUILD_64=ON -D CMAKE_BUILD_TYPE=release -D WARNINGS_AS_ERRORS=ON $(topdir) && $(MAKE)
+	cd $(builddir)/release && cmake -D STATIC=ON -D ARCH="x86-64" -D BUILD_64=ON -D CMAKE_BUILD_TYPE=Release -D WARNINGS_AS_ERRORS=ON $(topdir) && $(MAKE)
+release-full-static:
+	mkdir -p $(builddir)/release-static
+	cd $(builddir)/release-static && cmake -DBUILD_STATIC_DEPS=ON -DCMAKE_BUILD_TYPE=Release -DWARNINGS_AS_ERRORS=ON $(topdir) && $(MAKE)
+release-full-static-archive: release-full-static
+	cd $(builddir)/release-static && $(MAKE) strip_binaries && $(MAKE) create_archive
 
 coverage:
 	mkdir -p $(builddir)/debug
@@ -115,41 +116,41 @@ coverage:
 
 release-static-linux-armv6:
 	mkdir -p $(builddir)/release
-	cd $(builddir)/release && cmake -D BUILD_TESTS=OFF -D ARCH="armv6zk" -D STATIC=ON -D BUILD_64=OFF -D CMAKE_BUILD_TYPE=release -D BUILD_TAG="linux-armv6" -D WARNINGS_AS_ERRORS=ON $(topdir) && $(MAKE)
+	cd $(builddir)/release && cmake -D BUILD_TESTS=OFF -D ARCH="armv6zk" -D STATIC=ON -D BUILD_64=OFF -D CMAKE_BUILD_TYPE=Release -D BUILD_TAG="linux-armv6" -D WARNINGS_AS_ERRORS=ON $(topdir) && $(MAKE)
 
 release-static-linux-armv7:
 	mkdir -p $(builddir)/release
-	cd $(builddir)/release && cmake -D BUILD_TESTS=OFF -D ARCH="armv7-a" -D STATIC=ON -D BUILD_64=OFF -D CMAKE_BUILD_TYPE=release -D BUILD_TAG="linux-armv7" -D WARNINGS_AS_ERRORS=ON $(topdir) && $(MAKE)
+	cd $(builddir)/release && cmake -D BUILD_TESTS=OFF -D ARCH="armv7-a" -D STATIC=ON -D BUILD_64=OFF -D CMAKE_BUILD_TYPE=Release -D BUILD_TAG="linux-armv7" -D WARNINGS_AS_ERRORS=ON $(topdir) && $(MAKE)
 
 release-static-android-armv7:
 	mkdir -p $(builddir)/release/translations
 	cd $(builddir)/release/translations && cmake ../../../translations && $(MAKE)
-	cd $(builddir)/release && CC=arm-linux-androideabi-clang CXX=arm-linux-androideabi-clang++ cmake -D BUILD_TESTS=OFF -D ARCH="armv7-a" -D STATIC=ON -D BUILD_64=OFF -D CMAKE_BUILD_TYPE=release -D ANDROID=true -D INSTALL_VENDORED_LIBUNBOUND=ON -D BUILD_TAG="android-armv7" -D CMAKE_SYSTEM_NAME="Android" -D CMAKE_ANDROID_STANDALONE_TOOLCHAIN="${ANDROID_STANDALONE_TOOLCHAIN_PATH}" -D CMAKE_ANDROID_ARM_MODE=ON -D CMAKE_ANDROID_ARCH_ABI="armeabi-v7a" -D WARNINGS_AS_ERRORS=ON ../.. && $(MAKE)
+	cd $(builddir)/release && CC=arm-linux-androideabi-clang CXX=arm-linux-androideabi-clang++ cmake -D BUILD_TESTS=OFF -D ARCH="armv7-a" -D STATIC=ON -D BUILD_64=OFF -D CMAKE_BUILD_TYPE=Release -D ANDROID=true -D INSTALL_VENDORED_LIBUNBOUND=ON -D BUILD_TAG="android-armv7" -D CMAKE_SYSTEM_NAME="Android" -D CMAKE_ANDROID_STANDALONE_TOOLCHAIN="${ANDROID_STANDALONE_TOOLCHAIN_PATH}" -D CMAKE_ANDROID_ARM_MODE=ON -D CMAKE_ANDROID_ARCH_ABI="armeabi-v7a" -D WARNINGS_AS_ERRORS=ON ../.. && $(MAKE)
 
 release-static-android-armv8:
 	mkdir -p $(builddir)/release/translations
 	cd $(builddir)/release/translations && cmake ../../../translations && $(MAKE)
-	cd $(builddir)/release && CC=aarch64-linux-android-clang CXX=aarch64-linux-android-clang++ cmake -D BUILD_TESTS=OFF -D ARCH="armv8-a" -D STATIC=ON -D BUILD_64=ON -D CMAKE_BUILD_TYPE=release -D ANDROID=true -D INSTALL_VENDORED_LIBUNBOUND=ON -D BUILD_TAG="android-armv8" -D CMAKE_SYSTEM_NAME="Android" -D CMAKE_ANDROID_STANDALONE_TOOLCHAIN="${ANDROID_STANDALONE_TOOLCHAIN_PATH}" -D CMAKE_ANDROID_ARCH_ABI="arm64-v8a" -D WARNINGS_AS_ERRORS=ON ../.. && $(MAKE)
+	cd $(builddir)/release && CC=aarch64-linux-android-clang CXX=aarch64-linux-android-clang++ cmake -D BUILD_TESTS=OFF -D ARCH="armv8-a" -D STATIC=ON -D BUILD_64=ON -D CMAKE_BUILD_TYPE=Release -D ANDROID=true -D INSTALL_VENDORED_LIBUNBOUND=ON -D BUILD_TAG="android-armv8" -D CMAKE_SYSTEM_NAME="Android" -D CMAKE_ANDROID_STANDALONE_TOOLCHAIN="${ANDROID_STANDALONE_TOOLCHAIN_PATH}" -D CMAKE_ANDROID_ARCH_ABI="arm64-v8a" -D WARNINGS_AS_ERRORS=ON ../.. && $(MAKE)
 
 release-static-linux-armv8:
 	mkdir -p $(builddir)/release
-	cd $(builddir)/release && cmake -D BUILD_TESTS=OFF -D ARCH="armv8-a" -D STATIC=ON -D BUILD_64=ON -D CMAKE_BUILD_TYPE=release -D BUILD_TAG="linux-armv8" -D WARNINGS_AS_ERRORS=ON $(topdir) && $(MAKE)
+	cd $(builddir)/release && cmake -D BUILD_TESTS=OFF -D ARCH="armv8-a" -D STATIC=ON -D BUILD_64=ON -D CMAKE_BUILD_TYPE=Release -D BUILD_TAG="linux-armv8" -D WARNINGS_AS_ERRORS=ON $(topdir) && $(MAKE)
 
 release-static-linux-x86_64:
 	mkdir -p $(builddir)/release
-	cd $(builddir)/release && cmake -D STATIC=ON -D ARCH="x86-64" -D BUILD_64=ON -D CMAKE_BUILD_TYPE=release -D BUILD_TAG="linux-x64" -D WARNINGS_AS_ERRORS=ON $(topdir) && $(MAKE)
+	cd $(builddir)/release && cmake -D STATIC=ON -D ARCH="x86-64" -D BUILD_64=ON -D CMAKE_BUILD_TYPE=Release -D BUILD_TAG="linux-x64" -D WARNINGS_AS_ERRORS=ON $(topdir) && $(MAKE)
 
 release-static-freebsd-x86_64:
 	mkdir -p $(builddir)/release
-	cd $(builddir)/release && cmake -D STATIC=ON -D ARCH="x86-64" -D BUILD_64=ON -D CMAKE_BUILD_TYPE=release -D BUILD_TAG="freebsd-x64" -D WARNINGS_AS_ERRORS=ON $(topdir) && $(MAKE)
+	cd $(builddir)/release && cmake -D STATIC=ON -D ARCH="x86-64" -D BUILD_64=ON -D CMAKE_BUILD_TYPE=Release -D BUILD_TAG="freebsd-x64" -D WARNINGS_AS_ERRORS=ON $(topdir) && $(MAKE)
 
 release-static-mac-x86_64:
 	mkdir -p $(builddir)/release
-	cd $(builddir)/release && cmake -D STATIC=ON -D ARCH="x86-64" -D BUILD_64=ON -D CMAKE_BUILD_TYPE=release -D BUILD_TAG="mac-x64" -D WARNINGS_AS_ERRORS=ON $(topdir) && $(MAKE)
+	cd $(builddir)/release && cmake -D STATIC=ON -D ARCH="x86-64" -D BUILD_64=ON -D CMAKE_BUILD_TYPE=Release -D BUILD_TAG="mac-x64" -D WARNINGS_AS_ERRORS=ON $(topdir) && $(MAKE)
 
 release-static-linux-i686:
 	mkdir -p $(builddir)/release
-	cd $(builddir)/release && cmake -D STATIC=ON -D ARCH="i686" -D BUILD_64=OFF -D CMAKE_BUILD_TYPE=release -D BUILD_TAG="linux-x86" -D WARNINGS_AS_ERRORS=ON $(topdir) && $(MAKE)
+	cd $(builddir)/release && cmake -D STATIC=ON -D ARCH="i686" -D BUILD_64=OFF -D CMAKE_BUILD_TYPE=Release -D BUILD_TAG="linux-x86" -D WARNINGS_AS_ERRORS=ON $(topdir) && $(MAKE)
 
 release-static-win64:
 	mkdir -p $(builddir)/release

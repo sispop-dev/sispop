@@ -1036,7 +1036,7 @@ bool simple_wallet::make_multisig_main(const std::vector<std::string> &args, boo
   }
 
   // parse threshold
-  uint32_t threshold;
+  uint32_t threshold{0};
   if (!string_tools::get_xtype_from_string(threshold, args[0]))
   {
     fail_msg_writer() << tr("Invalid threshold");

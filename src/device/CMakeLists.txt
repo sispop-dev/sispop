@@ -43,17 +43,26 @@ target_link_libraries(device
     version
     extra)
 
-find_package(HIDAPI)
+if(BUILD_STATIC_DEPS)
+  message(STATUS "Using HIDAPI from static build deps")
+else()
+  add_library(hidapi_libusb INTERFACE)
+  find_package(HIDAPI)
 
 if (HIDAPI_FOUND)
     message(STATUS "Using HIDAPI ${HIDAPI_LIBRARIES} (includes at ${HIDAPI_INCLUDE_DIR})")
+    target_compile_definitions(hidapi_libusb INTERFACE HAVE_HIDAPI)
+    target_include_directories(hidapi_libusb INTERFACE ${HIDAPI_INCLUDE_DIR})
+    target_link_libraries(hidapi_libusb INTERFACE ${HIDAPI_LIBRARIES})
+  else (HIDAPI_FOUND)
+    message(STATUS "Could not find HIDAPI")
+  endif()
+endif()
+
+if (HIDAPI_FOUND)
   target_sources(device PRIVATE
     device_ledger.cpp
     device_io_hid.cpp
     )
-  target_compile_definitions(device PUBLIC HAVE_HIDAPI)
-  target_include_directories(device PRIVATE ${HIDAPI_INCLUDE_DIR})
-  target_link_libraries(device PRIVATE ${HIDAPI_LIBRARIES})
-else (HIDAPI_FOUND)
-  message(STATUS "Could not find HIDAPI")
+  target_link_libraries(device PRIVATE hidapi_libusb)
 endif()

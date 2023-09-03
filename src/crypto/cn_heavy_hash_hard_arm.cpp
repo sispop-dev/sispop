@@ -37,7 +37,9 @@
 
 #include "cn_heavy_hash.hpp"
 extern "C" {
-#include "../crypto/keccak.h"
+#include "keccak.h"
+#include "jh.h"
+#include "skein.h"
 }
 
 #include <sys/auxv.h>
@@ -317,8 +319,6 @@ inline uint64_t _umul128(uint64_t a, uint64_t b, uint64_t* hi)
 
 extern "C" void blake256_hash(uint8_t*, const uint8_t*, uint64_t);
 extern "C" void groestl(const unsigned char*, unsigned long long, unsigned char*);
-extern "C" size_t jh_hash(int, const unsigned char*, unsigned long long, unsigned char*);
-extern "C" size_t skein_hash(int, const unsigned char*, size_t, unsigned char*);
 
 inline uint8x16_t _mm_set_epi64x(const uint64_t a, const uint64_t b)
 {

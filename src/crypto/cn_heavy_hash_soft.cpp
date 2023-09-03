@@ -30,7 +30,9 @@
 
 #include "cn_heavy_hash.hpp"
 extern "C" {
-#include "../crypto/keccak.h"
+#include "keccak.h"
+#include "jh.h"
+#include "skein.h"
 #if !defined(__clang__) && defined(HAS_INTEL_HW)
 #  include <x86intrin.h>
 #endif
@@ -462,8 +464,6 @@ inline uint64_t _umul128(uint64_t a, uint64_t b, uint64_t* hi)
 
 extern "C" void blake256_hash(uint8_t*, const uint8_t*, uint64_t);
 extern "C" void groestl(const unsigned char*, unsigned long long, unsigned char*);
-extern "C" size_t jh_hash(int, const unsigned char*, unsigned long long, unsigned char*);
-extern "C" size_t skein_hash(int, const unsigned char*, size_t, unsigned char*);
 
 template<size_t MEMORY, size_t ITER, size_t VERSION>
 void cn_heavy_hash<MEMORY,ITER,VERSION>::software_hash(const void* in, size_t len, void* out, bool prehashed)

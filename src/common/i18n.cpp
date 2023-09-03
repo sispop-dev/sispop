@@ -34,7 +34,6 @@
 #include <map>
 #include "file_io_utils.h"
 #include "common/i18n.h"
-#include "translation_files.h"
 
 #undef SISPOP_DEFAULT_LOG_CATEGORY
 #define SISPOP_DEFAULT_LOG_CATEGORY "i18n"

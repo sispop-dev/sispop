@@ -50,6 +50,7 @@ target_link_libraries(wallet
       ${Boost_THREAD_LIBRARY}
   PRIVATE
     OpenSSL::SSL
+    OpenSSL::Crypto
     extra)
 
 sispop_add_executable(wallet_rpc_server "sispop-wallet-rpc"

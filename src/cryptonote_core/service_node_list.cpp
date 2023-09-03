@@ -793,7 +793,7 @@ namespace service_nodes
     std::vector<cryptonote::account_public_address> service_node_addresses;
     std::vector<uint64_t> service_node_portions;
     uint64_t portions_for_operator;
-    uint64_t expiration_timestamp;
+    uint64_t expiration_timestamp{0};
     crypto::signature signature;
 
     if (!reg_tx_extract_fields(tx, service_node_addresses, portions_for_operator, service_node_portions, expiration_timestamp, service_node_key, signature))
