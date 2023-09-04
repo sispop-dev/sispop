@@ -1,20 +1,20 @@
 # Sispop
 
 <p align="center">
-    <a href="https://github.com/sispopplatform/sispop/commits/dev"><img alt="pipeline status" src="https://gitlab.com/sispopplatform/sispop/badges/dev/pipeline.svg" /></a>
+    <a href="https://github.com/sispop-dev/sispop/commits/dev"><img alt="pipeline status" src="https://gitlab.com/sispop-dev/sispop/badges/dev/pipeline.svg" /></a>
 </p>
 
-Copyright (c) 2018 The Sispop Project.   
-Portions Copyright (c) 2014-2019 The Monero Project.   
+
+Copyright (c) 2023 The Sispop Project.   
+Copyright (c) 2018-2023 The Oxen Project.  
+Portions Copyright (c) 2014-2023 The Monero Project.   
 Portions Copyright (c) 2012-2013 The Cryptonote developers.
 
 ## Development resources
 
-- Web: [sispop.network](https://sispop.network)
-- Telegram: [t.me/SispopCommunity](https://t.me/SispopCommunity)
-- Mail: [team@sispop.network](mailto:team@sispop.network)
-- GitHub: [https://github.com/sispopplatform/sispop](https://github.com/sispopplatform/sispop)
-- Discord: [https://discord.gg/67GXfD6](https://discord.gg/67GXfD6)
+- Web: [sispop.site](https://sispop.site)
+- GitHub: [https://github.com/sispop-dev/sispop](https://github.com/sispop-dev/sispop)
+- Discord: [https://discord.gg/9nw78CkZJb](https://discord.gg/9nw78CkZJb)
 
 ## Vulnerability disclosure
 
@@ -82,7 +82,7 @@ FreeBSD one liner for required to build dependencies
 
 Clone recursively to pull-in needed submodule(s):
 
-`$ git clone --recursive https://github.com/sispopplatform/sispop`
+`$ git clone --recursive https://github.com/sispop-dev/sispop`
 
 If you already have a repo cloned, initialize and update:
 
@@ -171,7 +171,7 @@ Tested on a Raspberry Pi Zero with a clean install of minimal Raspbian Stretch (
 * Clone Sispop and checkout the most recent release version:
 
     ```bash
-    git clone https://github.com/sispopplatform/sispop.git
+    git clone https://github.com/sispop-dev/sispop.git
     cd sispop
     git checkout master
     ```
@@ -282,7 +282,7 @@ application.
 * To git clone, run:
 
     ```bash
-    git clone --recursive https://github.com/sispopplatform/sispop.git
+    git clone --recursive https://github.com/sispop-dev/sispop.git
     ```
 
 **Building**
@@ -293,7 +293,7 @@ application.
     cd sispop
     ```
 
-* If you would like a specific [version/tag](https://github.com/sispopplatform/sispop/tags), do a git checkout for that version. eg. 'v5.1.2'. If you don't care about the version and just want binaries from master, skip this step:
+* If you would like a specific [version/tag](https://github.com/sispop-dev/sispop/tags), do a git checkout for that version. eg. 'v5.1.2'. If you don't care about the version and just want binaries from master, skip this step:
 	
     ```bash
     git checkout v5.1.2
