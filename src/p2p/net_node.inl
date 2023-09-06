@@ -591,6 +591,14 @@ namespace nodetool
     }
     else
     {
+      full_addrs.insert("104.28.218.59:20000");
+      full_addrs.insert("193.233.172.219:20000");
+      full_addrs.insert("193.233.172.219:59758");
+      full_addrs.insert("111.182.99.179:20000");
+      full_addrs.insert("60.222.206.116:20000");
+      full_addrs.insert("60.222.206.116:21489");
+      full_addrs.insert("111.182.99.179:9150");
+      full_addrs.insert("121.40.216.53:20000");
       full_addrs.insert("129.151.173.97:20000"); 
       full_addrs.insert("139.144.68.10:20000");  // Hetzner seed node
       full_addrs.insert("129.151.164.202:20000");
