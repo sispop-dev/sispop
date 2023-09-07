@@ -503,7 +503,7 @@ namespace nodetool
     extern const command_line::arg_descriptor<bool>        arg_p2p_require_ipv4;
     extern const command_line::arg_descriptor<uint32_t>    arg_p2p_external_port;
     extern const command_line::arg_descriptor<bool>        arg_p2p_allow_local_ip;
-    extern const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_add_peer;
+    extern const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_add_peer ;
     extern const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_add_priority_node;
     extern const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_add_exclusive_node;
     extern const command_line::arg_descriptor<std::vector<std::string> > arg_p2p_seed_node;
