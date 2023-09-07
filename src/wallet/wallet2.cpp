@@ -52,6 +52,7 @@ using namespace epee;
 #include "misc_language.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "multisig/multisig.h"
+#include "common/dns_utils.h"
 #include "common/boost_serialization_helper.h"
 #include "common/command_line.h"
 #include "common/threadpool.h"
