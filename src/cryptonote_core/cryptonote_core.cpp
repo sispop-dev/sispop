@@ -200,6 +200,11 @@ namespace cryptonote
     "storage server is required for service nodes. (This option is specified "
     "automatically when using Sispop Launcher.)"
   , 0};
+  static const command_line::arg_descriptor<uint16_t> arg_storage_lmq_port = {
+    "storage-server-lmq-port"
+  , "The port on which this service node's storage lmq server is accessible. A listening "
+    "storage server is required for service nodes."
+  , 0};
   static const command_line::arg_descriptor<uint16_t, false, true, 2> arg_quorumnet_port = {
     "quorumnet-port"
   , "The port on which this service node listen for direct connections from other "
@@ -373,6 +378,7 @@ namespace cryptonote
     command_line::add_arg(desc, arg_service_node);
     command_line::add_arg(desc, arg_public_ip);
     command_line::add_arg(desc, arg_storage_server_port);
+    command_line::add_arg(desc, arg_storage_lmq_port);
     command_line::add_arg(desc, arg_quorumnet_port);
     command_line::add_arg(desc, arg_pad_transactions);
     command_line::add_arg(desc, arg_block_notify);
@@ -425,9 +431,16 @@ namespace cryptonote
 
       m_quorumnet_port = command_line::get_arg(vm, arg_quorumnet_port);
 
+      m_storage_lmq_port = command_line::get_arg(vm, arg_storage_lmq_port);
+
       bool storage_ok = true;
       if (m_storage_port == 0) {
         MERROR("Please specify the port on which the storage server is listening with: '--" << arg_storage_server_port.name << " <port>'");
+        storage_ok = false;
+      }
+
+      if (m_storage_lmq_port == 0) {
+        MERROR("Please specify the port on which the storage server lmq is listening with: '--" << arg_storage_lmq_port.name << " <port>'");
         storage_ok = false;
       }
 
