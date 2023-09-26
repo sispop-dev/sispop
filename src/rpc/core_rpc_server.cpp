@@ -2718,8 +2718,32 @@ namespace cryptonote
 
             entry.quorum.validators.reserve(quorum->validators.size());
             entry.quorum.workers.reserve(quorum->workers.size());
-            for (crypto::public_key const &key : quorum->validators) entry.quorum.validators.push_back(epee::string_tools::pod_to_hex(key));
-            for (crypto::public_key const &key : quorum->workers)    entry.quorum.workers.push_back(epee::string_tools::pod_to_hex(key));
+            auto const &service_node_list = m_core.get_service_node_list();
+            uint64_t const now = time(nullptr);
+
+            service_node_list.for_each_service_node_info_and_proof(
+             quorum->validators.begin(),
+             quorum->validators.end(),
+             [&](auto& pub_key, auto&, auto& proof) {
+               cryptonote::rpc::GET_QUORUM_STATE::quorum_validator validator;
+
+               validator.hash = sispopmq::to_hex(tools::view_guts(pub_key));
+               validator.uptime = now - proof.timestamp;
+
+               entry.quorum.validators.push_back(validator);
+             });
+
+            service_node_list.for_each_service_node_info_and_proof(
+              quorum->workers.begin(),
+              quorum->workers.end(),
+              [&](auto& pub_key, auto&, auto& proof) {
+                cryptonote::rpc::GET_QUORUM_STATE::quorum_worker worker;
+
+                worker.hash = sispopmq::to_hex(tools::view_guts(pub_key));
+                worker.uptime = now - proof.timestamp;
+
+                entry.quorum.workers.push_back(worker);
+            });
 
             res.quorums.push_back(entry);
             at_least_one_succeeded = true;
