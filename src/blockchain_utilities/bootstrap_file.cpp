@@ -29,7 +29,6 @@
 
 #include "bootstrap_serialization.h"
 #include "serialization/binary_utils.h" // dump_binary(), parse_binary()
-#include "serialization/json_utils.h" // dump_json()
 
 #include "bootstrap_file.h"
 
@@ -39,7 +38,6 @@
 namespace po = boost::program_options;
 
 using namespace cryptonote;
-using namespace epee;
 
 namespace
 {
@@ -118,9 +116,10 @@ bool BootstrapFile::initialize_file()
   const uint32_t file_magic = blockchain_raw_magic;
 
   std::string blob;
-  if (! ::serialization::dump_binary(file_magic, blob))
-  {
-    throw std::runtime_error("Error in serialization of file magic");
+  try {
+    blob = serialization::dump_binary(file_magic);
+  } catch (const std::exception& e) {
+    throw std::runtime_error("Error in serialization of file magic: "s + e.what());
   }
   *m_raw_data_file << blob;
 
@@ -143,9 +142,10 @@ bool BootstrapFile::initialize_file()
   MDEBUG("bootstrap::file_info size: " << bd.size());
   bd_size = bd.size();
 
-  if (! ::serialization::dump_binary(bd_size, blob))
-  {
-    throw std::runtime_error("Error in serialization of bootstrap::file_info size");
+  try {
+    blob = serialization::dump_binary(bd_size);
+  } catch (const std::exception& e) {
+    throw std::runtime_error("Error in serialization of bootstrap::file_info size: "s + e.what());
   }
   output_stream_header << blob;
   output_stream_header << bd;
@@ -154,9 +154,10 @@ bool BootstrapFile::initialize_file()
   MDEBUG("bootstrap::blocks_info size: " << bd.size());
   bd_size = bd.size();
 
-  if (! ::serialization::dump_binary(bd_size, blob))
-  {
-    throw std::runtime_error("Error in serialization of bootstrap::blocks_info size");
+  try {
+    blob = serialization::dump_binary(bd_size);
+  } catch (const std::exception& e) {
+    throw std::runtime_error("Error in serialization of bootstrap::blocks_info size: "s + e.what());
   }
   output_stream_header << blob;
   output_stream_header << bd;
@@ -181,9 +182,10 @@ void BootstrapFile::flush_chunk()
   }
 
   std::string blob;
-  if (! ::serialization::dump_binary(chunk_size, blob))
-  {
-    throw std::runtime_error("Error in serialization of chunk size");
+  try {
+    blob = serialization::dump_binary(chunk_size);
+  } catch (const std::exception& e) {
+    throw std::runtime_error("Error in serialization of chunk size: "s + e.what());
   }
   *m_raw_data_file << blob;
 
@@ -215,7 +217,7 @@ void BootstrapFile::write_block(block& block)
 
   std::vector<transaction> txs;
 
-  uint64_t block_height = boost::get<txin_gen>(block.miner_tx.vin.front()).height;
+  uint64_t block_height = std::get<txin_gen>(block.miner_tx.vin.front()).height;
 
 
   // now add all regular transactions
@@ -315,7 +317,7 @@ bool BootstrapFile::store_blockchain_raw(Blockchain* _blockchain_storage, tx_mem
   }
   // print message for last block, which may not have been printed yet due to progress_interval
   std::cout << refresh_string;
-  std::cout << "block " << m_cur_height-1 << "/" << block_stop << ENDL;
+  std::cout << "block " << m_cur_height-1 << "/" << block_stop << "\n";
 
   MINFO("Number of blocks exported: " << num_blocks_written);
   if (num_blocks_written > 0)
@@ -335,8 +337,11 @@ uint64_t BootstrapFile::seek_to_first_chunk(std::ifstream& import_file)
     throw std::runtime_error("Error reading expected number of bytes");
   str1.assign(buf1, sizeof(file_magic));
 
-  if (! ::serialization::parse_binary(str1, file_magic))
-    throw std::runtime_error("Error in deserialization of file_magic");
+  try {
+    serialization::parse_binary(str1, file_magic);
+  } catch (const std::exception& e) {
+    throw std::runtime_error("Error in deserialization of file_magic: "s + e.what());
+  }
 
   if (file_magic != blockchain_raw_magic)
   {
@@ -352,8 +357,11 @@ uint64_t BootstrapFile::seek_to_first_chunk(std::ifstream& import_file)
   str1.assign(buf1, sizeof(buflen_file_info));
   if (! import_file)
     throw std::runtime_error("Error reading expected number of bytes");
-  if (! ::serialization::parse_binary(str1, buflen_file_info))
-    throw std::runtime_error("Error in deserialization of buflen_file_info");
+  try {
+    serialization::parse_binary(str1, buflen_file_info);
+  } catch (const std::exception& e) {
+    throw std::runtime_error("Error in deserialization of buflen_file_info: "s + e.what());
+  }
   MINFO("bootstrap::file_info size: " << buflen_file_info);
 
   if (buflen_file_info > sizeof(buf1))
@@ -363,8 +371,11 @@ uint64_t BootstrapFile::seek_to_first_chunk(std::ifstream& import_file)
     throw std::runtime_error("Error reading expected number of bytes");
   str1.assign(buf1, buflen_file_info);
   bootstrap::file_info bfi;
-  if (! ::serialization::parse_binary(str1, bfi))
-    throw std::runtime_error("Error in deserialization of bootstrap::file_info");
+  try {
+    serialization::parse_binary(str1, bfi);
+  } catch (const std::exception& e) {
+    throw std::runtime_error("Error in deserialization of bootstrap::file_info: "s + e.what());
+  }
   MINFO("bootstrap file v" << unsigned(bfi.major_version) << "." << unsigned(bfi.minor_version));
   MINFO("bootstrap magic size: " << sizeof(file_magic));
   MINFO("bootstrap header size: " << bfi.header_size);
@@ -393,8 +404,11 @@ uint64_t BootstrapFile::count_bytes(std::ifstream& import_file, uint64_t blocks,
     }
     bytes_read += sizeof(chunk_size);
     str1.assign(buf1, sizeof(chunk_size));
-    if (! ::serialization::parse_binary(str1, chunk_size))
-      throw std::runtime_error("Error in deserialization of chunk_size");
+    try {
+      serialization::parse_binary(str1, chunk_size);
+    } catch (const std::exception& e) {
+      throw std::runtime_error("Error in deserialization of chunk_size: "s + e.what());
+    }
     MDEBUG("chunk_size: " << chunk_size);
 
     if (chunk_size > BUFFER_SIZE)
@@ -489,13 +503,12 @@ uint64_t BootstrapFile::count_blocks(const std::string& import_file_path, std::s
 
   import_file.close();
 
-  std::cout << ENDL;
-  std::cout << "Done scanning bootstrap file" << ENDL;
-  std::cout << "Full header length: " << full_header_size << " bytes" << ENDL;
-  std::cout << "Scanned for blocks: " << bytes_read << " bytes" << ENDL;
-  std::cout << "Total:              " << full_header_size + bytes_read << " bytes" << ENDL;
-  std::cout << "Number of blocks: " << h << ENDL;
-  std::cout << ENDL;
+  std::cout << "\nDone scanning bootstrap file";
+  std::cout << "\nFull header length: " << full_header_size << " bytes";
+  std::cout << "\nScanned for blocks: " << bytes_read << " bytes";
+  std::cout << "\nTotal:              " << full_header_size + bytes_read << " bytes";
+  std::cout << "\nNumber of blocks: " << h;
+  std::cout << std::endl;
 
   // NOTE: h is the number of blocks.
   // Note that a block's stored height is zero-based, but parts of the code use

@@ -5,7 +5,6 @@ index 8d477410b0..97e7ecb851 100644
 @@ -137,13 +137,14 @@ rule init ( version ? : command * : options * : requirement * )
      # - Set the toolset generic common options.
      common.handle-options darwin : $(condition) : $(command) : $(options) ;
-
 +    real-version = [ regex.split $(real-version) \\. ] ;
      # - GCC 4.0 and higher in Darwin does not have -fcoalesce-templates.
 -    if $(real-version) < "4.0.0"

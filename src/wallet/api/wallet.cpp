@@ -262,26 +262,28 @@ struct Wallet2CallbackImpl : public tools::i_wallet2_callback
       }
     }
 
-    boost::optional<epee::wipeable_string> on_device_pin_request() override
+    std::optional<epee::wipeable_string> on_device_pin_request() override
     {
       if (m_listener) {
         auto pin = m_listener->onDevicePinRequest();
         if (pin){
-          return boost::make_optional(epee::wipeable_string((*pin).data(), (*pin).size()));
+          return std::make_optional(epee::wipeable_string(pin->data(), pin->size()));
         }
       }
-      return boost::none;
+      return std::nullopt;
     }
 
-    boost::optional<epee::wipeable_string> on_device_passphrase_request(bool on_device) override
+    std::optional<epee::wipeable_string> on_device_passphrase_request(bool on_device) override
     {
       if (m_listener) {
         auto passphrase = m_listener->onDevicePassphraseRequest(on_device);
-        if (!on_device && passphrase) {
-          return boost::make_optional(epee::wipeable_string((*passphrase).data(), (*passphrase).size()));
+        if (passphrase) {
+          return std::make_optional(epee::wipeable_string(passphrase->data(), passphrase->size()));
         }
+      } else {
+        on_device = true;
       }
-      return boost::none;
+      return std::nullopt;
     }
 
     void on_device_progress(const hw::device_progress & event) override
@@ -451,11 +453,9 @@ WalletImpl::WalletImpl(NetworkType nettype, uint64_t kdf_rounds)
 
     m_refreshIntervalMillis = DEFAULT_REFRESH_INTERVAL_MILLIS;
 
-    m_refreshThread = boost::thread([this] () {
-        this->refreshThreadFunc();
-    });
+    m_refreshThread = std::thread([this] () { refreshThreadFunc(); });
 
-    m_longPollThread = boost::thread([this]() {
+    m_longPollThread = std::thread([this]() {
       for (;;)
       {
         if (!m_refreshEnabled)
@@ -757,7 +757,7 @@ bool WalletImpl::recover(const std::string &path, const std::string &seed)
     return recover(path, "", seed);
 }
 
-bool WalletImpl::recover(const std::string &path, const std::string &password, const std::string &seed)
+bool WalletImpl::recover(const std::string &path, const std::string &password, const std::string &seed, const std::string &seed_offset/* = {}*/)
 {
     clearStatus();
     m_errorString.clear();
@@ -774,6 +774,10 @@ bool WalletImpl::recover(const std::string &path, const std::string &password, c
     if (!crypto::ElectrumWords::words_to_bytes(seed, recovery_key, old_language)) {
         setStatusError(tr("Electrum-style word list failed verification"));
         return false;
+    }
+    if (!seed_offset.empty())
+    {
+        recovery_key = cryptonote::decrypt_key(recovery_key, seed_offset);
     }
 
     if (old_language == crypto::ElectrumWords::old_language_name)
@@ -837,18 +841,18 @@ void WalletImpl::setSeedLanguage(const std::string &arg)
 
 int WalletImpl::status() const
 {
-    boost::lock_guard<boost::mutex> l(m_statusMutex);
+    std::lock_guard l{m_statusMutex};
     return m_status;
 }
 
 std::string WalletImpl::errorString() const
 {
-    boost::lock_guard<boost::mutex> l(m_statusMutex);
+    std::lock_guard l{m_statusMutex};
     return m_errorString;
 }
 
 void WalletImpl::statusWithErrorString(int& status, std::string& errorString) const {
-    boost::lock_guard<boost::mutex> l(m_statusMutex);
+    std::lock_guard l{m_statusMutex};
     status = m_status;
     errorString = m_errorString;
 }
@@ -982,7 +986,7 @@ bool WalletImpl::lightWalletImportWalletRequest(std::string &payment_id, uint64_
 {
   try
   {
-    tools::COMMAND_RPC_IMPORT_WALLET_REQUEST::response response;
+    tools::COMMAND_RPC_IMPORT_WALLET_REQUEST::response response{};
     if(!m_wallet->light_wallet_import_wallet_request(response)){
       setStatusError(tr("Failed to send import wallet request"));
       return false;
@@ -1025,12 +1029,12 @@ void WalletImpl::setSubaddressLookahead(uint32_t major, uint32_t minor)
 
 uint64_t WalletImpl::balance(uint32_t accountIndex) const
 {
-    return m_wallet->balance(accountIndex);
+    return m_wallet->balance(accountIndex, false);
 }
 
 uint64_t WalletImpl::unlockedBalance(uint32_t accountIndex) const
 {
-    return m_wallet->unlocked_balance(accountIndex);
+    return m_wallet->unlocked_balance(accountIndex, false);
 }
 
 uint64_t WalletImpl::blockChainHeight() const
@@ -1155,6 +1159,10 @@ UnsignedTransaction *WalletImpl::loadUnsignedTx(const std::string &unsigned_file
   UnsignedTransactionImpl * transaction = new UnsignedTransactionImpl(*this);
   if (!m_wallet->load_unsigned_tx(unsigned_filename, transaction->m_unsigned_tx_set)){
     setStatusError(tr("Failed to load unsigned transactions"));
+    transaction->m_status = UnsignedTransaction::Status::Status_Error;
+    transaction->m_errorString = errorString();
+
+    return transaction;
   }
   
   // Check tx data and construct confirmation message
@@ -1439,8 +1447,7 @@ PendingTransaction* WalletImpl::restoreMultisigTransaction(const string& signDat
 //    - unconfirmed_transfer_details;
 //    - confirmed_transfer_details)
 
-PendingTransaction *WalletImpl::createTransaction(const string &dst_addr, const string &payment_id, optional<uint64_t> amount, uint32_t /*mixin_count*/,
-                                                  uint32_t priority, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices)
+PendingTransaction *WalletImpl::createTransactionMultDest(const std::vector<string> &dst_addr, const string &payment_id, optional<std::vector<uint64_t>> amount, uint32_t priority, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices)
 
 {
     clearStatus();
@@ -1452,83 +1459,84 @@ PendingTransaction *WalletImpl::createTransaction(const string &dst_addr, const 
     PendingTransactionImpl * transaction = new PendingTransactionImpl(*this);
 
     do {
-        if(!cryptonote::get_account_address_from_str(info, m_wallet->nettype(), dst_addr)) {
-            // TODO: copy-paste 'if treating as an address fails, try as url' from simplewallet.cpp:1982
-            setStatusError(tr("Invalid destination address"));
+        std::vector<uint8_t> extra;
+        std::string extra_nonce;
+        vector<cryptonote::tx_destination_entry> dsts;
+        if (!amount && dst_addr.size() > 1) {
+            setStatusError(tr("Sending all requires one destination address"));
             break;
         }
-
-
-        std::vector<uint8_t> extra;
-        // if dst_addr is not an integrated address, parse payment_id
-        if (!info.has_payment_id && !payment_id.empty()) {
-            // copy-pasted from simplewallet.cpp:2212
+        if (amount && (dst_addr.size() != (*amount).size())) {
+            setStatusError(tr("Destinations and amounts are unequal"));
+            break;
+        }
+        if (!payment_id.empty()) {
             crypto::hash payment_id_long;
-            bool r = tools::wallet2::parse_long_payment_id(payment_id, payment_id_long);
-            if (r) {
-                std::string extra_nonce;
+            if (tools::wallet2::parse_long_payment_id(payment_id, payment_id_long)) {
                 cryptonote::set_payment_id_to_tx_extra_nonce(extra_nonce, payment_id_long);
-                r = add_extra_nonce_to_tx_extra(extra, extra_nonce);
             } else {
-                r = tools::wallet2::parse_short_payment_id(payment_id, info.payment_id);
-                if (r) {
-                    std::string extra_nonce;
-                    set_encrypted_payment_id_to_tx_extra_nonce(extra_nonce, info.payment_id);
-                    r = add_extra_nonce_to_tx_extra(extra, extra_nonce);
+                setStatusError(tr("payment id has invalid format, expected 64 character hex string: ") + payment_id);
+                break;
+            }
+        }
+        bool error = false;
+        for (size_t i = 0; i < dst_addr.size() && !error; i++) {
+            if(!cryptonote::get_account_address_from_str(info, m_wallet->nettype(), dst_addr[i])) {
+                // TODO: copy-paste 'if treating as an address fails, try as url' from simplewallet.cpp:1982
+                setStatusError(tr("Invalid destination address"));
+                error = true;
+                break;
+            }
+            if (info.has_payment_id) {
+                if (!extra_nonce.empty()) {
+                    setStatusError(tr("a single transaction cannot use more than one payment id"));
+                    error = true;
+                    break;
                 }
+                set_encrypted_payment_id_to_tx_extra_nonce(extra_nonce, info.payment_id);
             }
 
-            if (!r) {
-                setStatusError(tr("payment id has invalid format, expected 16 or 64 character hex string: ") + payment_id);
-                break;
-            }
-        }
-        else if (info.has_payment_id) {
-            std::string extra_nonce;
-            set_encrypted_payment_id_to_tx_extra_nonce(extra_nonce, info.payment_id);
-            bool r = add_extra_nonce_to_tx_extra(extra, extra_nonce);
-            if (!r) {
-                setStatusError(tr("Failed to add short payment id: ") + epee::string_tools::pod_to_hex(info.payment_id));
-                break;
-            }
-        }
-
-
-        //std::vector<tools::wallet2::pending_tx> ptx_vector;
-
-        try {
             if (amount) {
-                vector<cryptonote::tx_destination_entry> dsts;
                 cryptonote::tx_destination_entry de;
-                de.original = dst_addr;
+                de.original = dst_addr[i];
                 de.addr = info.address;
-                de.amount = *amount;
+                de.amount = (*amount)[i];
                 de.is_subaddress = info.is_subaddress;
                 de.is_integrated = info.has_payment_id;
                 dsts.push_back(de);
 
-                boost::optional<uint8_t> hf_version = m_wallet->get_hard_fork_version();
-                if (!hf_version)
-                {
-                  setStatusError(tools::ERR_MSG_NETWORK_VERSION_QUERY_FAILED);
-                  return transaction;
-                }
-                sispop_construct_tx_params tx_params = tools::wallet2::construct_params(*hf_version, txtype::standard, priority);
-                transaction->m_pending_tx = m_wallet->create_transactions_2(
-                        dsts, CRYPTONOTE_DEFAULT_TX_MIXIN, 0 /* unlock_time */,
-                        priority, extra, subaddr_account, subaddr_indices, tx_params);
             } else {
-                // for the GUI, sweep_all (i.e. amount set as "(all)") will always sweep all the funds in all the addresses
-                if (subaddr_indices.empty())
-                {
+                if (subaddr_indices.empty()) {
                     for (uint32_t index = 0; index < m_wallet->get_num_subaddresses(subaddr_account); ++index)
                         subaddr_indices.insert(index);
                 }
-                transaction->m_pending_tx = m_wallet->create_transactions_all(
-                        0, info.address, info.is_subaddress, 1, CRYPTONOTE_DEFAULT_TX_MIXIN, 0 /* unlock_time */,
-                        priority, extra, subaddr_account, subaddr_indices);
             }
+        }
+        if (error) {
+            break;
+        }
+        if (!extra_nonce.empty() && !add_extra_nonce_to_tx_extra(extra, extra_nonce)) {
+            setStatusError(tr("failed to set up payment id, though it was decoded correctly"));
+            break;
+        }
+        try {
+            std::optional<uint8_t> hf_version = m_wallet->get_hard_fork_version();
+            if (!hf_version)
+            {
+              setStatusError(tools::ERR_MSG_NETWORK_VERSION_QUERY_FAILED);
+              return transaction;
+            }
+            sispop_construct_tx_params tx_params = tools::wallet2::construct_params(*hf_version, txtype::standard, priority);
 
+            if (amount) {
+                transaction->m_pending_tx = m_wallet->create_transactions_2(dsts, CRYPTONOTE_DEFAULT_TX_MIXIN, 0 /* unlock_time */,
+                                                                            priority,
+                                                                            extra, subaddr_account, subaddr_indices, tx_params);
+            } else {
+                transaction->m_pending_tx = m_wallet->create_transactions_all(0, info.address, info.is_subaddress, 1, CRYPTONOTE_DEFAULT_TX_MIXIN, 0 /* unlock_time */,
+                                                                              priority,
+                                                                              extra, subaddr_account, subaddr_indices, tx_params);
+            }
             pendingTxPostProcess(transaction);
 
             if (multisig().isMultisig) {
@@ -1603,6 +1611,13 @@ PendingTransaction *WalletImpl::createTransaction(const string &dst_addr, const 
     // Resume refresh thread
     startRefresh();
     return transaction;
+}
+
+PendingTransaction *WalletImpl::createTransaction(const string &dst_addr, const string &payment_id, optional<uint64_t> amount,
+                                                  uint32_t priority, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices)
+
+{
+    return createTransactionMultDest(std::vector<string> {dst_addr}, payment_id, amount ? (std::vector<uint64_t> {*amount}) : (optional<std::vector<uint64_t>>()), mixin_count, priority, subaddr_account, subaddr_indices);
 }
 
 PendingTransaction *WalletImpl::createSweepUnmixableTransaction()
@@ -1692,6 +1707,28 @@ void WalletImpl::disposeTransaction(PendingTransaction *t)
     delete t;
 }
 
+#if 0
+uint64_t WalletImpl::estimateTransactionFee(const std::vector<std::tuple<std::string, uint64_t>> &destinations, uint32_t priority) const
+{
+#if 0
+    const size_t pubkey_size = 33;
+    const size_t encrypted_paymentid_size = 11;
+    const size_t extra_size = pubkey_size + encrypted_paymentid_size;
+
+    return m_wallet->estimate_fee(
+        1 /*inputs*/,
+        CRYPTONOTE_DEFAULT_TX_MIXIN /*mixin*/,
+        destinations.size() + 1 /*outputs*/,
+        extra_size,
+        m_wallet->get_base_fees(),
+        m_wallet->get_fee_percent(priority),
+        m_wallet->get_fee_quantization_mask());
+#else
+    return 0; // TODO: IMPLEMENT
+#endif
+}
+#endif
+
 TransactionHistory *WalletImpl::history()
 {
     return m_history.get();
@@ -1716,6 +1753,19 @@ void WalletImpl::setListener(WalletListener *l)
 {
     // TODO thread synchronization;
     m_wallet2Callback->setListener(l);
+}
+
+bool WalletImpl::setCacheAttribute(const std::string &key, const std::string &val)
+{
+    m_wallet->set_attribute(key, val);
+    return true;
+}
+
+std::string WalletImpl::getCacheAttribute(const std::string &key) const
+{
+    std::string value;
+    m_wallet->get_attribute(key, value);
+    return value;
 }
 
 bool WalletImpl::setUserNote(const std::string &txid, const std::string &note)
@@ -1750,18 +1800,27 @@ std::string WalletImpl::getTxKey(const std::string &txid_str) const
 
     crypto::secret_key tx_key;
     std::vector<crypto::secret_key> additional_tx_keys;
-    if (m_wallet->get_tx_key(txid, tx_key, additional_tx_keys))
+    try
     {
         clearStatus();
-        std::ostringstream oss;
-        oss << epee::string_tools::pod_to_hex(tx_key);
-        for (size_t i = 0; i < additional_tx_keys.size(); ++i)
-            oss << epee::string_tools::pod_to_hex(additional_tx_keys[i]);
-        return oss.str();
+        if (m_wallet->get_tx_key(txid, tx_key, additional_tx_keys))
+        {
+            clearStatus();
+            std::ostringstream oss;
+            oss << epee::string_tools::pod_to_hex(tx_key);
+            for (size_t i = 0; i < additional_tx_keys.size(); ++i)
+                oss << epee::string_tools::pod_to_hex(additional_tx_keys[i]);
+            return oss.str();
+        }
+        else
+        {
+            setStatusError(tr("no tx keys found for this txid"));
+            return "";
+        }
     }
-    else
+    catch (const std::exception &e)
     {
-        setStatusError(tr("no tx keys found for this txid"));
+        setStatusError(e.what());
         return "";
     }
 }
@@ -1917,7 +1976,7 @@ std::string WalletImpl::getReserveProof(bool all, uint32_t account_index, uint64
     try
     {
         clearStatus();
-        boost::optional<std::pair<uint32_t, uint64_t>> account_minreserve;
+        std::optional<std::pair<uint32_t, uint64_t>> account_minreserve;
         if (!all)
         {
             account_minreserve = std::make_pair(account_index, amount);
@@ -2031,12 +2090,12 @@ bool WalletImpl::connectToDaemon()
 
 Wallet::ConnectionStatus WalletImpl::connected() const
 {
-    uint32_t version = 0;
+    rpc::version_t version;
     m_is_connected = m_wallet->check_connection(&version, NULL, DEFAULT_CONNECTION_TIMEOUT_MILLIS);
     if (!m_is_connected)
         return Wallet::ConnectionStatus_Disconnected;
     // Version check is not implemented in light wallets nodes/wallets
-    if (!m_wallet->light_wallet() && (version >> 16) != CORE_RPC_VERSION_MAJOR)
+    if (!m_wallet->light_wallet() && version.first != rpc::VERSION.first)
         return Wallet::ConnectionStatus_WrongVersion;
     return Wallet::ConnectionStatus_Connected;
 }
@@ -2058,7 +2117,7 @@ bool WalletImpl::watchOnly() const
 
 void WalletImpl::clearStatus() const
 {
-    boost::lock_guard<boost::mutex> l(m_statusMutex);
+    std::lock_guard l{m_statusMutex};
     m_status = Status_Ok;
     m_errorString.clear();
 }
@@ -2075,7 +2134,7 @@ void WalletImpl::setStatusCritical(const std::string& message) const
 
 void WalletImpl::setStatus(int status, const std::string& message) const
 {
-    boost::lock_guard<boost::mutex> l(m_statusMutex);
+    std::lock_guard l{m_statusMutex};
     m_status = status;
     m_errorString = message;
 }
@@ -2085,7 +2144,7 @@ void WalletImpl::refreshThreadFunc()
     LOG_PRINT_L3(__FUNCTION__ << ": starting refresh thread");
 
     while (true) {
-        boost::mutex::scoped_lock lock(m_refreshMutex);
+        std::unique_lock lock{m_refreshMutex};
         if (m_refreshThreadDone) {
             break;
         }
@@ -2093,8 +2152,8 @@ void WalletImpl::refreshThreadFunc()
         // if auto refresh enabled, we wait for the "m_refreshIntervalSeconds" interval.
         // if not - we wait forever
         if (m_refreshIntervalMillis > 0) {
-            boost::posix_time::milliseconds wait_for_ms(m_refreshIntervalMillis.load());
-            m_refreshCV.timed_wait(lock, wait_for_ms);
+            std::chrono::milliseconds wait_for_ms{m_refreshIntervalMillis.load()};
+            m_refreshCV.wait_for(lock, wait_for_ms);
         } else {
             m_refreshCV.wait(lock);
         }
@@ -2115,7 +2174,7 @@ void WalletImpl::doRefresh()
 {
     bool rescan = m_refreshShouldRescan.exchange(false);
     // synchronizing async and sync refresh calls
-    boost::lock_guard<boost::mutex> guarg(m_refreshMutex2);
+    std::lock_guard guard{m_refreshMutex2};
     do try {
         LOG_PRINT_L3(__FUNCTION__ << ": doRefresh, rescan = "<<rescan);
         // Syncing daemon and refreshing wallet simultaneously is very resource intensive.
@@ -2482,6 +2541,23 @@ PendingTransaction* WalletImpl::stakePending(const std::string& sn_key_str, cons
 uint64_t WalletImpl::coldKeyImageSync(uint64_t &spent, uint64_t &unspent)
 {
     return m_wallet->cold_key_image_sync(spent, unspent);
+}
+
+void WalletImpl::deviceShowAddress(uint32_t accountIndex, uint32_t addressIndex, const std::string &paymentId)
+{
+    std::optional<crypto::hash8> payment_id_param = std::nullopt;
+    if (!paymentId.empty())
+    {
+        crypto::hash8 payment_id;
+        bool res = tools::wallet2::parse_short_payment_id(paymentId, payment_id);
+        if (!res)
+        {
+            throw runtime_error("Invalid payment ID");
+        }
+        payment_id_param = payment_id;
+    }
+
+    m_wallet->device_show_address(accountIndex, addressIndex, payment_id_param);
 }
 } // namespace
 

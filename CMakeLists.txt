@@ -59,7 +59,7 @@ message(STATUS "CMake version ${CMAKE_VERSION}")
 project(sispop
     VERSION 7.1.9
     LANGUAGES CXX C)
-set(SISPOP_RELEASE_CODENAME "Valiant Vidar")
+set(SISPOP_RELEASE_CODENAME "Clean Water")
 
 # String value to append to the full version string; this is intended to easily identify whether a
 # binary was build from the release or development branches.  This should be permanently set to an
@@ -229,16 +229,6 @@ if(ARCH_ID STREQUAL "s390x")
   set(S390X 1)
 endif()
 
-if(WIN32 OR ARM OR PPC64LE OR PPC64 OR PPC)
-  set(OPT_FLAGS_RELEASE "-O2")
-else()
-  set(OPT_FLAGS_RELEASE "-Ofast")
-endif()
-
-set(CMAKE_C_FLAGS_RELEASE "-DNDEBUG ${OPT_FLAGS_RELEASE}")
-set(CMAKE_CXX_FLAGS_RELEASE "-DNDEBUG ${OPT_FLAGS_RELEASE}")
-
-
 # BUILD_TAG is used to select the build type to check for a new version
 if(BUILD_TAG)
   message(STATUS "Building build tag ${BUILD_TAG}")
@@ -284,7 +274,7 @@ if(NOT MANUAL_SUBMODULES)
     check_submodule(external/rapidjson)
     check_submodule(external/trezor-common)
     check_submodule(external/randomx)
-    check_submodule(external/sispop-mq mapbox-variant cppzmq)
+    check_submodule(external/sispop-mq cppzmq)
     if(BUILD_TESTS)
       check_submodule(external/googletest)
     endif()
@@ -339,7 +329,7 @@ endif()
 # elseif(CMAKE_SYSTEM_NAME MATCHES ".*BSDI.*")
 #   set(BSDI TRUE)
 
-include_directories(external/rapidjson/include src contrib/epee/include external)
+include_directories(external/rapidjson/include src external)
 
 if(APPLE)
   include_directories(SYSTEM /usr/include/malloc)
@@ -386,7 +376,6 @@ if(STATIC)
   else()
     set(CMAKE_FIND_LIBRARY_SUFFIXES .a ${CMAKE_FIND_LIBRARY_SUFFIXES})
   endif()
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DZMQ_STATIC")
 endif()
 
 if(SANITIZE)
@@ -492,7 +481,7 @@ if (WITH_SYSTEMD AND NOT BUILD_STATIC_DEPS)
     if(SYSTEMD_FOUND)
       target_compile_definitions(systemd INTERFACE ENABLE_SYSTEMD)
       target_link_libraries(systemd INTERFACE PkgConfig::SYSTEMD)
-    else()
+    elseif(CMAKE_SYSTEM_NAME STREQUAL Linux)
       message(WARNING "systemd not found; building without systemd support (use -DWITH_SYSTEMD=OFF to suppress this warning)")
     endif()
 endif()
@@ -587,11 +576,6 @@ else()
     set(COVERAGE_FLAGS "-fprofile-arcs -ftest-coverage --coverage")
   endif()
 
-  # With GCC 6.1.1 the compiled binary malfunctions due to aliasing. Until that
-  # is fixed in the code (Issue #847), force compiler to be conservative.
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-strict-aliasing")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-strict-aliasing")
-
   # if those don't work for your compiler, single it out where appropriate
   if(CMAKE_BUILD_TYPE STREQUAL "Release" AND NOT OPENBSD)
     set(C_SECURITY_FLAGS "${C_SECURITY_FLAGS} -U_FORTIFY_SOURCE -D_FORTIFY_SOURCE=1")
@@ -630,7 +614,7 @@ else()
   endif()
 
   # Removed in GCC 9.1 (or before ?), but still accepted, so spams the output
-  if (NOT (CMAKE_C_COMPILER_ID STREQUAL "GNU" AND NOT CMAKE_C_COMPILER_VERSION VERSION_LESS 9.1))
+  if (NOT CMAKE_C_COMPILER_ID STREQUAL "GNU" OR CMAKE_C_COMPILER_VERSION VERSION_LESS 9.1)
     add_c_flag_if_supported(-mmitigate-rop C_SECURITY_FLAGS)
     add_cxx_flag_if_supported(-mmitigate-rop CXX_SECURITY_FLAGS)
   endif()
@@ -671,11 +655,6 @@ else()
   set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -D_GNU_SOURCE ${MINGW_FLAG} ${STATIC_ASSERT_FLAG} ${WARNINGS} ${C_WARNINGS} ${COVERAGE_FLAGS} ${PIC_FLAG} ${C_SECURITY_FLAGS}")
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_GNU_SOURCE ${MINGW_FLAG} ${STATIC_ASSERT_CPP_FLAG} ${WARNINGS} ${CXX_WARNINGS} ${COVERAGE_FLAGS} ${PIC_FLAG} ${CXX_SECURITY_FLAGS}")
   set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${LD_SECURITY_FLAGS} ${LD_BACKCOMPAT_FLAGS}")
-
-  # With GCC 6.1.1 the compiled binary malfunctions due to aliasing. Until that
-  # is fixed in the code (Issue #847), force compiler to be conservative.
-  set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fno-strict-aliasing")
-  set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fno-strict-aliasing")
 
   if(ARM)
     message(STATUS "Setting FPU Flags for ARM Processors")
@@ -771,20 +750,8 @@ else()
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fvisibility=default -DGTEST_HAS_TR1_TUPLE=0")
   endif()
 
-  set(DEBUG_FLAGS "-g3")
-  if(CMAKE_C_COMPILER_ID STREQUAL "GNU" AND NOT (CMAKE_C_COMPILER_VERSION VERSION_LESS 4.8))
-    set(DEBUG_FLAGS "${DEBUG_FLAGS} -Og ")
-  else()
-    set(DEBUG_FLAGS "${DEBUG_FLAGS} -O0 ")
-  endif()
-
   # At least some CLANGs default to not enough for monero
   set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -ftemplate-depth=900")
-
-  set(CMAKE_C_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} ${DEBUG_FLAGS}")
-  set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} ${DEBUG_FLAGS}")
-  set(CMAKE_C_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} ${RELEASE_FLAGS}")
-  set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} ${RELEASE_FLAGS}")
 
   if(STATIC)
     # STATIC already configures most deps to be linked in statically,
@@ -822,9 +789,9 @@ set(Boost_USE_MULTITHREADED TRUE) # Needed for macOS, at least, and won't hurt e
 if(BUILD_STATIC_DEPS)
   # StaticBuild.cmake sets Boost targets up for us
 elseif (WIN32)
-  find_package(Boost 1.58 QUIET REQUIRED COMPONENTS system filesystem thread date_time chrono regex serialization program_options locale)
+  find_package(Boost 1.58 QUIET REQUIRED COMPONENTS system filesystem thread date_time serialization program_options locale)
 else()
-  find_package(Boost 1.58 QUIET REQUIRED COMPONENTS system filesystem thread date_time chrono regex serialization program_options)
+  find_package(Boost 1.58 QUIET REQUIRED COMPONENTS system filesystem thread date_time serialization program_options)
 endif()
 
 set(CMAKE_FIND_LIBRARY_SUFFIXES ${OLD_LIB_SUFFIXES})
@@ -832,13 +799,8 @@ if(NOT Boost_FOUND)
   message(FATAL_ERROR "Could not find Boost libraries, please make sure you have installed Boost or libboost-all-dev (>=1.58) or the equivalent")
 elseif(Boost_FOUND)
   message(STATUS "Found Boost Version: ${Boost_VERSION}")
-  if (Boost_VERSION VERSION_LESS 10 AND Boost_VERSION VERSION_LESS 1.62.0 AND NOT (OPENSSL_VERSION VERSION_LESS 1.1))
-    set(BOOST_BEFORE_1_62 true)
-  endif()
-  if (NOT Boost_VERSION VERSION_LESS 10 AND Boost_VERSION VERSION_LESS 106200 AND NOT (OPENSSL_VERSION VERSION_LESS 1.1))
-    set(BOOST_BEFORE_1_62 true)
-  endif()
-  if (BOOST_BEFORE_1_62)
+  if (OPENSSL_VERSION VERSION_GREATER_EQUAL 1.1 AND (
+        Boost_VERSION VERSION_LESS 1.62.0 OR (Boost_VERSION VERSION_GREATER 100000 AND Boost_VERSION VERSION_LESS 106200)))
       message(FATAL_ERROR "Boost ${Boost_VERSION} (older than 1.62) is too old to link with OpenSSL ${OPENSSL_VERSION} (1.1 or newer) found at ${OPENSSL_INCLUDE_DIR} and ${OPENSSL_LIBRARIES}. "
                           "Update Boost or install OpenSSL 1.0 and set path to it when running cmake: "
                           "cmake -DOPENSSL_ROOT_DIR='/usr/include/openssl-1.0'")
@@ -930,6 +892,12 @@ if(CMAKE_C_COMPILER_ID STREQUAL "Clang" AND ARCH_WIDTH EQUAL "32" AND NOT IOS AN
   endif()
 endif()
 
+option(SISPOP_DEBUG_SHORT_PROOFS "Developer option to substantially reduce uptime proof intervals for local test network debugging (the result ssispopd will not be usable on the live networks)" OFF)
+if (SISPOP_DEBUG_SHORT_PROOFS)
+  add_definitions(-DUPTIME_PROOF_BASE_MINUTE=3) # 20x faster uptime proofs
+endif()
+
+
 if(BUILD_STATIC_DEPS)
   # sqlite3 target already set up
 else()
@@ -988,12 +956,12 @@ if (iwyu_tool_path AND PYTHONINTERP_FOUND)
   )
 endif()
 
-get_property(sispop_exec_tgts GLOBAL PROPERTY sispop_executable_targets)
+get_property(ssispop_exec_tgts GLOBAL PROPERTY ssispop_executable_targets)
 set(strip_binaries "")
-foreach(tgt ${sispop_exec_tgts})
+foreach(tgt ${ssispop_exec_tgts})
   list(APPEND strip_binaries COMMAND ${CMAKE_STRIP} $<TARGET_FILE:${tgt}>)
 endforeach()
-add_custom_target(strip_binaries ${strip_binaries} DEPENDS ${sispop_exec_tgts})
+add_custom_target(strip_binaries ${strip_binaries} DEPENDS ${ssispop_exec_tgts})
 
 execute_process(COMMAND tar --version RESULT_VARIABLE tar_exit_code OUTPUT_VARIABLE tar_vers)
 set(git_tag "unknown")
@@ -1020,17 +988,17 @@ elseif(tar_os STREQUAL "Windows")
   endif()
   set(default_archive create_zip) # .tar.xz files are too scary for Windows users
 endif()
-set(tar_dir "sispop-${tar_os}-${PROJECT_VERSION}${SISPOP_RELEASE_SUFFIX}-${git_tag}")
+set(tar_dir "ssispop-${tar_os}-${PROJECT_VERSION}${SISPOP_RELEASE_SUFFIX}-${git_tag}")
 add_custom_target(create_tarxz
   COMMAND ${CMAKE_COMMAND} -E rename bin "${tar_dir}"
   COMMAND ${CMAKE_COMMAND} -E tar cvJ "${tar_dir}.tar.xz" -- "${tar_dir}"
   COMMAND ${CMAKE_COMMAND} -E rename "${tar_dir}" bin
-  DEPENDS ${sispop_exec_tgts})
+  DEPENDS ${ssispop_exec_tgts})
 
 add_custom_target(create_zip
   COMMAND ${CMAKE_COMMAND} -E rename bin "${tar_dir}"
   COMMAND ${CMAKE_COMMAND} -E tar cv "${tar_dir}.zip" --format=zip -- "${tar_dir}"
   COMMAND ${CMAKE_COMMAND} -E rename "${tar_dir}" bin
-  DEPENDS ${sispop_exec_tgts})
+  DEPENDS ${ssispop_exec_tgts})
 
 add_custom_target(create_archive DEPENDS ${default_archive})

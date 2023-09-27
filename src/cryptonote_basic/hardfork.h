@@ -28,8 +28,8 @@
 
 #pragma once
 
-#include "syncobj.h"
 #include "cryptonote_basic/cryptonote_basic.h"
+#include <mutex>
 
 namespace cryptonote
 {
@@ -46,8 +46,8 @@ namespace cryptonote
       time_t time;
     };
 
-    constexpr static uint8_t INVALID_HF_VERSION_FOR_HEIGHT = 255;
-    constexpr static uint64_t INVALID_HF_VERSION_HEIGHT    = static_cast<uint64_t>(-1);
+    constexpr static uint8_t INVALID_HF_VERSION         = 255;
+    constexpr static uint64_t INVALID_HF_VERSION_HEIGHT = static_cast<uint64_t>(-1);
     typedef enum {
       LikelyForked,
       UpdateNeeded,
@@ -279,7 +279,7 @@ namespace cryptonote
     unsigned int last_versions[256]; /* count of the block versions in the last N blocks */
     uint32_t current_fork_index;
 
-    mutable epee::critical_section lock;
+    mutable std::recursive_mutex lock;
   };
 
 }  // namespace cryptonote

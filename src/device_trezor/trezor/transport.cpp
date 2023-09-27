@@ -32,10 +32,10 @@
 #endif
 
 #include <algorithm>
+#include <chrono>
 #include <boost/endian/conversion.hpp>
 #include <boost/asio/io_service.hpp>
 #include <boost/asio/ip/udp.hpp>
-#include <boost/date_time/posix_time/posix_time_types.hpp>
 #include <boost/format.hpp>
 #include <boost/bind/bind.hpp>
 #include "common/apply_permutation.h"
@@ -59,6 +59,11 @@ namespace trezor{
     return true;
   }
 
+  bool t_serialize(const epee::wipeable_string & in, std::string & out){
+    out.assign(in.data(), in.size());
+    return true;
+  }
+
   bool t_serialize(const json_val & in, std::string & out){
     rapidjson::StringBuffer sb;
     rapidjson::Writer<rapidjson::StringBuffer> writer(sb);
@@ -75,6 +80,11 @@ namespace trezor{
 
   bool t_deserialize(const std::string & in, std::string & out){
     out = in;
+    return true;
+  }
+
+  bool t_deserialize(std::string & in, epee::wipeable_string & out){
+    out = epee::wipeable_string(in);
     return true;
   }
 
@@ -148,7 +158,7 @@ namespace trezor{
 #define PROTO_HEADER_SIZE 6
 
   static size_t message_size(const google::protobuf::Message &req){
-    return static_cast<size_t>(req.ByteSize());
+    return req.ByteSizeLong();
   }
 
   static size_t serialize_message_buffer_size(size_t msg_size) {
@@ -195,61 +205,69 @@ namespace trezor{
     const auto msg_size = message_size(req);
     const auto buff_size = serialize_message_buffer_size(msg_size) + 2;
 
-    std::unique_ptr<uint8_t[]> req_buff(new uint8_t[buff_size]);
-    uint8_t * req_buff_raw = req_buff.get();
+    epee::wipeable_string req_buff;
+    epee::wipeable_string chunk_buff;
+
+    req_buff.resize(buff_size);
+    chunk_buff.resize(REPLEN);
+
+    uint8_t * req_buff_raw = reinterpret_cast<uint8_t *>(req_buff.data());
+    uint8_t * chunk_buff_raw = reinterpret_cast<uint8_t *>(chunk_buff.data());
+
     req_buff_raw[0] = '#';
     req_buff_raw[1] = '#';
 
     serialize_message(req, msg_size, req_buff_raw + 2, buff_size - 2);
 
     size_t offset = 0;
-    uint8_t chunk_buff[REPLEN];
 
     // Chunk by chunk upload
     while(offset < buff_size){
       auto to_copy = std::min((size_t)(buff_size - offset), (size_t)(REPLEN - 1));
 
-      chunk_buff[0] = '?';
-      memcpy(chunk_buff + 1, req_buff_raw + offset, to_copy);
+      chunk_buff_raw[0] = '?';
+      memcpy(chunk_buff_raw + 1, req_buff_raw + offset, to_copy);
 
       // Pad with zeros
       if (to_copy < REPLEN - 1){
-        memset(chunk_buff + 1 + to_copy, 0, REPLEN - 1 - to_copy);
+        memset(chunk_buff_raw + 1 + to_copy, 0, REPLEN - 1 - to_copy);
       }
 
-      transport.write_chunk(chunk_buff, REPLEN);
+      transport.write_chunk(chunk_buff_raw, REPLEN);
       offset += REPLEN - 1;
     }
   }
 
   void ProtocolV1::read(Transport & transport, std::shared_ptr<google::protobuf::Message> & msg, messages::MessageType * msg_type){
-    char chunk[REPLEN];
+    epee::wipeable_string chunk_buff;
+    chunk_buff.resize(REPLEN);
+    char * chunk_buff_raw = chunk_buff.data();
 
     // Initial chunk read
-    size_t nread = transport.read_chunk(chunk, REPLEN);
+    size_t nread = transport.read_chunk(chunk_buff_raw, REPLEN);
     if (nread != REPLEN){
       throw exc::CommunicationException("Read chunk has invalid size");
     }
 
-    if (strncmp(chunk, "?##", 3) != 0){
+    if (memcmp(chunk_buff_raw, "?##", 3) != 0){
       throw exc::CommunicationException("Malformed chunk");
     }
 
     uint16_t tag;
     uint32_t len;
     nread -= 3 + 6;
-    deserialize_message_header(chunk + 3, tag, len);
+    deserialize_message_header(chunk_buff_raw + 3, tag, len);
 
-    std::string data_acc(chunk + 3 + 6, nread);
+    epee::wipeable_string data_acc(chunk_buff_raw + 3 + 6, nread);
     data_acc.reserve(len);
 
     while(nread < len){
-      const size_t cur = transport.read_chunk(chunk, REPLEN);
-      if (chunk[0] != '?'){
+      const size_t cur = transport.read_chunk(chunk_buff_raw, REPLEN);
+      if (chunk_buff_raw[0] != '?'){
         throw exc::CommunicationException("Chunk malformed");
       }
 
-      data_acc.append(chunk + 1, cur - 1);
+      data_acc.append(chunk_buff_raw + 1, cur - 1);
       nread += cur - 1;
     }
 
@@ -262,7 +280,7 @@ namespace trezor{
     }
 
     std::shared_ptr<google::protobuf::Message> msg_wrap(MessageMapper::get_message(tag));
-    if (!msg_wrap->ParseFromArray(data_acc.c_str(), len)){
+    if (!msg_wrap->ParseFromArray(data_acc.data(), len)){
       throw exc::CommunicationException("Message could not be parsed");
     }
 
@@ -315,13 +333,13 @@ namespace trezor{
   const char * BridgeTransport::PATH_PREFIX = "bridge:";
 
   BridgeTransport::BridgeTransport(
-        boost::optional<std::string> device_path,
-        boost::optional<std::string> bridge_host):
+        std::optional<std::string> device_path,
+        std::optional<std::string> bridge_host):
     m_device_path(device_path),
-    m_bridge_host(bridge_host ? bridge_host.get() : DEFAULT_BRIDGE),
-    m_response(boost::none),
-    m_session(boost::none),
-    m_device_info(boost::none)
+    m_bridge_host(bridge_host.value_or(DEFAULT_BRIDGE)),
+    m_response(std::nullopt),
+    m_session(std::nullopt),
+    m_device_info(std::nullopt)
     {
       const char *env_bridge_port = nullptr;
       if (!bridge_host && (env_bridge_port = getenv("TREZOR_BRIDGE_PORT")) != nullptr)
@@ -330,11 +348,11 @@ namespace trezor{
         CHECK_AND_ASSERT_THROW_MES(epee::string_tools::get_xtype_from_string(bridge_port, env_bridge_port), "Invalid bridge port: " << env_bridge_port);
         assert_port_number(bridge_port);
 
-        m_bridge_host = std::string("127.0.0.1:") + boost::lexical_cast<std::string>(env_bridge_port);
+        m_bridge_host = "127.0.0.1:" + std::to_string(bridge_port);
         MDEBUG("Bridge host: " << m_bridge_host);
       }
 
-      m_http_client.set_server(m_bridge_host, boost::none, epee::net_utils::ssl_support_t::e_ssl_support_disabled);
+      m_http_client.set_server(m_bridge_host, std::nullopt, epee::net_utils::ssl_support_t::e_ssl_support_disabled);
     }
 
   std::string BridgeTransport::get_path() const {
@@ -342,8 +360,7 @@ namespace trezor{
       return "";
     }
 
-    std::string path(PATH_PREFIX);
-    return path + m_device_path.get();
+    return PATH_PREFIX + *m_device_path;
   }
 
   void BridgeTransport::enumerate(t_transport_vect & res) {
@@ -357,7 +374,7 @@ namespace trezor{
 
     for(rapidjson::Value::ConstValueIterator itr = bridge_res.Begin(); itr != bridge_res.End(); ++itr){
       auto element = itr->GetObject();
-      auto t = std::make_shared<BridgeTransport>(boost::make_optional(json_get_string(element["path"])));
+      auto t = std::make_shared<BridgeTransport>(std::make_optional(json_get_string(element["path"])));
 
       auto itr_vendor = element.FindMember("vendor");
       auto itr_product = element.FindMember("product");
@@ -391,7 +408,7 @@ namespace trezor{
       throw exc::CommunicationException("Coud not open, empty device path");
     }
 
-    std::string uri = "/acquire/" + m_device_path.get() + "/null";
+    std::string uri = "/acquire/" + *m_device_path + "/null";
     std::string req;
     json bridge_res;
     bool req_status = invoke_bridge_http(uri, req, bridge_res, m_http_client);
@@ -399,7 +416,7 @@ namespace trezor{
       throw exc::CommunicationException("Failed to acquire device");
     }
 
-    m_session = boost::make_optional(json_get_string(bridge_res["session"]));
+    m_session = std::make_optional(json_get_string(bridge_res["session"]));
     m_open_counter = 1;
   }
 
@@ -413,7 +430,7 @@ namespace trezor{
       throw exc::CommunicationException("Device not open");
     }
 
-    std::string uri = "/release/" + m_session.get();
+    std::string uri = "/release/" + *m_session;
     std::string req;
     json bridge_res;
     bool req_status = invoke_bridge_http(uri, req, bridge_res, m_http_client);
@@ -421,23 +438,24 @@ namespace trezor{
       throw exc::CommunicationException("Failed to release device");
     }
 
-    m_session = boost::none;
+    m_session = std::nullopt;
   }
 
   void BridgeTransport::write(const google::protobuf::Message &req) {
-    m_response = boost::none;
+    m_response = std::nullopt;
 
     const auto msg_size = message_size(req);
     const auto buff_size = serialize_message_buffer_size(msg_size);
+    epee::wipeable_string req_buff;
+    req_buff.resize(buff_size);
 
-    std::unique_ptr<uint8_t[]> req_buff(new uint8_t[buff_size]);
-    uint8_t * req_buff_raw = req_buff.get();
+    uint8_t * req_buff_raw = reinterpret_cast<uint8_t *>(req_buff.data());
 
     serialize_message(req, msg_size, req_buff_raw, buff_size);
 
-    std::string uri = "/call/" + m_session.get();
-    std::string req_hex = epee::to_hex::string(epee::span<const std::uint8_t>(req_buff_raw, buff_size));
-    std::string res_hex;
+    std::string uri = "/call/" + *m_session;
+    epee::wipeable_string res_hex;
+    epee::wipeable_string req_hex = epee::to_hex::wipeable_string(epee::span<const std::uint8_t>(req_buff_raw, buff_size));
 
     bool req_status = invoke_bridge_http(uri, req_hex, res_hex, m_http_client);
     if (!req_status){
@@ -452,15 +470,15 @@ namespace trezor{
       throw exc::CommunicationException("Could not read, no response stored");
     }
 
-    std::string bin_data;
-    if (!epee::string_tools::parse_hexstr_to_binbuff(m_response.get(), bin_data)){
+    std::optional<epee::wipeable_string> bin_data = m_response->parse_hexstr();
+    if (!bin_data){
       throw exc::CommunicationException("Response is not well hexcoded");
     }
 
     uint16_t msg_tag;
     uint32_t msg_len;
-    deserialize_message_header(bin_data.c_str(), msg_tag, msg_len);
-    if (bin_data.size() != msg_len + 6){
+    deserialize_message_header(bin_data->data(), msg_tag, msg_len);
+    if (bin_data->size() != msg_len + 6){
       throw exc::CommunicationException("Response is not well hexcoded");
     }
 
@@ -469,20 +487,20 @@ namespace trezor{
     }
 
     std::shared_ptr<google::protobuf::Message> msg_wrap(MessageMapper::get_message(msg_tag));
-    if (!msg_wrap->ParseFromArray(bin_data.c_str() + 6, msg_len)){
+    if (!msg_wrap->ParseFromArray(bin_data->data() + 6, msg_len)){
       throw exc::EncodingException("Response is not well hexcoded");
     }
     msg = msg_wrap;
   }
 
-  const boost::optional<json> & BridgeTransport::device_info() const {
+  const std::optional<json> & BridgeTransport::device_info() const {
     return m_device_info;
   }
 
   std::ostream& BridgeTransport::dump(std::ostream& o) const {
     return o << "BridgeTransport<path=" << (m_device_path ? get_path() : "None")
-             << ", info=" << (m_device_info ? t_serialize(m_device_info.get()) : "None")
-             << ", session=" << (m_session ? m_session.get() : "None")
+             << ", info=" << (m_device_info ? t_serialize(*m_device_info) : "None")
+             << ", session=" << m_session.value_or("None")
              << ">";
   }
 
@@ -509,8 +527,8 @@ namespace trezor{
     }
   }
 
-  UdpTransport::UdpTransport(boost::optional<std::string> device_path,
-                             boost::optional<std::shared_ptr<Protocol>> proto) :
+  UdpTransport::UdpTransport(std::optional<std::string> device_path,
+                             std::optional<std::shared_ptr<Protocol>> proto) :
       m_io_service(), m_deadline(m_io_service)
   {
     m_device_host = DEFAULT_HOST;
@@ -518,7 +536,7 @@ namespace trezor{
     const char *env_trezor_path = nullptr;
 
     if (device_path) {
-      parse_udp_path(m_device_host, m_device_port, device_path.get());
+      parse_udp_path(m_device_host, m_device_port, *device_path);
     } else if ((env_trezor_path = getenv("TREZOR_PATH")) != nullptr && boost::starts_with(env_trezor_path, UdpTransport::PATH_PREFIX)){
       parse_udp_path(m_device_host, m_device_port, std::string(env_trezor_path));
       MDEBUG("Applied TREZOR_PATH: " << m_device_host << ":" << m_device_port);
@@ -531,7 +549,7 @@ namespace trezor{
       throw std::invalid_argument("Local endpoint allowed only");
     }
 
-    m_proto = proto ? proto.get() : std::make_shared<ProtocolV1>();
+    m_proto = proto ? *proto : std::make_shared<ProtocolV1>();
   }
 
   std::string UdpTransport::get_path() const {
@@ -549,7 +567,7 @@ namespace trezor{
     return ping_int();
   }
 
-  bool UdpTransport::ping_int(boost::posix_time::time_duration timeout){
+  bool UdpTransport::ping_int(std::chrono::milliseconds timeout){
     require_socket();
     try {
       std::string req = "PINGPING";
@@ -593,7 +611,7 @@ namespace trezor{
     m_socket.reset(new udp::socket(m_io_service));
     m_socket->open(udp::v4());
 
-    m_deadline.expires_at(boost::posix_time::pos_infin);
+    m_deadline.expires_at(std::chrono::steady_clock::time_point::max());
     check_deadline();
 
     m_proto->session_begin(*this);
@@ -675,7 +693,7 @@ namespace trezor{
     return static_cast<size_t>(len);
   }
 
-  ssize_t UdpTransport::receive(void * buff, size_t size, boost::system::error_code * error_code, bool no_throw, boost::posix_time::time_duration timeout){
+  ssize_t UdpTransport::receive(void * buff, size_t size, boost::system::error_code * error_code, bool no_throw, std::chrono::milliseconds timeout){
     boost::system::error_code ec;
     boost::asio::mutable_buffer buffer = boost::asio::buffer(buff, size);
 
@@ -692,11 +710,9 @@ namespace trezor{
     ec = boost::asio::error::would_block;
     std::size_t length = 0;
 
-    using namespace boost::placeholders;
-    // Start the asynchronous operation itself. The handle_receive function
-    // used as a callback will update the ec and length variables.
+    // Start the asynchronous operation itself.
     m_socket->async_receive_from(boost::asio::buffer(buffer), m_endpoint,
-                                 boost::bind(&UdpTransport::handle_receive, _1, _2, &ec, &length));
+            [&ec, &length] (const boost::system::error_code &ec_, std::size_t length_) { ec = ec_; length = length_; });
 
     // Block until the asynchronous operation has completed.
     do {
@@ -741,7 +757,7 @@ namespace trezor{
     // Check whether the deadline has passed. We compare the deadline against
     // the current time since a new asynchronous operation may have moved the
     // deadline before this actor had a chance to run.
-    if (m_deadline.expires_at() <= boost::asio::deadline_timer::traits_type::now())
+    if (m_deadline.expiry() <= std::chrono::steady_clock::now())
     {
       // The deadline has passed. The outstanding asynchronous operation needs
       // to be cancelled so that the blocked receive() function will return.
@@ -753,17 +769,11 @@ namespace trezor{
 
       // There is no longer an active deadline. The expiry is set to positive
       // infinity so that the actor takes no action until a new deadline is set.
-      m_deadline.expires_at(boost::posix_time::pos_infin);
+      m_deadline.expires_at(std::chrono::steady_clock::time_point::max());
     }
 
     // Put the actor back to sleep.
-    m_deadline.async_wait(boost::bind(&UdpTransport::check_deadline, this));
-  }
-
-  void UdpTransport::handle_receive(const boost::system::error_code &ec, std::size_t length,
-                                    boost::system::error_code *out_ec, std::size_t *out_length) {
-    *out_ec = ec;
-    *out_length = length;
+    m_deadline.async_wait([this] (const boost::system::error_code&) { check_deadline(); });
   }
 
   std::ostream& UdpTransport::dump(std::ostream& o) const {
@@ -837,18 +847,18 @@ namespace trezor{
   const char * WebUsbTransport::PATH_PREFIX = "webusb:";
 
   WebUsbTransport::WebUsbTransport(
-      boost::optional<libusb_device_descriptor*> descriptor,
-      boost::optional<std::shared_ptr<Protocol>> proto
+      std::optional<libusb_device_descriptor*> descriptor,
+      std::optional<std::shared_ptr<Protocol>> proto
   ): m_usb_session(nullptr), m_usb_device(nullptr), m_usb_device_handle(nullptr),
      m_bus_id(-1), m_device_addr(-1)
   {
     if (descriptor){
       libusb_device_descriptor * desc = new libusb_device_descriptor;
-      memcpy(desc, descriptor.get(), sizeof(libusb_device_descriptor));
+      memcpy(desc, *descriptor, sizeof(libusb_device_descriptor));
       this->m_usb_device_desc.reset(desc);
     }
 
-    m_proto = proto ? proto.get() : std::make_shared<ProtocolV1>();
+    m_proto = proto ? *proto : std::make_shared<ProtocolV1>();
 
 #ifdef WITH_TREZOR_DEBUGGING
     m_debug_mode = false;
@@ -912,7 +922,7 @@ namespace trezor{
 
       MTRACE("Found Trezor device: " << desc.idVendor << ":" << desc.idProduct << " dev_idx " << (int)trezor_dev_idx);
 
-      auto t = std::make_shared<WebUsbTransport>(boost::make_optional(&desc));
+      auto t = std::make_shared<WebUsbTransport>(std::make_optional(&desc));
       t->m_bus_id = libusb_get_bus_number(devs[i]);
       t->m_device_addr = libusb_get_device_address(devs[i]);
 
@@ -1050,7 +1060,7 @@ namespace trezor{
   std::shared_ptr<Transport> WebUsbTransport::find_debug() {
 #ifdef WITH_TREZOR_DEBUGGING
     require_device();
-    auto t = std::make_shared<WebUsbTransport>(boost::make_optional(m_usb_device_desc.get()));
+    auto t = std::make_shared<WebUsbTransport>(std::make_optional(m_usb_device_desc.get()));
     t->m_bus_id = m_bus_id;
     t->m_device_addr = m_device_addr;
     t->m_port_numbers = m_port_numbers;
@@ -1222,8 +1232,8 @@ namespace trezor{
       throw std::invalid_argument("Failure message cannot be null");
     }
 
-    boost::optional<std::string> message = failure->has_message() ? boost::make_optional(failure->message()) : boost::none;
-    boost::optional<uint32_t> code = failure->has_code() ? boost::make_optional(static_cast<uint32_t>(failure->code())) : boost::none;
+    std::optional<std::string> message = failure->has_message() ? std::make_optional(failure->message()) : std::nullopt;
+    std::optional<uint32_t> code = failure->has_code() ? std::make_optional(static_cast<uint32_t>(failure->code())) : std::nullopt;
     if (!code){
       throw exc::proto::FailureException(code, message);
     }

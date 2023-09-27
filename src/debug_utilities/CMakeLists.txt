@@ -47,3 +47,18 @@ target_link_libraries(object_sizes
     p2p
     extra
     )
+
+set(dns_checks_sources
+  dns_checks.cpp
+  )
+
+loki_add_executable(dns_checks "loki-utils-dns-checks" dns_checks.cpp)
+
+target_link_libraries(dns_checks
+    PRIVATE
+    common
+    epee
+    version
+    Boost::program_options
+    Boost::system
+    Boost::thread)

@@ -32,7 +32,6 @@
 #include "tx_validation.h"
 #include "device/device.hpp"
 
-using namespace epee;
 using namespace crypto;
 using namespace cryptonote;
 
@@ -50,7 +49,7 @@ namespace
       m_tx.unlock_time = unlock_time;
 
       m_tx_key = keypair::generate(hw::get_device("default"));
-      add_tx_pub_key_to_extra(m_tx, m_tx_key.pub);
+      add_tx_extra<tx_extra_pub_key>(m_tx, m_tx_key.pub);
     }
 
     void step2_fill_inputs(const account_keys& sender_account_keys, const std::vector<tx_source_entry>& sources)
@@ -124,7 +123,7 @@ namespace
         m_tx.signatures.push_back(std::vector<crypto::signature>());
         std::vector<crypto::signature>& sigs = m_tx.signatures.back();
         sigs.resize(src_entr.outputs.size());
-        generate_ring_signature(m_tx_prefix_hash, boost::get<txin_to_key>(m_tx.vin[i]).k_image, keys_ptrs, m_in_contexts[i].sec, src_entr.real_output, sigs.data());
+        generate_ring_signature(m_tx_prefix_hash, std::get<txin_to_key>(m_tx.vin[i]).k_image, keys_ptrs, m_in_contexts[i].sec, src_entr.real_output, sigs.data());
         i++;
       }
     }
@@ -274,17 +273,24 @@ bool gen_tx_input_is_not_txin_to_key::generate(std::vector<test_event_entry>& ev
   DO_CALLBACK(events, "mark_invalid_tx");
   events.push_back(blk_tmp.miner_tx);
 
-  DO_CALLBACK(events, "mark_invalid_tx");
-  transaction tx = {};
-  sispop_tx_builder(events, tx, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(1), cryptonote::network_version_7).build();
-  tx.vin.push_back(txin_to_script());
-  events.push_back(tx);
+  auto make_tx_with_input = [&](const txin_v& tx_input) -> transaction
+  {
+    std::vector<tx_source_entry> sources;
+    std::vector<tx_destination_entry> destinations;
+    fill_tx_sources_and_destinations(events, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(1), TESTS_DEFAULT_FEE, 0, sources, destinations);
+
+    tx_builder builder;
+    builder.step1_init();
+    builder.m_tx.vin.push_back(tx_input);
+    builder.step3_fill_outputs(destinations);
+    return builder.m_tx;
+  };
 
   DO_CALLBACK(events, "mark_invalid_tx");
-  tx = {};
-  sispop_tx_builder(events, tx, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(1), cryptonote::network_version_7).build();
-  tx.vin.push_back(txin_to_scripthash());
-  events.push_back(tx);
+  events.push_back(make_tx_with_input(txin_to_script()));
+
+  DO_CALLBACK(events, "mark_invalid_tx");
+  events.push_back(make_tx_with_input(txin_to_scripthash()));
 
   return true;
 }
@@ -298,7 +304,7 @@ bool gen_tx_no_inputs_no_outputs::generate(std::vector<test_event_entry>& events
 
   transaction tx = {};
   tx.version     = cryptonote::txversion::v2_ringct;
-  add_tx_pub_key_to_extra(tx, keypair::generate(hw::get_device("default")).pub);
+  add_tx_extra<tx_extra_pub_key>(tx, keypair::generate(hw::get_device("default")).pub);
 
   DO_CALLBACK(events, "mark_invalid_tx");
   events.push_back(tx);
@@ -380,7 +386,7 @@ bool gen_tx_input_wo_key_offsets::generate(std::vector<test_event_entry>& events
 
   transaction tx = {};
   sispop_tx_builder(events, tx, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(1), cryptonote::network_version_7).build();
-  txin_to_key& in_to_key = boost::get<txin_to_key>(tx.vin.front());
+  txin_to_key& in_to_key = std::get<txin_to_key>(tx.vin.front());
   while (!in_to_key.key_offsets.empty())
     in_to_key.key_offsets.pop_back();
 
@@ -412,7 +418,7 @@ bool gen_tx_key_offset_points_to_foreign_key::generate(std::vector<test_event_en
   std::vector<tx_destination_entry> destinations_alice;
   fill_tx_sources_and_destinations(events, blk_money_unlocked, alice_account, get_address(miner_account), MK_COINS(15) + 1 - TESTS_DEFAULT_FEE, TESTS_DEFAULT_FEE, CRYPTONOTE_DEFAULT_TX_MIXIN, sources_alice, destinations_alice);
 
-  txin_to_key& bob_in_to_key        = boost::get<txin_to_key>(bob_tx.vin.front());
+  txin_to_key& bob_in_to_key        = std::get<txin_to_key>(bob_tx.vin.front());
   bob_in_to_key.key_offsets.front() = sources_alice.front().outputs.back().first;
 
   // TODO(sispop): This used to be first(), but in the debugger bob's front() is
@@ -438,7 +444,7 @@ bool gen_tx_sender_key_offset_not_exist::generate(std::vector<test_event_entry>&
 
   transaction tx = {};
   sispop_tx_builder(events, tx, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(1), cryptonote::network_version_7).build();
-  txin_to_key& in_to_key        = boost::get<txin_to_key>(tx.vin.front());
+  txin_to_key& in_to_key        = std::get<txin_to_key>(tx.vin.front());
   in_to_key.key_offsets.front() = std::numeric_limits<uint64_t>::max();
 
   DO_CALLBACK(events, "mark_invalid_tx");
@@ -526,7 +532,7 @@ bool gen_tx_key_image_not_derive_from_tx_key::generate(std::vector<test_event_en
 
   transaction tx = {};
   sispop_tx_builder(events, tx, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(1), cryptonote::network_version_7).build();
-  txin_to_key& in_to_key        = boost::get<txin_to_key>(tx.vin.front());
+  txin_to_key& in_to_key        = std::get<txin_to_key>(tx.vin.front());
 
   // Use fake key image
   keypair keys = keypair::generate(hw::get_device("default"));
@@ -554,7 +560,7 @@ bool gen_tx_key_image_is_invalid::generate(std::vector<test_event_entry>& events
 
   transaction tx = {};
   sispop_tx_builder(events, tx, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(1), cryptonote::network_version_7).build();
-  txin_to_key& in_to_key = boost::get<txin_to_key>(tx.vin.front());
+  txin_to_key& in_to_key = std::get<txin_to_key>(tx.vin.front());
   in_to_key.k_image      = generate_invalid_key_image();
 
   // Tx with invalid key image can't be subscribed, so create empty signature
@@ -638,7 +644,7 @@ bool gen_tx_txout_to_key_has_invalid_key::generate(std::vector<test_event_entry>
 
   transaction tx           = {};
   sispop_tx_builder(events, tx, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(1), cryptonote::network_version_7).build();
-  txout_to_key& out_to_key = boost::get<txout_to_key>(tx.vout.front().target);
+  txout_to_key& out_to_key = std::get<txout_to_key>(tx.vout.front().target);
   out_to_key.key           = generate_invalid_pub_key();
 
   DO_CALLBACK(events, "mark_invalid_tx");

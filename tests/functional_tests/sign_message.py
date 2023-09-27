@@ -28,8 +28,6 @@
 # STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import print_function
-
 """Test message signing/verification RPC calls
 
 Test the following RPCs:
@@ -43,7 +41,8 @@ from framework.wallet import Wallet
 class MessageSigningTest():
     def run_test(self):
       self.create()
-      self.check_signing()
+      self.check_signing(False)
+      self.check_signing(True)
 
     def create(self):
         print('Creating wallets')
@@ -65,20 +64,34 @@ class MessageSigningTest():
             assert res.address == self.address[i]
             assert res.seed == seeds[i]
 
-    def check_signing(self):
-        print('Signing/verifing messages')
+    def check_signing(self, subaddress):
+        print('Signing/verifing messages with ' + ('subaddress' if subaddress else 'standard address'))
         messages = ['foo', '']
+        if subaddress:
+            address = []
+            for i in range(2):
+                res = self.wallet[i].create_account()
+                if i == 0:
+                    account_index = res.account_index
+                res = self.wallet[i].create_address(account_index = account_index)
+                if i == 0:
+                    address_index = res.address_index
+                address.append(res.address)
+        else:
+            address = [self.address[0], self.address[1]]
+            account_index = 0
+            address_index = 0
         for message in messages:
-            res = self.wallet[0].sign(message)
+            res = self.wallet[0].sign(message, account_index = account_index, address_index = address_index)
             signature = res.signature
             for i in range(2):
-                res = self.wallet[i].verify(message, self.address[0], signature)
+                res = self.wallet[i].verify(message, address[0], signature)
                 assert res.good
-                res = self.wallet[i].verify('different', self.address[0], signature)
+                res = self.wallet[i].verify('different', address[0], signature)
                 assert not res.good
-                res = self.wallet[i].verify(message, self.address[1], signature)
+                res = self.wallet[i].verify(message, address[1], signature)
                 assert not res.good
-                res = self.wallet[i].verify(message, self.address[0], signature + 'x')
+                res = self.wallet[i].verify(message, address[0], signature + 'x')
                 assert not res.good
 
 if __name__ == '__main__':

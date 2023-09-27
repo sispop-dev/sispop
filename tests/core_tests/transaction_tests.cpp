@@ -80,17 +80,17 @@ bool test_transaction_generation_and_ring_signature()
   {
     tx_output_entry oe;
 
-    src.push_output(0, boost::get<txout_to_key>(tx_mine_1.vout[0].target).key, src.amount);
+    src.push_output(0, std::get<txout_to_key>(tx_mine_1.vout[0].target).key, src.amount);
 
-    src.push_output(1, boost::get<txout_to_key>(tx_mine_2.vout[0].target).key, src.amount);
+    src.push_output(1, std::get<txout_to_key>(tx_mine_2.vout[0].target).key, src.amount);
 
-    src.push_output(2, boost::get<txout_to_key>(tx_mine_3.vout[0].target).key, src.amount);
+    src.push_output(2, std::get<txout_to_key>(tx_mine_3.vout[0].target).key, src.amount);
 
-    src.push_output(3, boost::get<txout_to_key>(tx_mine_4.vout[0].target).key, src.amount);
+    src.push_output(3, std::get<txout_to_key>(tx_mine_4.vout[0].target).key, src.amount);
 
-    src.push_output(4, boost::get<txout_to_key>(tx_mine_5.vout[0].target).key, src.amount);
+    src.push_output(4, std::get<txout_to_key>(tx_mine_5.vout[0].target).key, src.amount);
 
-    src.push_output(5, boost::get<txout_to_key>(tx_mine_6.vout[0].target).key, src.amount);
+    src.push_output(5, std::get<txout_to_key>(tx_mine_6.vout[0].target).key, src.amount);
 
     src.real_out_tx_key = cryptonote::get_tx_pub_key_from_extra(tx_mine_2);
     src.real_output = 1;
@@ -105,18 +105,18 @@ bool test_transaction_generation_and_ring_signature()
   destinations.push_back(td);
 
   transaction tx_rc1;
-  bool r = construct_tx(miner_acc2.get_keys(), sources, destinations, boost::none, std::vector<uint8_t>(), tx_rc1, 0);
+  bool r = construct_tx(miner_acc2.get_keys(), sources, destinations, std::nullopt, std::vector<uint8_t>(), tx_rc1, 0);
   CHECK_AND_ASSERT_MES(r, false, "failed to construct transaction");
 
   crypto::hash pref_hash = get_transaction_prefix_hash(tx_rc1);
   std::vector<const crypto::public_key *> output_keys;
-  output_keys.push_back(&boost::get<txout_to_key>(tx_mine_1.vout[0].target).key);
-  output_keys.push_back(&boost::get<txout_to_key>(tx_mine_2.vout[0].target).key);
-  output_keys.push_back(&boost::get<txout_to_key>(tx_mine_3.vout[0].target).key);
-  output_keys.push_back(&boost::get<txout_to_key>(tx_mine_4.vout[0].target).key);
-  output_keys.push_back(&boost::get<txout_to_key>(tx_mine_5.vout[0].target).key);
-  output_keys.push_back(&boost::get<txout_to_key>(tx_mine_6.vout[0].target).key);
-  r = crypto::check_ring_signature(pref_hash, boost::get<txin_to_key>(tx_rc1.vin[0]).k_image, output_keys, &tx_rc1.signatures[0][0]);
+  output_keys.push_back(&std::get<txout_to_key>(tx_mine_1.vout[0].target).key);
+  output_keys.push_back(&std::get<txout_to_key>(tx_mine_2.vout[0].target).key);
+  output_keys.push_back(&std::get<txout_to_key>(tx_mine_3.vout[0].target).key);
+  output_keys.push_back(&std::get<txout_to_key>(tx_mine_4.vout[0].target).key);
+  output_keys.push_back(&std::get<txout_to_key>(tx_mine_5.vout[0].target).key);
+  output_keys.push_back(&std::get<txout_to_key>(tx_mine_6.vout[0].target).key);
+  r = crypto::check_ring_signature(pref_hash, std::get<txin_to_key>(tx_rc1.vin[0]).k_image, output_keys, &tx_rc1.signatures[0][0]);
   CHECK_AND_ASSERT_MES(r, false, "failed to check ring signature");
 
   std::vector<size_t> outs;

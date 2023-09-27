@@ -1,3 +1,4 @@
+// Copyright (c) 2018-2020, The Loki Project
 // Copyright (c) 2016-2019, The Monero Project
 // 
 // All rights reserved.
@@ -36,112 +37,27 @@
 namespace sfinae
 {
 
-  typedef char true_type;
+template <typename T, typename = void>
+constexpr bool is_container_like = false;
 
-  struct false_type { true_type a[2]; };
+// Container-like: has a begin(), end(), and a ::value_type.
+template <typename T>
+constexpr bool is_container_like<T, std::void_t<
+  decltype(std::declval<T>().begin()),
+  decltype(std::declval<T>().end()),
+  typename T::value_type>> = true;
 
-  template <typename T>
-  struct is_not_container
-  {
-  private:
+template <typename T, typename = void>
+constexpr bool is_map_like = false;
 
-    // does not have const iterator
-    template <typename C> static false_type c_iter(typename C::const_iterator*);
-    template <typename C> static true_type c_iter(...);
+// Map-like: looks like a container plus has a ::key_type and ::mapped_type
+template <typename T>
+constexpr bool is_map_like<T, std::enable_if_t<is_container_like<T>, std::void_t<
+  typename T::key_type,
+  typename T::mapped_type>>> = true;
 
-    // does not have value_type
-    template <typename C> static false_type v_type(typename C::value_type*);
-    template <typename C> static true_type v_type(...);
-
-    // does not have key_type
-    template <typename C> static false_type k_type(typename C::key_type*);
-    template <typename C> static true_type k_type(...);
-
-    // does not have mapped_type
-    template <typename C> static false_type m_type(typename C::mapped_type*);
-    template <typename C> static true_type m_type(...);
-
-  public:
-
-    static const bool value = (
-      (
-        sizeof(c_iter<T>(0)) == sizeof(true_type) &&
-        sizeof(v_type<T>(0)) == sizeof(true_type) &&
-        sizeof(k_type<T>(0)) == sizeof(true_type) &&
-        sizeof(m_type<T>(0)) == sizeof(true_type)
-      )
-      || std::is_same<T, std::string>::value
-    );
-
-    typedef T type;
-  };
-
-  template <typename T>
-  struct is_vector_like
-  {
-  private:
-
-    // has const iterator
-    template <typename C> static true_type c_iter(typename C::const_iterator*);
-    template <typename C> static false_type c_iter(...);
-
-    // has value_type
-    template <typename C> static true_type v_type(typename C::value_type*);
-    template <typename C> static false_type v_type(...);
-
-    // does not have key_type
-    template <typename C> static false_type k_type(typename C::key_type*);
-    template <typename C> static true_type k_type(...);
-
-    // does not have mapped_type
-    template <typename C> static false_type m_type(typename C::mapped_type*);
-    template <typename C> static true_type m_type(...);
-
-  public:
-
-    static const bool value = (
-        sizeof(c_iter<T>(0)) == sizeof(true_type) &&
-        sizeof(v_type<T>(0)) == sizeof(true_type) &&
-        sizeof(k_type<T>(0)) == sizeof(true_type) &&
-        sizeof(m_type<T>(0)) == sizeof(true_type) &&
-        !std::is_same<T, std::string>::value
-    );
-
-    typedef T type;
-  };
-
-  template <typename T>
-  struct is_map_like
-  {
-  private:
-
-    // has const iterator
-    template <typename C> static true_type c_iter(typename C::const_iterator*);
-    template <typename C> static false_type c_iter(...);
-
-    // has value_type
-    template <typename C> static true_type v_type(typename C::value_type*);
-    template <typename C> static false_type v_type(...);
-
-    // has key_type
-    template <typename C> static true_type k_type(typename C::key_type*);
-    template <typename C> static false_type k_type(...);
-
-    // has mapped_type
-    template <typename C> static true_type m_type(typename C::mapped_type*);
-    template <typename C> static false_type m_type(...);
-
-  public:
-
-    static const bool value = (
-        sizeof(c_iter<T>(0)) == sizeof(true_type) &&
-        sizeof(v_type<T>(0)) == sizeof(true_type) &&
-        sizeof(k_type<T>(0)) == sizeof(true_type) &&
-        sizeof(m_type<T>(0)) == sizeof(true_type) &&
-        !std::is_same<T, std::string>::value
-    );
-
-    typedef T type;
-  };
+// List-like: looks like a container but *doesn't* look like a map
+template <typename T>
+constexpr bool is_list_like = is_container_like<T> && !is_map_like<T>;
 
 }  // namespace sfinae

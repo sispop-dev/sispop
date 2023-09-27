@@ -31,7 +31,9 @@
 #include "password.h"
 
 #include <iostream>
-#include <stdio.h>
+#include <cstdio>
+#include <utility>
+#include <type_traits>
 
 #if defined(_WIN32)
 #include <io.h>
@@ -255,7 +257,7 @@ namespace tools
 
   std::atomic<bool> password_container::is_prompting(false);
 
-  boost::optional<password_container> password_container::prompt(const bool verify, const char *message, bool hide_input)
+  std::optional<password_container> password_container::prompt(const bool verify, const char *message, bool hide_input)
   {
 #if defined(SISPOP_ENABLE_INTEGRATION_TEST_HOOKS)
     return password_container(std::string(""));
@@ -270,11 +272,11 @@ namespace tools
     }
 
     is_prompting = false;
-    return boost::none;
+    return std::nullopt;
 #endif
   }
 
-  boost::optional<login> login::parse(std::string&& userpass, bool verify, const std::function<boost::optional<password_container>(bool)> &prompt)
+  std::optional<login> login::parse(std::string&& userpass, bool verify, const std::function<std::optional<password_container>(bool)> &prompt)
   {
     login out{};
 
@@ -283,7 +285,7 @@ namespace tools
     {
       auto result = prompt(verify);
       if (!result)
-        return boost::none;
+        return std::nullopt;
 
       out.password = std::move(*result);
     }

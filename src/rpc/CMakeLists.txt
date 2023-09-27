@@ -27,11 +27,16 @@
 # STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-add_library(rpc_base
+add_library(rpc_commands
+  core_rpc_server_commands_defs.cpp
+  )
+
+add_library(rpc_args
   rpc_args.cpp
   )
 
 add_library(rpc
+  bootstrap_daemon.cpp
   core_rpc_server.cpp
   rpc_handler.cpp
   )
@@ -43,28 +48,35 @@ add_library(daemon_messages
 
 add_library(daemon_rpc_server
   daemon_handler.cpp
-  zmq_server.cpp
+  http_server.cpp
+  lmq_server.cpp
   )
 
-target_link_libraries(rpc_base
+target_link_libraries(rpc_commands
   PUBLIC
     common
-    epee
-    Boost::thread
-    Boost::program_options
-    OpenSSL::SSL
+  PRIVATE
+    cryptonote_protocol
+    extra)
+
+target_link_libraries(rpc_args
+  PUBLIC
+    common
   PRIVATE
     extra)
 
 target_link_libraries(rpc
   PUBLIC
-    rpc_base
     cryptonote_core
-    cryptonote_protocol
+    rpc_commands
+    rpc_args
     net
     version
-    Boost::regex
   PRIVATE
+    cryptonote_protocol
+    Boost::thread
+    Boost::program_options
+    OpenSSL::SSL
     extra)
 
 target_link_libraries(daemon_messages
@@ -80,6 +92,5 @@ target_link_libraries(daemon_rpc_server
     rpc
     daemon_messages
     serialization
-    Boost::chrono
     Boost::thread
     extra)

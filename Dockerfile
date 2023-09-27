@@ -33,8 +33,8 @@ RUN set -ex && \
 
 WORKDIR /usr/local/src
 
-ARG OPENSSL_VERSION=1.1.1d
-ARG OPENSSL_HASH=1e3a91bc1f9dfce01af26026f856e064eab4c8ee0a8f457b5ae30b40b8b711f2
+ARG OPENSSL_VERSION=1.1.1g
+ARG OPENSSL_HASH=ddb04774f1e32f0c49751e21b67216ac87852ceb056b75209af2443400636d46
 RUN set -ex \
     && curl -s -O https://www.openssl.org/source/openssl-${OPENSSL_VERSION}.tar.gz \
     && echo "${OPENSSL_HASH}  openssl-${OPENSSL_VERSION}.tar.gz" | sha256sum -c \
@@ -58,7 +58,6 @@ RUN set -ex \
         --with-regex --with-serialization --with-system --with-thread --with-locale \
         threading=multi threadapi=pthread cxxflags=-fPIC \
         -j$(nproc) install
-
 
 ARG SODIUM_VERSION=1.0.18-RELEASE
 ARG SODIUM_HASH=940ef42797baa0278df6b7fd9e67c7590f87744b

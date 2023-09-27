@@ -15,7 +15,6 @@ uint64_t get_staking_requirement(cryptonote::network_type m_nettype, uint64_t he
   if (m_nettype == cryptonote::TESTNET || m_nettype == cryptonote::FAKECHAIN)
       return COIN * 100;
 
-
   uint64_t hardfork_height = m_nettype == cryptonote::MAINNET ? 105 : 96210 /* stagenet */;
   if (height < hardfork_height) height = hardfork_height;
 
@@ -126,7 +125,7 @@ static bool get_portions_from_percent(double cur_percent, uint64_t& portions) {
   }
   else
   {
-    portions = (cur_percent / 100.0) * STAKING_PORTIONS;
+    portions = (cur_percent / 100.0) * (double)STAKING_PORTIONS;
   }
 
   return true;

@@ -31,6 +31,7 @@
 #include "cryptonote_basic/blobdatatype.h"
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
+#include "serialization/boost_std_variant.h"
 #include "wallet/wallet2.h"
 #include "fuzzer.h"
 
@@ -54,7 +55,7 @@ int ColdTransactionFuzzer::init()
 
   try
   {
-    wallet.init("", boost::none, boost::asio::ip::tcp::endpoint{}, 0, true, epee::net_utils::ssl_support_t::e_ssl_support_disabled);
+    wallet.init("", std::nullopt, boost::asio::ip::tcp::endpoint{}, 0, true, epee::net_utils::ssl_support_t::e_ssl_support_disabled);
     wallet.set_subaddress_lookahead(1, 1);
     wallet.generate("", "", spendkey, true, false);
   }

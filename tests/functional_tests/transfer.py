@@ -28,7 +28,6 @@
 # STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import print_function
 import json
 
 """Test simple transfers
@@ -44,13 +43,20 @@ class TransferTest():
         self.mine()
         self.transfer()
         self.check_get_bulk_payments()
+        self.check_get_payments()
         self.check_double_spend_detection()
+        self.sweep_dust()
         self.sweep_single()
+        self.check_destinations()
+        self.check_tx_notes()
+        self.check_rescan()
+        self.check_is_key_image_spent()
 
     def reset(self):
         print('Resetting blockchain')
         daemon = Daemon()
-        daemon.pop_blocks(1000)
+        res = daemon.get_height()
+        daemon.pop_blocks(res.height - 1)
         daemon.flush_txpool()
 
     def create(self):
@@ -107,13 +113,19 @@ class TransferTest():
         except: ok = True
         assert ok
 
+        print ('Checking long payment IDs are rejected')
+        ok = False
+        try: self.wallet[0].transfer([dst], ring_size = 11, payment_id = payment_id, get_tx_key = False, get_tx_hex = True)
+        except: ok = True
+        assert ok
+
         print ('Checking empty destination is rejected')
         ok = False
         try: self.wallet[0].transfer([], ring_size = 11, get_tx_key = False)
         except: ok = True
         assert ok
 
-        res = self.wallet[0].transfer([dst], ring_size = 11, payment_id = payment_id, get_tx_key = False)
+        res = self.wallet[0].transfer([dst], ring_size = 11, get_tx_key = False, get_tx_hex = True)
         assert len(res.tx_hash) == 32*2
         txid = res.tx_hash
         assert len(res.tx_key) == 0
@@ -121,11 +133,18 @@ class TransferTest():
         amount = res.amount
         assert res.fee > 0
         fee = res.fee
-        assert len(res.tx_blob) == 0
+        assert len(res.tx_blob) > 0
+        blob_size = len(res.tx_blob) // 2
         assert len(res.tx_metadata) == 0
         assert len(res.multisig_txset) == 0
         assert len(res.unsigned_txset) == 0
         unsigned_txset = res.unsigned_txset
+
+        res = daemon.get_fee_estimate(10)
+        assert res.fee > 0
+        assert res.quantization_mask > 0
+        expected_fee = (res.fee * 1 * blob_size + res.quantization_mask - 1) // res.quantization_mask * res.quantization_mask
+        assert abs(1 - fee / expected_fee) < 0.01
 
         self.wallet[0].refresh()
 
@@ -142,14 +161,14 @@ class TransferTest():
           assert e.type == 'block'
         e = res.pending[0]
         assert e.txid == txid
-        assert e.payment_id == payment_id
+        assert e.payment_id in ['', '0000000000000000']
         assert e.type == 'pending'
         assert e.unlock_time == 0
         assert e.subaddr_index.major == 0
         assert e.subaddr_indices == [{'major': 0, 'minor': 0}]
         assert e.address == '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm'
         assert e.double_spend_seen == False
-        assert e.confirmations == 0
+        assert not 'confirmations' in e or e.confirmations == 0
 
         running_balances[0] -= 1000000000000 + fee
 
@@ -175,7 +194,7 @@ class TransferTest():
           assert e.type == 'block'
         e = res.out[0]
         assert e.txid == txid
-        assert e.payment_id == payment_id
+        assert e.payment_id in ['', '0000000000000000']
         assert e.type == 'out'
         assert e.unlock_time == 0
         assert e.subaddr_index.major == 0
@@ -191,7 +210,7 @@ class TransferTest():
         assert res.transfers[0] == res.transfer
         t = res.transfer
         assert t.txid == txid
-        assert t.payment_id == payment_id
+        assert t.payment_id in ['', '0000000000000000']
         assert t.height == wallet_height - 1
         assert t.timestamp > 0
         assert t.amount == 0 # to self, so it's just "pay a fee" really
@@ -213,7 +232,7 @@ class TransferTest():
         print("Creating transfer to another, manual relay")
 
         dst = {'address': '44Kbx4sJ7JDRDV5aAhLJzQCjDz2ViLRduE3ijDZu3osWKBjMGkV1XPk4pfDUMqt1Aiezvephdqm6YD19GKFD9ZcXVUTp6BW', 'amount': 1000000000000}
-        res = self.wallet[0].transfer([dst], ring_size = 11, payment_id = payment_id, get_tx_key = True, do_not_relay = True, get_tx_hex = True)
+        res = self.wallet[0].transfer([dst], ring_size = 11, get_tx_key = True, do_not_relay = True, get_tx_hex = True)
         assert len(res.tx_hash) == 32*2
         txid = res.tx_hash
         assert len(res.tx_key) == 32*2
@@ -236,7 +255,6 @@ class TransferTest():
         assert res.too_big == False
         assert res.overspend == False
         assert res.fee_too_low == False
-        assert res.not_rct == False
 
         self.wallet[0].refresh()
 
@@ -255,14 +273,14 @@ class TransferTest():
         assert not 'failed' in res or len(res.failed) == 0
         e = res.pool[0]
         assert e.txid == txid
-        assert e.payment_id == payment_id
+        assert e.payment_id in ["", "0000000000000000"] # long payment IDs are now ignored
         assert e.type == 'pool'
         assert e.unlock_time == 0
         assert e.subaddr_index.major == 0
         assert e.subaddr_indices == [{'major': 0, 'minor': 0}]
         assert e.address == '44Kbx4sJ7JDRDV5aAhLJzQCjDz2ViLRduE3ijDZu3osWKBjMGkV1XPk4pfDUMqt1Aiezvephdqm6YD19GKFD9ZcXVUTp6BW'
         assert e.double_spend_seen == False
-        assert e.confirmations == 0
+        assert not 'confirmations' in e or e.confirmations == 0
         assert e.amount == amount
         assert e.fee == fee
 
@@ -281,7 +299,7 @@ class TransferTest():
         assert not 'failed' in res or len(res.failed) == 0
         e = res['in'][0]
         assert e.txid == txid
-        assert e.payment_id == payment_id
+        assert e.payment_id in ["", "0000000000000000"] # long payment IDs are now ignored
         assert e.type == 'in'
         assert e.unlock_time == 0
         assert e.subaddr_index.major == 0
@@ -304,7 +322,7 @@ class TransferTest():
         dst0 = {'address': '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 'amount': 1000000000000}
         dst1 = {'address': '44Kbx4sJ7JDRDV5aAhLJzQCjDz2ViLRduE3ijDZu3osWKBjMGkV1XPk4pfDUMqt1Aiezvephdqm6YD19GKFD9ZcXVUTp6BW', 'amount': 1100000000000}
         dst2 = {'address': '46r4nYSevkfBUMhuykdK3gQ98XDqDTYW1hNLaXNvjpsJaSbNtdXh1sKMsdVgqkaihChAzEy29zEDPMR3NHQvGoZCLGwTerK', 'amount': 1200000000000}
-        res = self.wallet[0].transfer([dst0, dst1, dst2], ring_size = 11, payment_id = payment_id, get_tx_key = True)
+        res = self.wallet[0].transfer([dst0, dst1, dst2], ring_size = 11, get_tx_key = True)
         assert len(res.tx_hash) == 32*2
         txid = res.tx_hash
         assert len(res.tx_key) == 32*2
@@ -343,7 +361,7 @@ class TransferTest():
         assert len(e) == 1
         e = e[0]
         assert e.txid == txid
-        assert e.payment_id == payment_id
+        assert e.payment_id in ["", "0000000000000000"] # long payment IDs are now ignored
         assert e.type == 'out'
         assert e.unlock_time == 0
         assert e.subaddr_index.major == 0
@@ -371,7 +389,7 @@ class TransferTest():
         assert len(e) == 1
         e = e[0]
         assert e.txid == txid
-        assert e.payment_id == payment_id
+        assert e.payment_id in ["", "0000000000000000"] # long payment IDs are now ignored
         assert e.type == 'in'
         assert e.unlock_time == 0
         assert e.subaddr_index.major == 0
@@ -398,7 +416,7 @@ class TransferTest():
         assert len(e) == 1
         e = e[0]
         assert e.txid == txid
-        assert e.payment_id == payment_id
+        assert e.payment_id in ["", "0000000000000000"] # long payment IDs are now ignored
         assert e.type == 'in'
         assert e.unlock_time == 0
         assert e.subaddr_index.major == 0
@@ -507,7 +525,7 @@ class TransferTest():
         res = self.wallet[1].get_bulk_payments()
         assert len(res.payments) >= 3 # two txes to standard address were sent, plus one to integrated address
         res = self.wallet[1].get_bulk_payments(payment_ids = ['1234500000012345abcde00000abcdeff1234500000012345abcde00000abcde'])
-        assert len(res.payments) >= 2 # two txes were sent with that payment id
+        assert not 'payments' in res or len(res.payments) == 0 # long payment IDs are now ignored on receipt
         res = self.wallet[1].get_bulk_payments(payment_ids = ['ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff'])
         assert 'payments' not in res or len(res.payments) == 0 # none with that payment id
         res = self.wallet[1].get_bulk_payments(payment_ids = ['1111111122222222' + '0'*48])
@@ -517,7 +535,32 @@ class TransferTest():
         res = self.wallet[2].get_bulk_payments()
         assert len(res.payments) >= 1 # one tx was sent
         res = self.wallet[2].get_bulk_payments(payment_ids = ['1'*64, '1234500000012345abcde00000abcdeff1234500000012345abcde00000abcde', '2'*64])
-        assert len(res.payments) >= 1 # one tx was sent
+        assert not 'payments' in res or len(res.payments) == 0 # long payment IDs are now ignored
+
+        res = self.wallet[1].get_bulk_payments(["1111111122222222"])
+        assert len(res.payments) >= 1 # we have one of these
+
+    def check_get_payments(self):
+        print('Checking get_payments')
+
+        daemon = Daemon()
+        res = daemon.get_info()
+        height = res.height
+
+        self.wallet[0].refresh()
+        self.wallet[1].refresh()
+
+        res = self.wallet[0].get_payments('1234500000012345abcde00000abcdeff1234500000012345abcde00000abcde')
+        assert 'payments' not in res or len(res.payments) == 0
+
+        res = self.wallet[1].get_payments('1234500000012345abcde00000abcdeff1234500000012345abcde00000abcde')
+        assert 'payments' not in res or len(res.payments) == 0
+
+        res = self.wallet[1].get_payments('ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff')
+        assert 'payments' not in res or len(res.payments) == 0
+
+        res = self.wallet[1].get_payments(payment_id = '1111111122222222' + '0'*48)
+        assert len(res.payments) >= 1 # one tx to integrated address
 
     def check_double_spend_detection(self):
         print('Checking double spend detection')
@@ -553,7 +596,6 @@ class TransferTest():
         assert res.too_big == False
         assert res.overspend == False
         assert res.fee_too_low == False
-        assert res.not_rct == False
 
         res = daemon.get_transactions([txes[0][0]])
         assert len(res.txs) >= 1
@@ -570,13 +612,20 @@ class TransferTest():
         assert res.too_big == False
         assert res.overspend == False
         assert res.fee_too_low == False
-        assert res.not_rct == False
+        assert res.too_few_outputs == False
 
         res = daemon.get_transactions([txes[0][0]])
         assert len(res.txs) >= 1
         tx = [tx for tx in res.txs if tx.tx_hash == txes[0][0]][0]
         assert tx.in_pool
         assert tx.double_spend_seen
+
+    def sweep_dust(self):
+        print("Sweeping dust")
+        daemon = Daemon()
+        self.wallet[0].refresh()
+        res = self.wallet[0].sweep_dust()
+        assert not 'tx_hash_list' in res or len(res.tx_hash_list) == 0 # there's just one, but it cannot meet the fee
 
     def sweep_single(self):
         daemon = Daemon()
@@ -598,11 +647,19 @@ class TransferTest():
         self.wallet[0].refresh()
         res = self.wallet[0].get_balance()
         balance = res.balance
-        res = self.wallet[0].incoming_transfers(transfer_type = 'all')
+        res = daemon.is_key_image_spent([ki])
+        assert len(res.spent_status) == 1
+        assert res.spent_status[0] == 0
         res = self.wallet[0].sweep_single('44Kbx4sJ7JDRDV5aAhLJzQCjDz2ViLRduE3ijDZu3osWKBjMGkV1XPk4pfDUMqt1Aiezvephdqm6YD19GKFD9ZcXVUTp6BW', key_image = ki)
         assert len(res.tx_hash) == 64
         tx_hash = res.tx_hash
+        res = daemon.is_key_image_spent([ki])
+        assert len(res.spent_status) == 1
+        assert res.spent_status[0] == 2
         daemon.generateblocks('44Kbx4sJ7JDRDV5aAhLJzQCjDz2ViLRduE3ijDZu3osWKBjMGkV1XPk4pfDUMqt1Aiezvephdqm6YD19GKFD9ZcXVUTp6BW', 1)
+        res = daemon.is_key_image_spent([ki])
+        assert len(res.spent_status) == 1
+        assert res.spent_status[0] == 1
         self.wallet[0].refresh()
         res = self.wallet[0].get_balance()
         new_balance = res.balance
@@ -625,6 +682,154 @@ class TransferTest():
         assert len([t for t in res.transfers if t.key_image == ki]) == 0
         res = self.wallet[0].incoming_transfers(transfer_type = 'unavailable')
         assert len([t for t in res.transfers if t.key_image == ki]) == 1
+
+    def check_destinations(self):
+        daemon = Daemon()
+
+        print("Checking transaction destinations")
+
+        dst = {'address': '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 'amount': 1000000000000}
+        res = self.wallet[0].transfer([dst])
+        assert len(res.tx_hash) == 64
+        tx_hash = res.tx_hash
+        for i in range(2):
+            res = self.wallet[0].get_transfers(pending = True, out = True)
+            l = [x for x in (res.pending if i == 0 else res.out) if x.txid == tx_hash]
+            assert len(l) == 1
+            e = l[0]
+            assert len(e.destinations) == 1
+            assert e.destinations[0].amount == 1000000000000
+            assert e.destinations[0].address == '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm'
+
+            if i == 0:
+                daemon.generateblocks('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 1)
+                self.wallet[0].refresh()
+
+        dst = {'address': '8AsN91rznfkBGTY8psSNkJBg9SZgxxGGRUhGwRptBhgr5XSQ1XzmA9m8QAnoxydecSh5aLJXdrgXwTDMMZ1AuXsN1EX5Mtm', 'amount': 1000000000000}
+        res = self.wallet[0].transfer([dst])
+        assert len(res.tx_hash) == 64
+        tx_hash = res.tx_hash
+        for i in range(2):
+            res = self.wallet[0].get_transfers(pending = True, out = True)
+            l = [x for x in (res.pending if i == 0 else res.out) if x.txid == tx_hash]
+            assert len(l) == 1
+            e = l[0]
+            assert len(e.destinations) == 1
+            assert e.destinations[0].amount == 1000000000000
+            assert e.destinations[0].address == '8AsN91rznfkBGTY8psSNkJBg9SZgxxGGRUhGwRptBhgr5XSQ1XzmA9m8QAnoxydecSh5aLJXdrgXwTDMMZ1AuXsN1EX5Mtm'
+
+            if i == 0:
+                daemon.generateblocks('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 1)
+                self.wallet[0].refresh()
+
+        dst = {'address': '4BxSHvcgTwu25WooY4BVmgdcKwZu5EksVZSZkDd6ooxSVVqQ4ubxXkhLF6hEqtw96i9cf3cVfLw8UWe95bdDKfRQeYtPwLm1Jiw7AKt2LY', 'amount': 1000000000000}
+        res = self.wallet[0].transfer([dst])
+        assert len(res.tx_hash) == 64
+        tx_hash = res.tx_hash
+        for i in range(2):
+            res = self.wallet[0].get_transfers(pending = True, out = True)
+            l = [x for x in (res.pending if i == 0 else res.out) if x.txid == tx_hash]
+            assert len(l) == 1
+            e = l[0]
+            assert len(e.destinations) == 1
+            assert e.destinations[0].amount == 1000000000000
+            assert e.destinations[0].address == '4BxSHvcgTwu25WooY4BVmgdcKwZu5EksVZSZkDd6ooxSVVqQ4ubxXkhLF6hEqtw96i9cf3cVfLw8UWe95bdDKfRQeYtPwLm1Jiw7AKt2LY'
+
+            if i == 0:
+                daemon.generateblocks('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 1)
+                self.wallet[0].refresh()
+
+    def check_tx_notes(self):
+        daemon = Daemon()
+
+        print('Testing tx notes')
+        res = self.wallet[0].get_transfers()
+        assert len(res['in']) > 0
+        in_txid = res['in'][0].txid
+        assert len(res['out']) > 0
+        out_txid = res['out'][0].txid
+        res = self.wallet[0].get_tx_notes([in_txid, out_txid])
+        assert res.notes == ['', '']
+        res = self.wallet[0].set_tx_notes([in_txid, out_txid], ['in txid', 'out txid'])
+        res = self.wallet[0].get_tx_notes([in_txid, out_txid])
+        assert res.notes == ['in txid', 'out txid']
+        res = self.wallet[0].get_tx_notes([out_txid, in_txid])
+        assert res.notes == ['out txid', 'in txid']
+
+    def check_rescan(self):
+        daemon = Daemon()
+
+        print('Testing rescan_spent')
+        res = self.wallet[0].incoming_transfers(transfer_type = 'all')
+        transfers = res.transfers
+        res = self.wallet[0].rescan_spent()
+        res = self.wallet[0].incoming_transfers(transfer_type = 'all')
+        assert transfers == res.transfers
+
+        for hard in [False, True]:
+            print('Testing %s rescan_blockchain' % ('hard' if hard else 'soft'))
+            res = self.wallet[0].incoming_transfers(transfer_type = 'all')
+            transfers = res.transfers
+            res = self.wallet[0].get_transfers()
+            t_in = res['in']
+            t_out = res.out
+            res = self.wallet[0].rescan_blockchain(hard = hard)
+            res = self.wallet[0].incoming_transfers(transfer_type = 'all')
+            assert transfers == res.transfers
+            res = self.wallet[0].get_transfers()
+            assert t_in == res['in']
+            # some information can not be recovered for out txes
+            unrecoverable_fields = ['payment_id', 'destinations', 'note']
+            old_t_out = []
+            for x in t_out:
+                e = {}
+                for k in x.keys():
+                    if not k in unrecoverable_fields:
+                        e[k] = x[k]
+                old_t_out.append(e)
+            new_t_out = []
+            for x in res.out:
+                e = {}
+                for k in x.keys():
+                    if not k in unrecoverable_fields:
+                        e[k] = x[k]
+                new_t_out.append(e)
+            assert sorted(old_t_out, key = lambda k: k['txid']) == sorted(new_t_out, key = lambda k: k['txid'])
+
+    def check_is_key_image_spent(self):
+        daemon = Daemon()
+
+        print('Testing is_key_image_spent')
+        res = self.wallet[0].incoming_transfers(transfer_type = 'all')
+        transfers = res.transfers
+        ki = [x.key_image for x in transfers]
+        expected = [1 if x.spent else 0 for x in transfers]
+        res = daemon.is_key_image_spent(ki)
+        assert res.spent_status == expected
+
+        res = self.wallet[0].incoming_transfers(transfer_type = 'available')
+        transfers = res.transfers
+        ki = [x.key_image for x in transfers]
+        expected = [0 for x in transfers]
+        res = daemon.is_key_image_spent(ki)
+        assert res.spent_status == expected
+
+        res = self.wallet[0].incoming_transfers(transfer_type = 'unavailable')
+        transfers = res.transfers
+        ki = [x.key_image for x in transfers]
+        expected = [1 for x in transfers]
+        res = daemon.is_key_image_spent(ki)
+        assert res.spent_status == expected
+
+        ki = [ki[-1]] * 5
+        expected = [1] * len(ki)
+        res = daemon.is_key_image_spent(ki)
+        assert res.spent_status == expected
+
+        ki = ['2'*64, '1'*64]
+        expected = [0, 0]
+        res = daemon.is_key_image_spent(ki)
+        assert res.spent_status == expected
 
 
 if __name__ == '__main__':

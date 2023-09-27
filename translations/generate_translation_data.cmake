@@ -1,3 +1,4 @@
+
 set(TRANSLATION_FILES "")
 foreach(qm_file ${qm_files})
     file(READ "${qm_file}" trans_data HEX)

@@ -30,14 +30,12 @@
 #pragma once
 
 #include <string>
-#include <stdio.h>
-#include <memory>
+#include <cstdio>
+#include <cstdint>
 #include "misc_log_ex.h"
 
 namespace tools
 {
-
-class PerformanceTimer;
 
 extern el::Level performance_timer_log_level;
 

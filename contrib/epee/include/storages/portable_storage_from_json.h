@@ -25,8 +25,8 @@
 // 
 
 #pragma once
-#include <boost/lexical_cast.hpp>
-#include <boost/algorithm/string/predicate.hpp>
+#include <string_view>
+#include <charconv>
 #include "parserse_base_utils.h"
 #include "file_io_utils.h"
 
@@ -41,18 +41,51 @@ namespace epee
     {
 #define CHECK_ISSPACE()  if(!epee::misc_utils::parse::isspace(*it)){ ASSERT_MES_AND_THROW("Wrong JSON character at: " << std::string(it, buf_end));}
 
+      template <typename T>
+      T parse_number(const std::string_view str)
+      {
+        T num;
+        // In theory from_chars should work with double, but neither libc++ nor libstdc++ implement
+        // it yet.
+        if constexpr (std::is_same_v<T, double>)
+        {
+          size_t consumed;
+          try {
+            if (num = std::stod(str.data(), &consumed); consumed == str.size())
+              return num;
+          }
+          catch (...) {}
+        }
+        else
+        {
+          auto* end = str.data() + str.size();
+          if (auto [p, ec] = std::from_chars(str.data(), end, num); ec == std::errc{} && p == end)
+            return num;
+        }
+        throw std::runtime_error("Invalid number: " + std::string{str});
+      }
+
+      template <typename Storage, typename T>
+      array_entry* make_array_and_insert(Storage& st, const std::string& value_name, T value, section* parent_section)
+      {
+        auto* array = st.template make_array<T>(value_name, parent_section);
+        CHECK_AND_ASSERT_THROW_MES(array, "failed to insert " + std::string{typeid(T).name()} + " array");
+        std::get<array_t<T>>(*array).push_back(std::move(value));
+        return array;
+      }
+
       /*inline void parse_error()
       {
         ASSERT_MES_AND_THROW("json parse error");
       }*/
       template<typename It, class t_storage>
-      void run_handler(typename t_storage::hsection current_section, It& sec_buf_begin, It buf_end, t_storage& stg, unsigned int recursion)
+      void run_handler(section* current_section, It& sec_buf_begin, It buf_end, t_storage& stg, unsigned int recursion)
       {
         CHECK_AND_ASSERT_THROW_MES(recursion < EPEE_JSON_RECURSION_LIMIT_INTERNAL, "Wrong JSON data: recursion limitation (" << EPEE_JSON_RECURSION_LIMIT_INTERNAL << ") exceeded");
 
         std::string::const_iterator sub_element_start;
-        std::string name;        
-        typename t_storage::harray h_array = nullptr;
+        std::string name;
+        array_entry* array = nullptr;
         enum match_state
         {
           match_state_lookup_for_section_start, 
@@ -68,7 +101,7 @@ namespace epee
 
         enum array_mode
         {
-          array_mode_undifined = 0,
+          array_mode_undefined = 0,
           array_mode_sections, 
           array_mode_string, 
           array_mode_numbers,
@@ -76,7 +109,7 @@ namespace epee
         };
 
         match_state state = match_state_lookup_for_section_start;
-        array_mode array_md = array_mode_undifined;
+        array_mode array_md = array_mode_undefined;
         for(auto it = sec_buf_begin; it != buf_end; ++it)
         {
           switch (state)
@@ -117,53 +150,31 @@ namespace epee
               state = match_state_wonder_after_value;
             }else if (epee::misc_utils::parse::isdigit(*it) || *it == '-')
             {//just a named number value started
-              boost::string_ref val;
+              std::string_view val;
               bool is_v_float = false;bool is_signed = false;
               match_number2(it, buf_end, val, is_v_float, is_signed);
-              if(!is_v_float)
-              {
-                if(is_signed)
-                {
-                  errno = 0;
-                  int64_t nval = strtoll(val.data(), NULL, 10);
-                  if (errno) throw std::runtime_error("Invalid number: " + std::string(val));
-                  stg.set_value(name, nval, current_section);              
-                }else
-                {
-                  errno = 0;
-                  uint64_t nval = strtoull(val.data(), NULL, 10);
-                  if (errno) throw std::runtime_error("Invalid number: " + std::string(val));
-                  stg.set_value(name, nval, current_section);              
-                }
-              }else
-              {
-                errno = 0;
-                double nval = strtod(val.data(), NULL);
-                if (errno) throw std::runtime_error("Invalid number: " + std::string(val));
-                stg.set_value(name, nval, current_section);              
-              }
+              if(is_v_float)
+                stg.set_value(name, parse_number<double>(val), current_section);
+              else if(is_signed)
+                stg.set_value(name, parse_number<int64_t>(val), current_section);
+              else
+                stg.set_value(name, parse_number<uint64_t>(val), current_section);
               state = match_state_wonder_after_value;
             }else if(isalpha(*it) )
             {// could be null, true or false
-              boost::string_ref word;
+              std::string_view word;
               match_word2(it, buf_end, word);
-              if(boost::iequals(word, "null"))
-              {
-                state = match_state_wonder_after_value;
+              if(word == "null")
                 //just skip this, 
-              }else if(boost::iequals(word, "true"))
-              {
-                stg.set_value(name, true, current_section);              
                 state = match_state_wonder_after_value;
-              }else if(boost::iequals(word, "false"))
-              {
-                stg.set_value(name, false, current_section);              
-                state = match_state_wonder_after_value;
-              }else ASSERT_MES_AND_THROW("Unknown value keyword " << word);
+              else if(word == "true" || word == "false")
+                stg.set_value(name, word == "true", current_section);              
+              else ASSERT_MES_AND_THROW("Unknown value keyword " << word);
+              state = match_state_wonder_after_value;
             }else if(*it == '{')
             {
               //sub section here
-              typename t_storage::hsection new_sec = stg.open_section(name, current_section, true);
+              section* new_sec = stg.open_section(name, current_section, true);
               CHECK_AND_ASSERT_THROW_MES(new_sec, "Failed to insert new section in json: " << std::string(it, buf_end));
               run_handler(new_sec, it, buf_end, stg, recursion + 1);
               state = match_state_wonder_after_value;
@@ -185,16 +196,14 @@ namespace epee
           case match_state_wonder_array:
             if(*it == '[')
             {
-              ASSERT_MES_AND_THROW("array of array not suppoerted yet :( sorry"); 
+              ASSERT_MES_AND_THROW("array of array not supported yet :( sorry"); 
               //mean array of array
             }
             if(*it == '{')
             {
               //mean array of sections
-              typename t_storage::hsection new_sec = nullptr;
-              h_array = stg.insert_first_section(name, new_sec, current_section);
-              CHECK_AND_ASSERT_THROW_MES(h_array&&new_sec, "failed to create new section");
-              run_handler(new_sec, it, buf_end, stg, recursion + 1);
+              array = make_array_and_insert(stg, name, section{}, current_section);
+              run_handler(&std::get<array_t<section>>(*array).back(), it, buf_end, stg, recursion + 1);
               state = match_state_array_after_value;
               array_md = array_mode_sections;
             }else if(*it == '"')
@@ -202,64 +211,55 @@ namespace epee
               //mean array of strings
               std::string val;
               match_string2(it, buf_end, val);
-              h_array = stg.insert_first_value(name, std::move(val), current_section);
-              CHECK_AND_ASSERT_THROW_MES(h_array, " failed to insert values entry");
+              array = make_array_and_insert(stg, name, std::move(val), current_section);
               state = match_state_array_after_value;
               array_md = array_mode_string;
             }else if (epee::misc_utils::parse::isdigit(*it) || *it == '-')
             {//array of numbers value started
-              boost::string_ref val;
+              std::string_view val;
               bool is_v_float = false;bool is_signed_val = false;
               match_number2(it, buf_end, val, is_v_float, is_signed_val);
-              if(!is_v_float)
-              {
-                if (is_signed_val)
-                {
-                  errno = 0;
-                  int64_t nval = strtoll(val.data(), NULL, 10);
-                  if (errno) throw std::runtime_error("Invalid number: " + std::string(val));
-                  h_array = stg.insert_first_value(name, nval, current_section);
-                }else
-                {
-                  errno = 0;
-                  uint64_t nval = strtoull(val.data(), NULL, 10);
-                  if (errno) throw std::runtime_error("Invalid number: " + std::string(val));
-                  h_array = stg.insert_first_value(name, nval, current_section);
-                }
-                CHECK_AND_ASSERT_THROW_MES(h_array, " failed to insert values section entry");
-              }else
-              {
-                errno = 0;
-                double nval = strtod(val.data(), NULL);
-                if (errno) throw std::runtime_error("Invalid number: " + std::string(val));
-                h_array = stg.insert_first_value(name, nval, current_section);
-                CHECK_AND_ASSERT_THROW_MES(h_array, " failed to insert values section entry");
-              }
-
+              // This numeric array handling here is gross: the first value determines the array
+              // type, but subsequent values have to be guessed as the same type or else you get a
+              // parse error because the code requires (and has always required) that the guessed
+              // type is the same.  So these are okay:
+              //   "foo": [1,2]
+              //   "foo": [-1,-2]
+              //   "foo": [1.5, 2.0]
+              // but these result in parse failures:
+              //   "foo": [1,-2]
+              //   "foo": [-1,2]
+              //   "foo": [1.5, 2]
+              // even though 2 is both a valid signed integer and a valid double.  And that means
+              // there is *no way* to send a list of signed integer values unless *all* happen to be
+              // negative, and no way to send a list of doubles unless *all* happen to not be
+              // integers.
+              //
+              // It is not worth fixing this cursed code, though: better to scrap it and move to a
+              // proper library that isn't such a pile of garbage.
+              //
+              if (is_v_float)
+                array = make_array_and_insert(stg, name, parse_number<double>(val), current_section);
+              else if (is_signed_val)
+                array = make_array_and_insert(stg, name, parse_number<int64_t>(val), current_section);
+              else
+                array = make_array_and_insert(stg, name, parse_number<uint64_t>(val), current_section);
               state = match_state_array_after_value;
               array_md = array_mode_numbers;
             }else if(*it == ']')//empty array
             {
-              array_md = array_mode_undifined;
+              array_md = array_mode_undefined;
               state = match_state_wonder_after_value;
             }else if(isalpha(*it) )
             {// array of booleans
-              boost::string_ref word;
+              std::string_view word;
               match_word2(it, buf_end, word);
-              if(boost::iequals(word, "true"))
-              {
-                h_array = stg.insert_first_value(name, true, current_section);              
-                CHECK_AND_ASSERT_THROW_MES(h_array, " failed to insert values section entry");
-                state = match_state_array_after_value;
-                array_md = array_mode_booleans;
-              }else if(boost::iequals(word, "false"))
-              {
-                h_array = stg.insert_first_value(name, false, current_section);              
-                CHECK_AND_ASSERT_THROW_MES(h_array, " failed to insert values section entry");
-                state = match_state_array_after_value;
-                array_md = array_mode_booleans;
-
-              }else ASSERT_MES_AND_THROW("Unknown value keyword " << word)
+              if(word == "true" || word == "false")
+                array = make_array_and_insert(stg, name, word == "true", current_section);              
+              else
+                ASSERT_MES_AND_THROW("Unknown value keyword " << word)
+              state = match_state_array_after_value;
+              array_md = array_mode_booleans;
             }else CHECK_ISSPACE();
             break;
           case match_state_array_after_value:
@@ -267,8 +267,8 @@ namespace epee
               state = match_state_array_waiting_value;
             else if(*it == ']')
             {
-              h_array = nullptr;
-              array_md = array_mode_undifined;
+              array = nullptr;
+              array_md = array_mode_undefined;
               state = match_state_wonder_after_value;
             }else CHECK_ISSPACE();
             break;
@@ -278,10 +278,10 @@ namespace epee
             case array_mode_sections:
               if(*it == '{')
               {
-                typename t_storage::hsection new_sec = NULL;
-                bool res = stg.insert_next_section(h_array, new_sec);
-                CHECK_AND_ASSERT_THROW_MES(res&&new_sec, "failed to insert next section");
-                run_handler(new_sec, it, buf_end, stg, recursion + 1);
+                auto* a = std::get_if<array_t<section>>(array);
+                CHECK_AND_ASSERT_THROW_MES(a, "failed to insert next section");
+                a->emplace_back();
+                run_handler(&a->back(), it, buf_end, stg, recursion + 1);
                 state = match_state_array_after_value;
               }else CHECK_ISSPACE();
               break;
@@ -290,40 +290,42 @@ namespace epee
               {
                 std::string val;
                 match_string2(it, buf_end, val);
-                bool res = stg.insert_next_value(h_array, std::move(val));
-                CHECK_AND_ASSERT_THROW_MES(res, "failed to insert values");
+                auto* a = std::get_if<array_t<std::string>>(array);
+                CHECK_AND_ASSERT_THROW_MES(a, "failed to insert string value");
+                a->push_back(std::move(val));
                 state = match_state_array_after_value;
               }else CHECK_ISSPACE();
               break;
             case array_mode_numbers:
               if (epee::misc_utils::parse::isdigit(*it) || *it == '-')
               {//array of numbers value started
-                boost::string_ref val;
+                std::string_view val;
                 bool is_v_float = false;bool is_signed_val = false;
                 match_number2(it, buf_end, val, is_v_float, is_signed_val);
                 bool insert_res = false;
-                if(!is_v_float)
+                // This is broken AF.  See comment above.
+                if (is_v_float)
                 {
-                  if (is_signed_val)
-                  {
-                    errno = 0;
-                    int64_t nval = strtoll(val.data(), NULL, 10);
-                    if (errno) throw std::runtime_error("Invalid number: " + std::string(val));
-                    insert_res = stg.insert_next_value(h_array, nval);
-                  }else
-                  {
-                    errno = 0;
-                    uint64_t nval = strtoull(val.data(), NULL, 10);
-                    if (errno) throw std::runtime_error("Invalid number: " + std::string(val));
-                    insert_res = stg.insert_next_value(h_array, nval);
+                  if (auto* a = std::get_if<array_t<double>>(array)) {
+                    a->push_back(parse_number<double>(val));
+                    insert_res = true;
                   }
-                }else
-                {
-                  errno = 0;
-                  double nval = strtod(val.data(), NULL);
-                  if (errno) throw std::runtime_error("Invalid number: " + std::string(val));
-                  insert_res = stg.insert_next_value(h_array, nval);              
                 }
+                else if (is_signed_val)
+                {
+                  if (auto* a = std::get_if<array_t<int64_t>>(array)) {
+                    a->push_back(parse_number<int64_t>(val));
+                    insert_res = true;
+                  }
+                }
+                else
+                {
+                  if (auto* a = std::get_if<array_t<uint64_t>>(array)) {
+                    a->push_back(parse_number<uint64_t>(val));
+                    insert_res = true;
+                  }
+                }
+
                 CHECK_AND_ASSERT_THROW_MES(insert_res, "Failed to insert next value");
                 state = match_state_array_after_value;
                 array_md = array_mode_numbers;
@@ -332,23 +334,21 @@ namespace epee
             case array_mode_booleans:
               if(isalpha(*it) )
               {// array of booleans
-                boost::string_ref word;
+                std::string_view word;
                 match_word2(it, buf_end, word);
-                if(boost::iequals(word, "true"))
-                {
-                  bool r = stg.insert_next_value(h_array, true);              
-                  CHECK_AND_ASSERT_THROW_MES(r, " failed to insert values section entry");
-                  state = match_state_array_after_value;
-                }else if(boost::iequals(word, "false"))
-                {
-                  bool r = stg.insert_next_value(h_array, false);
-                  CHECK_AND_ASSERT_THROW_MES(r, " failed to insert values section entry");
-                  state = match_state_array_after_value;
-                }
+                bool val;
+                if (word == "true" || word == "false")
+                  val = true;
+                else if (word == "false")
+                  val = false;
                 else ASSERT_MES_AND_THROW("Unknown value keyword " << word);
+
+                if (auto* a = std::get_if<array_t<bool>>(array))
+                  a->push_back(val);
+                else ASSERT_MES_AND_THROW("can't handle a bool value mixed with other types");
               }else CHECK_ISSPACE();
               break;
-            case array_mode_undifined:
+            case array_mode_undefined:
             default:
               ASSERT_MES_AND_THROW("Bad array state");
             }

@@ -29,13 +29,12 @@
 #include "daemon.h"
 #include <common/command_line.h>
 
-using namespace std;
 using namespace daemonize;
 namespace po = boost::program_options;
 
-bool mock_rpc_daemon::on_send_raw_tx_2(const cryptonote::COMMAND_RPC_SEND_RAW_TX::request& req, cryptonote::COMMAND_RPC_SEND_RAW_TX::response& res, const cryptonote::core_rpc_server::connection_context *ctx)
+bool mock_rpc_daemon::on_send_raw_tx_2(const cryptonote::rpc::SEND_RAW_TX::request& req, cryptonote::rpc::SEND_RAW_TX::response& res, const cryptonote::core_rpc_server::connection_context *ctx)
 {
-  cryptonote::COMMAND_RPC_SEND_RAW_TX::request req2(req);
+  cryptonote::rpc::SEND_RAW_TX::request req2(req);
   req2.do_not_relay = true;  // Do not relay in test setup, only one daemon running.
   return cryptonote::core_rpc_server::on_send_raw_tx(req2, res, ctx);
 }
@@ -129,7 +128,7 @@ void mock_daemon::init()
   m_rpc_server.nettype(m_network_type);
 
   CHECK_AND_ASSERT_THROW_MES(m_protocol.init(m_vm), "Failed to initialize cryptonote protocol.");
-  CHECK_AND_ASSERT_THROW_MES(m_rpc_server.init(m_vm, false, main_rpc_port), "Failed to initialize RPC server.");
+  CHECK_AND_ASSERT_THROW_MES(m_rpc_server.init(m_vm, false, main_rpc_port, false), "Failed to initialize RPC server.");
 
   if (m_start_p2p)
     CHECK_AND_ASSERT_THROW_MES(m_server.init(m_vm), "Failed to initialize p2p server.");
@@ -137,7 +136,7 @@ void mock_daemon::init()
   if(m_http_client.is_connected())
     m_http_client.disconnect();
 
-  CHECK_AND_ASSERT_THROW_MES(m_http_client.set_server(rpc_addr(), boost::none, epee::net_utils::ssl_support_t::e_ssl_support_disabled), "RPC client init fail");
+  CHECK_AND_ASSERT_THROW_MES(m_http_client.set_server(rpc_addr(), std::nullopt, epee::net_utils::ssl_support_t::e_ssl_support_disabled), "RPC client init fail");
 }
 
 void mock_daemon::deinit()
@@ -191,7 +190,7 @@ void mock_daemon::stop_and_deinit()
   deinit();
 }
 
-void mock_daemon::try_init_and_run(boost::optional<unsigned> initial_port)
+void mock_daemon::try_init_and_run(std::optional<unsigned> initial_port)
 {
   const unsigned max_attempts = 3;
   for(unsigned attempts=0; attempts < max_attempts; ++attempts)
@@ -300,7 +299,7 @@ void mock_daemon::stop()
 void mock_daemon::stop_rpc()
 {
   m_rpc_server.send_stop_signal();
-  m_rpc_server.timed_wait_server_stop(5000);
+  m_rpc_server.server_stop();
 }
 
 void mock_daemon::stop_p2p()
@@ -313,7 +312,7 @@ void mock_daemon::mine_blocks(size_t num_blocks, const std::string &miner_addres
 {
   bool blocks_mined = false;
   const uint64_t start_height = get_height();
-  const auto mining_timeout = std::chrono::seconds(30);
+  const auto mining_timeout = std::chrono::seconds(120);
   MDEBUG("Current height before mining: " << start_height);
 
   start_mining(miner_address);
@@ -345,27 +344,27 @@ constexpr const std::chrono::seconds mock_daemon::rpc_timeout;
 
 void mock_daemon::start_mining(const std::string &miner_address, uint64_t threads_count, bool do_background_mining, bool ignore_battery)
 {
-  cryptonote::COMMAND_RPC_START_MINING::request req;
+  cryptonote::rpc::START_MINING::request req;
   req.miner_address = miner_address;
   req.threads_count = threads_count;
   req.do_background_mining = do_background_mining;
   req.ignore_battery = ignore_battery;
 
-  cryptonote::COMMAND_RPC_START_MINING::response resp;
+  cryptonote::rpc::START_MINING::response resp;
   bool r = epee::net_utils::invoke_http_json("/start_mining", req, resp, m_http_client, rpc_timeout);
   CHECK_AND_ASSERT_THROW_MES(r, "RPC error - start mining");
-  CHECK_AND_ASSERT_THROW_MES(resp.status != CORE_RPC_STATUS_BUSY, "Daemon busy");
-  CHECK_AND_ASSERT_THROW_MES(resp.status == CORE_RPC_STATUS_OK, "Daemon response invalid: " << resp.status);
+  CHECK_AND_ASSERT_THROW_MES(resp.status != rpc::STATUS_BUSY, "Daemon busy");
+  CHECK_AND_ASSERT_THROW_MES(resp.status == rpc::STATUS_OK, "Daemon response invalid: " << resp.status);
 }
 
 void mock_daemon::stop_mining()
 {
-  cryptonote::COMMAND_RPC_STOP_MINING::request req;
-  cryptonote::COMMAND_RPC_STOP_MINING::response resp;
+  cryptonote::rpc::STOP_MINING::request req;
+  cryptonote::rpc::STOP_MINING::response resp;
   bool r = epee::net_utils::invoke_http_json("/stop_mining", req, resp, m_http_client, rpc_timeout);
   CHECK_AND_ASSERT_THROW_MES(r, "RPC error - stop mining");
-  CHECK_AND_ASSERT_THROW_MES(resp.status != CORE_RPC_STATUS_BUSY, "Daemon busy");
-  CHECK_AND_ASSERT_THROW_MES(resp.status == CORE_RPC_STATUS_OK, "Daemon response invalid: " << resp.status);
+  CHECK_AND_ASSERT_THROW_MES(resp.status != rpc::STATUS_BUSY, "Daemon busy");
+  CHECK_AND_ASSERT_THROW_MES(resp.status == rpc::STATUS_OK, "Daemon response invalid: " << resp.status);
 }
 
 uint64_t mock_daemon::get_height()

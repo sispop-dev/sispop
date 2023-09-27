@@ -27,6 +27,7 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #include <array>
+#include <boost/predef/other/endian.h>
 #include <boost/endian/conversion.hpp>
 #include <boost/range/algorithm/equal.hpp>
 #include <boost/range/algorithm_ext/iota.hpp>
@@ -35,6 +36,7 @@
 #include <iterator>
 #include <string>
 #include <sstream>
+#include <type_traits>
 #include <vector>
 
 #ifndef _WIN32
@@ -43,6 +45,8 @@
 
 #include "boost/archive/portable_binary_iarchive.hpp"
 #include "boost/archive/portable_binary_oarchive.hpp"
+#include "shared_sv.h"
+#include "crypto/crypto.h"
 #include "hex.h"
 #include "net/net_utils_base.h"
 #include "net/local_ip.h"
@@ -135,7 +139,7 @@ namespace
     EXPECT_FALSE( lhs >= rhs );  \
     EXPECT_TRUE( rhs >= lhs )
 
-  #ifdef BOOST_LITTLE_ENDIAN
+  #if BOOST_ENDIAN_LITTLE_BYTE
     #define CHECK_LESS_ENDIAN(lhs, rhs) CHECK_LESS( rhs , lhs )
   #else
     #define CHECK_LESS_ENDIAN(lhs, rhs) CHECK_LESS( lhs , rhs )
@@ -372,6 +376,48 @@ TEST(Span, ToMutSpan)
   auto span = epee::to_mut_span(mut);
   boost::range::iota(span, 1);
   EXPECT_EQ((std::vector<unsigned>{1, 2, 3, 4}), mut);
+}
+
+static_assert(std::is_default_constructible_v<epee::shared_sv>);
+static_assert(std::is_move_constructible_v<epee::shared_sv>);
+static_assert(std::is_copy_constructible_v<epee::shared_sv>);
+static_assert(std::is_move_assignable_v<epee::shared_sv>);
+static_assert(std::is_copy_assignable_v<epee::shared_sv>);
+static_assert(std::is_nothrow_default_constructible_v<epee::shared_sv>);
+static_assert(std::is_nothrow_move_constructible_v<epee::shared_sv>);
+static_assert(std::is_nothrow_move_assignable_v<epee::shared_sv>);
+
+TEST(SharedSV, Tests)
+{
+  epee::shared_sv slice{};
+  auto& view = slice.view;
+
+  EXPECT_TRUE(view.empty());
+  EXPECT_EQ(0u, slice.extract_prefix(0).size());
+  EXPECT_EQ(0u, slice.extract_prefix(1).size());
+
+  using namespace std::literals;
+  epee::shared_sv from_str{"abcdef"s};
+  EXPECT_EQ("abcdef"sv, from_str.view);
+  auto sv2 = from_str.extract_prefix(4);
+  EXPECT_EQ(4, sv2.size());
+  EXPECT_EQ(2, from_str.size());
+  auto sv3 = sv2.extract_prefix(1);
+  EXPECT_EQ("a"sv, sv3.view);
+  EXPECT_EQ("bcd"sv, sv2.view);
+  EXPECT_EQ("ef"sv, from_str.view);
+  EXPECT_EQ(3, from_str.ptr.use_count());
+  sv2 = {};
+  EXPECT_EQ(2, from_str.ptr.use_count());
+  sv3 = {};
+  EXPECT_EQ(1, from_str.ptr.use_count());
+  auto ptr = from_str.ptr;
+  from_str = {};
+  EXPECT_EQ(1, ptr.use_count());
+  ptr.reset();
+  EXPECT_EQ(0, from_str.size());
+  EXPECT_EQ(0, sv2.size());
+  EXPECT_EQ(0, sv3.size());
 }
 
 TEST(ToHex, String)
@@ -883,7 +929,7 @@ TEST(parsing, isdigit)
 
 TEST(parsing, number)
 {
-  boost::string_ref val;
+  std::string_view val;
   std::string s;
 
   // the parser expects another character to end the number, and accepts things
@@ -944,4 +990,21 @@ TEST(parsing, number)
   i = s.begin();
   epee::misc_utils::parse::match_number(i, s.end(), val);
   ASSERT_EQ(val, "+9.34e+03");
+}
+
+TEST(parsing, unicode)
+{
+  std::string bs;
+  std::string s;
+  std::string::const_iterator si;
+
+  s = "\"\""; si = s.begin(); ASSERT_TRUE(epee::misc_utils::parse::match_string(si, s.cend(), bs)); ASSERT_EQ(bs, "");
+  s = "\"\\u0000\""; si = s.begin(); ASSERT_TRUE(epee::misc_utils::parse::match_string(si, s.cend(), bs)); ASSERT_EQ(bs, std::string(1, '\0'));
+  s = "\"\\u0020\""; si = s.begin(); ASSERT_TRUE(epee::misc_utils::parse::match_string(si, s.cend(), bs)); ASSERT_EQ(bs, " ");
+  s = "\"\\u1\""; si = s.begin(); ASSERT_FALSE(epee::misc_utils::parse::match_string(si, s.cend(), bs));
+  s = "\"\\u12\""; si = s.begin(); ASSERT_FALSE(epee::misc_utils::parse::match_string(si, s.cend(), bs));
+  s = "\"\\u123\""; si = s.begin(); ASSERT_FALSE(epee::misc_utils::parse::match_string(si, s.cend(), bs));
+  s = "\"\\u1234\""; si = s.begin(); ASSERT_TRUE(epee::misc_utils::parse::match_string(si, s.cend(), bs)); ASSERT_EQ(bs, "ሴ");
+  s = "\"foo\\u1234bar\""; si = s.begin(); ASSERT_TRUE(epee::misc_utils::parse::match_string(si, s.cend(), bs)); ASSERT_EQ(bs, "fooሴbar");
+  s = "\"\\u3042\\u307e\\u3084\\u304b\\u3059\""; si = s.begin(); ASSERT_TRUE(epee::misc_utils::parse::match_string(si, s.cend(), bs)); ASSERT_EQ(bs, "あまやかす");
 }

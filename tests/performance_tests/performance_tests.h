@@ -30,42 +30,16 @@
 
 #pragma once
 
+#include <iomanip>
 #include <iostream>
-#include <stdint.h>
-
-#include <boost/chrono.hpp>
-#include <boost/regex.hpp>
+#include <cstdint>
+#include <regex>
+#include <chrono>
 
 #include "misc_language.h"
 #include "stats.h"
 #include "common/perf_timer.h"
 #include "common/timings.h"
-
-class performance_timer
-{
-public:
-  typedef boost::chrono::high_resolution_clock clock;
-
-  performance_timer()
-  {
-    m_base = clock::now();
-  }
-
-  void start()
-  {
-    m_start = clock::now();
-  }
-
-  int elapsed_ms()
-  {
-    clock::duration elapsed = clock::now() - m_start;
-    return static_cast<int>(boost::chrono::duration_cast<boost::chrono::milliseconds>(elapsed).count());
-  }
-
-private:
-  clock::time_point m_base;
-  clock::time_point m_start;
-};
 
 struct Params
 {
@@ -75,12 +49,14 @@ struct Params
   unsigned loop_multiplier;
 };
 
+using namespace std::literals;
+
 template <typename T>
 class test_runner
 {
 public:
   test_runner(const Params &params)
-    : m_elapsed(0)
+    : m_elapsed(0s)
     , m_params(params)
     , m_per_call_timers(T::loop_count * params.loop_multiplier, {true})
   {
@@ -94,13 +70,13 @@ public:
     if (!test.init())
       return false;
 
-    performance_timer timer;
-    timer.start();
+    using clock = std::chrono::steady_clock;
+    auto start = clock::now();
     warm_up();
     if (m_params.verbose)
-      std::cout << "Warm up: " << timer.elapsed_ms() << " ms" << std::endl;
+      std::cout << "Warm up: " << std::chrono::duration<double>{clock::now() - start}.count() << " s" << std::endl;
 
-    timer.start();
+    start = clock::now();
     for (size_t i = 0; i < T::loop_count * m_params.loop_multiplier; ++i)
     {
       if (m_params.stats)
@@ -110,28 +86,28 @@ public:
       if (m_params.stats)
         m_per_call_timers[i].pause();
     }
-    m_elapsed = timer.elapsed_ms();
-    m_stats.reset(new Stats<tools::PerformanceTimer, uint64_t>(m_per_call_timers));
+    m_elapsed = clock::now() - start;
+    m_stats.reset(new Stats<tools::PerformanceTimer, double>(m_per_call_timers));
 
     return true;
   }
 
-  int elapsed_time() const { return m_elapsed; }
+  std::chrono::duration<double> elapsed_time() const { return m_elapsed; }
   size_t get_size() const { return m_stats->get_size(); }
 
-  int time_per_call(int scale = 1) const
+  std::chrono::duration<double> time_per_call() const
   {
-    static_assert(0 < T::loop_count, "T::loop_count must be greater than 0");
-    return m_elapsed * scale / (T::loop_count * m_params.loop_multiplier);
+    static_assert(T::loop_count > 0);
+    return m_elapsed / (T::loop_count * m_params.loop_multiplier);
   }
 
-  uint64_t get_min() const { return m_stats->get_min(); }
-  uint64_t get_max() const { return m_stats->get_max(); }
+  double get_min() const { return m_stats->get_min(); }
+  double get_max() const { return m_stats->get_max(); }
   double get_mean() const { return m_stats->get_mean(); }
-  uint64_t get_median() const { return m_stats->get_median(); }
+  double get_median() const { return m_stats->get_median(); }
   double get_stddev() const { return m_stats->get_standard_deviation(); }
   double get_non_parametric_skew() const { return m_stats->get_non_parametric_skew(); }
-  std::vector<uint64_t> get_quantiles(size_t n) const { return m_stats->get_quantiles(n); }
+  std::vector<double> get_quantiles(size_t n) const { return m_stats->get_quantiles(n); }
 
   bool is_same_distribution(size_t npoints, double mean, double stddev) const
   {
@@ -155,17 +131,33 @@ private:
 
 private:
   volatile uint64_t m_warm_up;  ///<! This field is intended for preclude compiler optimizations
-  int m_elapsed;
+  std::chrono::duration<double> m_elapsed;
   Params m_params;
   std::vector<tools::PerformanceTimer> m_per_call_timers;
-  std::unique_ptr<Stats<tools::PerformanceTimer, uint64_t>> m_stats;
+  std::unique_ptr<Stats<tools::PerformanceTimer, double>> m_stats;
 };
+
+std::string elapsed_str(std::chrono::duration<double> seconds)
+{
+  std::pair<double, std::string> val;
+  if (seconds >= 1s)
+    val = {seconds.count(), "s"};
+  else if (seconds >= 1ms)
+    val = {seconds.count()*1e3, "ms"};
+  else if (seconds >= 1us)
+    val = {seconds.count()*1e6, u8"µs"};
+  else
+    val = {seconds.count()*1e9, u8"ns"};
+  std::ostringstream s;
+  s << std::fixed << std::setprecision(3) << val.first << val.second;
+  return s.str();
+}
+std::string elapsed_str(double seconds) { return elapsed_str(std::chrono::duration<double>{seconds}); }
 
 template <typename T>
 void run_test(const std::string &filter, Params &params, const char* test_name)
 {
-  boost::smatch match;
-  if (!filter.empty() && !boost::regex_match(std::string(test_name), match, boost::regex(filter)))
+  if (std::cmatch m; !filter.empty() && !std::regex_match(test_name, m, std::regex(filter)))
     return;
 
   test_runner<T> runner(params);
@@ -175,30 +167,18 @@ void run_test(const std::string &filter, Params &params, const char* test_name)
     {
       std::cout << test_name << " - OK:\n";
       std::cout << "  loop count:    " << T::loop_count * params.loop_multiplier << '\n';
-      std::cout << "  elapsed:       " << runner.elapsed_time() << " ms\n";
+      std::cout << "  elapsed:       " << elapsed_str(runner.elapsed_time()) << '\n';
       if (params.stats)
       {
-        std::cout << "  min:       " << runner.get_min() << " ns\n";
-        std::cout << "  max:       " << runner.get_max() << " ns\n";
-        std::cout << "  median:    " << runner.get_median() << " ns\n";
-        std::cout << "  std dev:   " << runner.get_stddev() << " ns\n";
+        std::cout << "  min:       " << elapsed_str(runner.get_min()) << '\n';
+        std::cout << "  max:       " << elapsed_str(runner.get_max()) << '\n';
+        std::cout << "  median:    " << elapsed_str(runner.get_median()) << '\n';
+        std::cout << "  std dev:   " << elapsed_str(runner.get_stddev()) << '\n';
       }
     }
     else
     {
       std::cout << test_name << " (" << T::loop_count * params.loop_multiplier << " calls) - OK:";
-    }
-    const char *unit = "ms";
-    double scale = 1000000;
-    uint64_t time_per_call = runner.time_per_call();
-    if (time_per_call < 100) {
-     scale = 1000;
-     time_per_call = runner.time_per_call(1000);
-#ifdef _WIN32
-     unit = "\xb5s";
-#else
-     unit = "µs";
-#endif
     }
     const auto quantiles = runner.get_quantiles(10);
     double min = runner.get_min();
@@ -211,14 +191,9 @@ void run_test(const std::string &filter, Params &params, const char* test_name)
     std::vector<TimingsDatabase::instance> prev_instances = params.td.get(test_name);
     params.td.add(test_name, {time(NULL), runner.get_size(), min, max, mean, med, stddev, npskew, quantiles});
 
-    std::cout << (params.verbose ? "  time per call: " : " ") << time_per_call << " " << unit << "/call" << (params.verbose ? "\n" : "");
+    std::cout << (params.verbose ? "  time per call: " : " ") << elapsed_str(runner.time_per_call()) << "/call" << (params.verbose ? "\n" : "");
     if (params.stats)
     {
-      uint64_t mins = min / scale;
-      uint64_t maxs = max / scale;
-      uint64_t meds = med / scale;
-      uint64_t p95s = quantiles[9] / scale;
-      uint64_t stddevs = stddev / scale;
       std::string cmp;
       if (!prev_instances.empty())
       {
@@ -228,9 +203,10 @@ void run_test(const std::string &filter, Params &params, const char* test_name)
           double pc = fabs(100. * (prev_instance.mean - runner.get_mean()) / prev_instance.mean);
           cmp = ", " + std::to_string(pc) + "% " + (mean > prev_instance.mean ? "slower" : "faster");
         }
-cmp += "  -- " + std::to_string(prev_instance.mean);
+        cmp += "  -- " + std::to_string(prev_instance.mean);
       }
-      std::cout << " (min " << mins << " " << unit << ", 90th " << p95s << " " << unit << ", median " << meds << " " << unit << ", std dev " << stddevs << " " << unit << ")" << cmp;
+      std::cout << " (min " << elapsed_str(min) << ", 90th " << elapsed_str(quantiles[9]) <<
+        ", median " << elapsed_str(med) << ", std dev " << elapsed_str(stddev) << ")" << cmp;
     }
     std::cout << std::endl;
   }

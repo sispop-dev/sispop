@@ -177,8 +177,6 @@ BEGIN_RPC_MESSAGE_CLASS(StartMining);
   BEGIN_RPC_MESSAGE_REQUEST;
     std::string miner_address;
     uint64_t threads_count;
-    bool do_background_mining;
-    bool ignore_battery;
   END_RPC_MESSAGE_REQUEST;
   BEGIN_RPC_MESSAGE_RESPONSE;
   END_RPC_MESSAGE_RESPONSE;
@@ -207,7 +205,6 @@ BEGIN_RPC_MESSAGE_CLASS(MiningStatus);
     uint64_t speed;
     uint64_t threads_count;
     std::string address;
-    bool is_background_mining_enabled;
   END_RPC_MESSAGE_RESPONSE;
 END_RPC_MESSAGE_CLASS;
 

@@ -33,27 +33,16 @@
 /* rfree: implementation for throttle details */
 
 #include <string>
-#include <vector>
-#include <atomic>
-
-#include <boost/asio.hpp>
-
-#include <memory>
-
-#include "syncobj.h"
+#include <sstream>
+#include <fstream>
+#include <iomanip>
+#include <algorithm>
 
 #include "net/net_utils_base.h" 
 #include "misc_log_ex.h" 
 #include "misc_language.h"
 #include "pragma_comp_defs.h"
-#include <sstream>
-#include <iomanip>
-#include <algorithm>
 
-
-
-#include <boost/asio/basic_socket.hpp>
-#include <boost/asio/ip/unicast.hpp>
 #include "net/abstract_tcp_server2.h"
 
 // TODO:
@@ -85,7 +74,6 @@ class connection_basic_pimpl {
 		static int m_default_tos;
 
 		network_throttle_bw m_throttle; // per-perr
-    critical_section m_throttle_lock;
 
 		void _packet(size_t packet_size, int phase, int q_len); // execute a sleep ; phase is not really used now(?) could be used for different kinds of sleep e.g. direct/queue write
 };
@@ -168,7 +156,7 @@ void network_throttle::tick()
 	// TODO optimize when moving few slots at once
 	while ( (!m_any_packet_yet) || (last_sample_time_slot < current_sample_time_slot))
 	{
-		_dbg3("Moving counter buffer by 1 second " << last_sample_time_slot << " < " << current_sample_time_slot << " (last time " << m_last_sample_time<<")");
+		MTRACE("Moving counter buffer by 1 second " << last_sample_time_slot << " < " << current_sample_time_slot << " (last time " << m_last_sample_time<<")");
 		// rotate buffer 
 		m_history.push_front(packet_info());
 		if (! m_any_packet_yet) 
@@ -220,15 +208,15 @@ network_time_seconds network_throttle::get_sleep_time_after_tick(size_t packet_s
 }
 
 void network_throttle::logger_handle_net(const std::string &filename, double time, size_t size) {
-    static boost::mutex mutex;
+    static std::mutex mutex;
 
-    boost::lock_guard<boost::mutex> lock(mutex);
+    std::lock_guard lock{mutex};
     {
         std::fstream file;
         file.open(filename.c_str(), std::ios::app | std::ios::out );
         file.precision(6);
         if(!file.is_open())
-            _warn("Can't open file " << filename);
+            MWARNING("Can't open file " << filename);
         file << static_cast<int>(time) << " " << static_cast<double>(size/1024) << "\n";
         file.close();
     }

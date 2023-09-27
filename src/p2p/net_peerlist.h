@@ -34,20 +34,20 @@
 #include <list>
 #include <string>
 #include <vector>
+#include <optional>
+#include <shared_mutex>
 
 #include <boost/multi_index_container.hpp>
 #include <boost/multi_index/ordered_index.hpp>
 #include <boost/multi_index/identity.hpp>
 #include <boost/multi_index/member.hpp>
-#include <boost/optional/optional.hpp>
-#include <boost/range/adaptor/reversed.hpp>
 
 
+#include "crypto/crypto.h"
 #include "cryptonote_config.h"
 #include "net/enums.h"
 #include "net/local_ip.h"
 #include "p2p_protocol_defs.h"
-#include "syncobj.h"
 #include "common/random.h"
 
 namespace nodetool
@@ -67,10 +67,10 @@ namespace nodetool
     {}
 
     //! \return Peers stored in stream `src` in `new_format` (portable archive or older non-portable).
-    static boost::optional<peerlist_storage> open(std::istream& src, const bool new_format);
+    static std::optional<peerlist_storage> open(std::istream& src, const bool new_format);
 
     //! \return Peers stored in file at `path`
-    static boost::optional<peerlist_storage> open(const std::string& path);
+    static std::optional<peerlist_storage> open(const std::string& path);
 
     peerlist_storage(peerlist_storage&&) = default;
     peerlist_storage(const peerlist_storage&) = delete;
@@ -100,9 +100,9 @@ namespace nodetool
   {
   public: 
     bool init(peerlist_types&& peers, bool allow_local_ip);
-    size_t get_white_peers_count(){CRITICAL_REGION_LOCAL(m_peerlist_lock); return m_peers_white.size();}
-    size_t get_gray_peers_count(){CRITICAL_REGION_LOCAL(m_peerlist_lock); return m_peers_gray.size();}
-    bool merge_peerlist(const std::vector<peerlist_entry>& outer_bs);
+    size_t get_white_peers_count(){std::shared_lock lock{m_peerlist_lock}; return m_peers_white.size();}
+    size_t get_gray_peers_count(){std::shared_lock lock{m_peerlist_lock}; return m_peers_gray.size();}
+    bool merge_peerlist(const std::vector<peerlist_entry>& outer_bs, const std::function<bool(const peerlist_entry&)> &f = NULL);
     bool get_peerlist_head(std::vector<peerlist_entry>& bs_head, bool anonymize, uint32_t depth = P2P_DEFAULT_PEERS_IN_HANDSHAKE);
     void get_peerlist(std::vector<peerlist_entry>& pl_gray, std::vector<peerlist_entry>& pl_white);
     void get_peerlist(peerlist_types& peers);
@@ -113,7 +113,6 @@ namespace nodetool
     bool append_with_peer_gray(const peerlist_entry& pr);
     bool append_with_peer_anchor(const anchor_peerlist_entry& ple);
     bool set_peer_just_seen(peerid_type peer, const epee::net_utils::network_address& addr, uint32_t pruning_seed, uint16_t rpc_port);
-    bool set_peer_unreachable(const peerlist_entry& pr);
     bool is_host_allowed(const epee::net_utils::network_address &address);
     bool get_random_gray_peer(peerlist_entry& pe);
     bool remove_from_peer_gray(const peerlist_entry& pe);
@@ -185,7 +184,7 @@ namespace nodetool
     void trim_gray_peerlist();
 
     friend class boost::serialization::access;
-    epee::critical_section m_peerlist_lock;
+    std::shared_mutex m_peerlist_lock;
     std::string m_config_folder;
     bool m_allow_local_ip;
 
@@ -214,12 +213,13 @@ namespace nodetool
   }
   //--------------------------------------------------------------------------------------------------
   inline 
-  bool peerlist_manager::merge_peerlist(const std::vector<peerlist_entry>& outer_bs)
+  bool peerlist_manager::merge_peerlist(const std::vector<peerlist_entry>& outer_bs, const std::function<bool(const peerlist_entry&)> &f)
   {
-    CRITICAL_REGION_LOCAL(m_peerlist_lock);
+    std::unique_lock lock{m_peerlist_lock};
     for(const peerlist_entry& be:  outer_bs)
     {
-      append_with_peer_gray(be);
+      if (!f || f(be))
+        append_with_peer_gray(be);
     }
     // delete extra elements
     trim_gray_peerlist();    
@@ -229,7 +229,7 @@ namespace nodetool
   inline
   bool peerlist_manager::get_white_peer_by_index(peerlist_entry& p, size_t i)
   {
-    CRITICAL_REGION_LOCAL(m_peerlist_lock);
+    std::unique_lock lock{m_peerlist_lock};
     if(i >= m_peers_white.size())
       return false;
 
@@ -241,7 +241,7 @@ namespace nodetool
   inline
     bool peerlist_manager::get_gray_peer_by_index(peerlist_entry& p, size_t i)
   {
-    CRITICAL_REGION_LOCAL(m_peerlist_lock);
+    std::unique_lock lock{m_peerlist_lock};
     if(i >= m_peers_gray.size())
       return false;
 
@@ -266,27 +266,30 @@ namespace nodetool
   inline 
   bool peerlist_manager::get_peerlist_head(std::vector<peerlist_entry>& bs_head, bool anonymize, uint32_t depth)
   {
-    CRITICAL_REGION_LOCAL(m_peerlist_lock);
-    peers_indexed::index<by_time>::type& by_time_index=m_peers_white.get<by_time>();
+    std::unique_lock lock{m_peerlist_lock};
+    auto& by_time_index=m_peers_white.get<by_time>();
     uint32_t cnt = 0;
 
-    // picks a random set of peers within the first 120%, rather than a set of the first 100%.
+    // picks a random set of peers within the whole set, rather pick the first depth elements.
     // The intent is that if someone asks twice, they can't easily tell:
     // - this address was not in the first list, but is in the second, so the only way this can be
     // is if its last_seen was recently reset, so this means the target node recently had a new
     // connection to that address
     // - this address was in the first list, and not in the second, which means either the address
-    // was moved to the gray list (if it's not accessibe, which the attacker can check if
+    // was moved to the gray list (if it's not accessible, which the attacker can check if
     // the address accepts incoming connections) or it was the oldest to still fit in the 250 items,
     // so its last_seen is old.
-    const uint32_t pick_depth = anonymize ? depth + depth / 5 : depth;
+    //
+    // See Cao, Tong et al. "Exploring the Monero Peer-to-Peer Network". https://eprint.iacr.org/2019/411
+    //
+    const uint32_t pick_depth = anonymize ? m_peers_white.size() : depth;
     bs_head.reserve(pick_depth);
-    for(const peers_indexed::value_type& vl: boost::adaptors::reverse(by_time_index))
+    for(auto it = by_time_index.rbegin(); it != by_time_index.rend(); ++it)
     {
       if(cnt++ >= pick_depth)
         break;
 
-      bs_head.push_back(vl);
+      bs_head.push_back(*it);
     }
 
     if (anonymize)
@@ -301,13 +304,13 @@ namespace nodetool
     return true;
   }
   //--------------------------------------------------------------------------------------------------
-  template<typename F> inline
+  template<typename F>
   bool peerlist_manager::foreach(bool white, const F &f)
   {
-    CRITICAL_REGION_LOCAL(m_peerlist_lock);
-    peers_indexed::index<by_time>::type& by_time_index = white ? m_peers_white.get<by_time>() : m_peers_gray.get<by_time>();
-    for(const peers_indexed::value_type& vl: boost::adaptors::reverse(by_time_index))
-      if (!f(vl))
+    std::lock_guard lock{m_peerlist_lock};
+    auto& by_time_index = white ? m_peers_white.get<by_time>() : m_peers_gray.get<by_time>();
+    for (auto it = by_time_index.rbegin(); it != by_time_index.rend(); ++it)
+      if (!f(*it))
         return false;
     return true;
   }
@@ -316,7 +319,7 @@ namespace nodetool
   bool peerlist_manager::set_peer_just_seen(peerid_type peer, const epee::net_utils::network_address& addr, uint32_t pruning_seed, uint16_t rpc_port)
   {
     TRY_ENTRY();
-    CRITICAL_REGION_LOCAL(m_peerlist_lock);
+    std::lock_guard lock{m_peerlist_lock};
     //find in white list
     peerlist_entry ple;
     ple.adr = addr;
@@ -335,7 +338,7 @@ namespace nodetool
     if(!is_host_allowed(ple.adr))
       return true;
 
-     CRITICAL_REGION_LOCAL(m_peerlist_lock);
+     std::lock_guard lock{m_peerlist_lock};
     //find in white list
     auto by_addr_it_wt = m_peers_white.get<by_addr>().find(ple.adr);
     if(by_addr_it_wt == m_peers_white.get<by_addr>().end())
@@ -371,7 +374,7 @@ namespace nodetool
     if(!is_host_allowed(ple.adr))
       return true;
 
-    CRITICAL_REGION_LOCAL(m_peerlist_lock);
+    std::lock_guard lock{m_peerlist_lock};
     //find in white list
     auto by_addr_it_wt = m_peers_white.get<by_addr>().find(ple.adr);
     if(by_addr_it_wt != m_peers_white.get<by_addr>().end())
@@ -404,7 +407,7 @@ namespace nodetool
   {
     TRY_ENTRY();
 
-    CRITICAL_REGION_LOCAL(m_peerlist_lock);
+    std::lock_guard lock{m_peerlist_lock};
 
     auto by_addr_it_anchor = m_peers_anchor.get<by_addr>().find(ple.adr);
 
@@ -422,7 +425,7 @@ namespace nodetool
   {
     TRY_ENTRY();
 
-    CRITICAL_REGION_LOCAL(m_peerlist_lock);
+    std::lock_guard lock{m_peerlist_lock};
 
     if (m_peers_gray.empty()) {
       return false;
@@ -443,7 +446,7 @@ namespace nodetool
   {
     TRY_ENTRY();
 
-    CRITICAL_REGION_LOCAL(m_peerlist_lock);
+    std::lock_guard lock{m_peerlist_lock};
 
     peers_indexed::index_iterator<by_addr>::type iterator = m_peers_white.get<by_addr>().find(pe.adr);
 
@@ -461,7 +464,7 @@ namespace nodetool
   {
     TRY_ENTRY();
 
-    CRITICAL_REGION_LOCAL(m_peerlist_lock);
+    std::lock_guard lock{m_peerlist_lock};
 
     peers_indexed::index_iterator<by_addr>::type iterator = m_peers_gray.get<by_addr>().find(pe.adr);
 
@@ -479,7 +482,7 @@ namespace nodetool
   {
     TRY_ENTRY();
 
-    CRITICAL_REGION_LOCAL(m_peerlist_lock);
+    std::lock_guard lock{m_peerlist_lock};
 
     auto begin = m_peers_anchor.get<by_time>().begin();
     auto end = m_peers_anchor.get<by_time>().end();
@@ -500,7 +503,7 @@ namespace nodetool
   {
     TRY_ENTRY();
 
-    CRITICAL_REGION_LOCAL(m_peerlist_lock);
+    std::lock_guard lock{m_peerlist_lock};
 
     anchor_peers_indexed::index_iterator<by_addr>::type iterator = m_peers_anchor.get<by_addr>().find(addr);
 

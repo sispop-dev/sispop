@@ -28,109 +28,57 @@
 
 #pragma once
 
-#include <time.h>
-#include <boost/regex.hpp>
+#include <iomanip>
+#include <regex>
+#include <type_traits>
+#include <charconv>
 
 #include "misc_language.h"
 #include "portable_storage_base.h"
+#include "parserse_base_utils.h"
 #include "warnings.h"
 
 namespace epee
 {
   namespace serialization
   {
-#define ASSERT_AND_THROW_WRONG_CONVERSION() ASSERT_MES_AND_THROW("WRONG DATA CONVERSION: from type=" << typeid(from).name() << " to type " << typeid(to).name())
+#define ASSERT_AND_THROW_WRONG_CONVERSION() ASSERT_MES_AND_THROW("WRONG DATA CONVERSION @ " << __FILE__ << ":" << __LINE__ << ": " << typeid(from).name() << " to " << typeid(to).name())
 
-    template<typename from_type, typename to_type>
-    void convert_int_to_uint(const from_type& from, to_type& to)
+    template<typename From, typename To, typename SFINAE = void>
+    struct converter
     {
-PUSH_WARNINGS
-DISABLE_VS_WARNINGS(4018)
-      CHECK_AND_ASSERT_THROW_MES(from >=0, "unexpected int value with signed storage value less than 0, and unsigned receiver value");
-DISABLE_GCC_AND_CLANG_WARNING(sign-compare)
-      CHECK_AND_ASSERT_THROW_MES(from <= std::numeric_limits<to_type>::max(), "int value overhead: try to set value " << from << " to type " << typeid(to_type).name() << " with max possible value = " << std::numeric_limits<to_type>::max());
-      to = static_cast<to_type>(from);
-POP_WARNINGS
-    }
-    template<typename from_type, typename to_type>
-    void convert_int_to_int(const from_type& from, to_type& to)
-    {
-      CHECK_AND_ASSERT_THROW_MES(from >= boost::numeric::bounds<to_type>::lowest(), "int value overhead: try to set value " << from << " to type " << typeid(to_type).name() << " with lowest possible value = " << boost::numeric::bounds<to_type>::lowest());
-PUSH_WARNINGS
-DISABLE_CLANG_WARNING(tautological-constant-out-of-range-compare)
-      CHECK_AND_ASSERT_THROW_MES(from <= std::numeric_limits<to_type>::max(), "int value overhead: try to set value " << from << " to type " << typeid(to_type).name() << " with max possible value = " << std::numeric_limits<to_type>::max());
-POP_WARNINGS
-      to = static_cast<to_type>(from);
-    }
-    template<typename from_type, typename to_type>
-    void convert_uint_to_any_int(const from_type& from, to_type& to)
-    {
-PUSH_WARNINGS
-DISABLE_VS_WARNINGS(4018)
-DISABLE_CLANG_WARNING(tautological-constant-out-of-range-compare)
-        CHECK_AND_ASSERT_THROW_MES(from <= std::numeric_limits<to_type>::max(), "uint value overhead: try to set value " << from << " to type " << typeid(to_type).name() << " with max possible value = " << std::numeric_limits<to_type>::max());
-      to = static_cast<to_type>(from);
-POP_WARNINGS
-    }
-
-    template<typename from_type, typename to_type, bool, bool> //is from signed, is from to signed
-    struct convert_to_signed_unsigned;
-
-    template<typename from_type, typename to_type>
-    struct convert_to_signed_unsigned<from_type, to_type, true, true>
-    {
-      static void convert(const from_type& from, to_type& to)
-      {//from signed to signed
-        convert_int_to_int(from, to);
-      }
-    };
-
-    template<typename from_type, typename to_type>
-    struct convert_to_signed_unsigned<from_type, to_type, true, false>
-    {
-      static void convert(const from_type& from, to_type& to)
-      {//from signed to unsigned
-        convert_int_to_uint(from, to);
-      }
-    };
-
-    template<typename from_type, typename to_type>
-    struct convert_to_signed_unsigned<from_type, to_type, false, true>
-    {
-      static void convert(const from_type& from, to_type& to)
-      {//from unsigned to signed
-        convert_uint_to_any_int(from, to);
-      }
-    };
-
-    template<typename from_type, typename to_type>
-    struct convert_to_signed_unsigned<from_type, to_type, false, false>
-    {
-      static void convert(const from_type& from, to_type& to)
-      {
-        //from unsigned to unsigned
-        convert_uint_to_any_int(from, to);
-      }
-    };
-
-    template<typename from_type, typename to_type, bool>
-    struct convert_to_integral;
-
-    template<typename from_type, typename to_type>
-    struct convert_to_integral<from_type, to_type, true>
-    {
-      static void convert(const from_type& from, to_type& to)
-      {
-        convert_to_signed_unsigned<from_type, to_type, std::is_signed<from_type>::value, std::is_signed<to_type>::value>::convert(from, to);
-      }
-    };
-
-    template<typename from_type, typename to_type>
-    struct convert_to_integral<from_type, to_type, false>
-    {
-      static void convert(const from_type& from, to_type& to)
+      void operator()(const From& from, To& to)
       {
         ASSERT_AND_THROW_WRONG_CONVERSION();
+      }
+    };
+
+    template<typename From, typename To>
+    struct converter<From, To, std::enable_if_t<
+      !std::is_same_v<To, From> && std::is_integral_v<To> && std::is_integral_v<From> &&
+      !std::is_same_v<From, bool> && !std::is_same_v<To, bool>>>
+    {
+      void operator()(const From& from, To& to)
+      {
+PUSH_WARNINGS
+DISABLE_VS_WARNINGS(4018)
+DISABLE_CLANG_WARNING(tautological-constant-out-of-range-compare)
+DISABLE_GCC_AND_CLANG_WARNING(sign-compare)
+
+        bool in_range;
+        if constexpr (std::is_signed_v<From> == std::is_signed_v<To>) // signed -> signed or unsigned -> unsigned
+          in_range = from >= std::numeric_limits<To>::min() && from <= std::numeric_limits<To>::max();
+        else if constexpr (std::is_signed_v<To>) // unsigned -> signed
+          in_range = from <= std::numeric_limits<To>::max();
+        else // signed -> unsigned
+          in_range = from >= 0 && from <= std::numeric_limits<To>::max();
+
+        CHECK_AND_ASSERT_THROW_MES(in_range,
+            "int value overflow: cannot convert value " << +from << " to integer type with range ["
+            << +std::numeric_limits<To>::min() << "," << +std::numeric_limits<To>::max() << "]");
+        to = static_cast<To>(from);
+
+POP_WARNINGS
       }
     };
 
@@ -138,65 +86,46 @@ POP_WARNINGS
     // MyMonero backend sends amount, fees and timestamp values as strings.
     // Until MM backend is updated, this is needed for compatibility between OpenMonero and MyMonero. 
     template<>
-    struct convert_to_integral<std::string, uint64_t, false>
+    struct converter<std::string, uint64_t>
     {
-      static void convert(const std::string& from, uint64_t& to)
+      // MyMonero ISO 8061 timestamp (2017-05-06T16:27:06Z)
+      inline static std::regex mymonero_iso8061_timestamp{R"(\d{4}-[01]\d-[0-3]\dT[0-2]\d:[0-5]\d:[0-5]\dZ)"};
+
+      void operator()(const std::string& from, uint64_t& to)
       {
         MTRACE("Converting std::string to uint64_t. Source: " << from);
-        // String only contains digits
-        if(std::all_of(from.begin(), from.end(), epee::misc_utils::parse::isdigit))
-          to = boost::lexical_cast<uint64_t>(from);
-        // MyMonero ISO 8061 timestamp (2017-05-06T16:27:06Z)
-        else if (boost::regex_match (from, boost::regex("\\d{4}-[01]\\d-[0-3]\\dT[0-2]\\d:[0-5]\\d:[0-5]\\dZ")))
+        const auto* strend = from.data() + from.size();
+        if (auto [p, ec] = std::from_chars(from.data(), strend, to); ec == std::errc{} && p == strend)
+          return; // Good: successfully consumed the whole string.
+
+        if (std::regex_match(from, mymonero_iso8061_timestamp))
         {
           // Convert to unix timestamp
-#ifdef HAVE_STRPTIME
-          struct tm tm;
-          if (strptime(from.c_str(), "%Y-%m-%dT%H:%M:%S", &tm))
-#else
-          std::tm tm = {};
-          std::istringstream ss(from);
+          std::tm tm{};
+          std::istringstream ss{from};
           if (ss >> std::get_time(&tm, "%Y-%m-%dT%H:%M:%S"))
-#endif
+          {
             to = std::mktime(&tm);
-        } else
-          ASSERT_AND_THROW_WRONG_CONVERSION();
+            return;
+          }
+        }
+        ASSERT_AND_THROW_WRONG_CONVERSION();
       }
     };
 
-    template<class from_type, class to_type>
-    struct is_convertable: std::integral_constant<bool,
-                            std::is_integral<to_type>::value &&
-                            std::is_integral<from_type>::value &&
-                            !std::is_same<from_type, bool>::value &&
-                            !std::is_same<to_type, bool>::value > {};
-
-    template<typename from_type, typename to_type, bool>
-    struct convert_to_same;
-
-    template<typename from_type, typename to_type>
-    struct convert_to_same<from_type, to_type, true>
+    template<typename From, typename To>
+    struct converter<From, To, std::enable_if_t<std::is_same<To, From>::value>>
     {
-      static void convert(const from_type& from, to_type& to)
+      void operator()(const From& from, To& to)
       {
         to = from;
       }
     };
 
-    template<typename from_type, typename to_type>
-    struct convert_to_same<from_type, to_type, false>
+    template<class From, class To>
+    void convert_t(const From& from, To& to)
     {
-      static void convert(const from_type& from, to_type& to)
-      {
-        convert_to_integral<from_type, to_type, is_convertable<from_type, to_type>::value>::convert(from, to);// ASSERT_AND_THROW_WRONG_CONVERSION();
-      }
-    };
-
-
-    template<class from_type, class to_type>
-    void convert_t(const from_type& from, to_type& to)
-    {
-      convert_to_same<from_type, to_type, std::is_same<to_type, from_type>::value>::convert(from, to);
+      converter<From, To>{}(from, to);
     }
   }
 }

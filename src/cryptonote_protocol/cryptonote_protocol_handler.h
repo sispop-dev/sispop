@@ -35,18 +35,19 @@
 #pragma once
 
 #include <boost/program_options/variables_map.hpp>
+#include <chrono>
 #include <string>
 #include <unordered_map>
 
-#include "math_helper.h"
+#include "common/periodic_task.h"
 #include "storages/levin_abstract_invoke2.h"
 #include "warnings.h"
 #include "cryptonote_protocol_defs.h"
 #include "cryptonote_protocol_handler_common.h"
 #include "block_queue.h"
 #include "common/perf_timer.h"
+#include "common/meta.h"
 #include "cryptonote_basic/connection_context.h"
-#include "cryptonote_basic/cryptonote_stat_info.h"
 #include <boost/circular_buffer.hpp>
 
 PUSH_WARNINGS
@@ -64,11 +65,12 @@ namespace cryptonote
   {
   public:
     typedef cryptonote_connection_context connection_context;
-    typedef core_stat_info stat_info;
     typedef t_cryptonote_protocol_handler<t_core> cryptonote_protocol_handler;
     typedef CORE_SYNC_DATA payload_type;
 
-    t_cryptonote_protocol_handler(t_core& rcore, nodetool::i_p2p_endpoint<connection_context>* p_net_layout, bool offline = false);
+    t_cryptonote_protocol_handler(t_core& rcore, bool offline = false);
+
+    virtual ~t_cryptonote_protocol_handler() = default;
 
     BEGIN_INVOKE_MAP2(cryptonote_protocol_handler)
       HANDLE_NOTIFY_T2(NOTIFY_NEW_TRANSACTIONS, handle_notify_new_transactions)
@@ -93,7 +95,6 @@ namespace cryptonote
     bool process_payload_sync_data(CORE_SYNC_DATA&& hshd, cryptonote_connection_context& context, bool is_inital);
     bool get_payload_sync_data(blobdata& data);
     bool get_payload_sync_data(CORE_SYNC_DATA& hshd);
-    bool get_stat_info(core_stat_info& stat_inf);
     bool on_callback(cryptonote_connection_context& context);
     t_core& get_core(){return m_core;}
     bool is_synchronized(){return m_synchronized;}
@@ -103,6 +104,7 @@ namespace cryptonote
     void stop();
     void on_connection_close(cryptonote_connection_context &context);
     void set_max_out_peers(unsigned int max) { m_max_out_peers = max; }
+    bool no_sync() const { return m_no_sync; }
     void set_no_sync(bool value) { m_no_sync = value; }
     std::string get_peers_overview() const;
     std::pair<uint32_t, uint32_t> get_next_needed_pruning_stripe() const;
@@ -126,7 +128,7 @@ namespace cryptonote
     template<class T>
     bool relay_to_synchronized_peers(typename T::request& arg, cryptonote_connection_context& exclude_context)
     {
-      LOG_PRINT_L2("[" << epee::net_utils::print_connection_context_short(exclude_context) << "] post relay " << typeid(T).name() << " -->");
+      LOG_PRINT_L2("[" << epee::net_utils::print_connection_context_short(exclude_context) << "] post relay " << tools::type_name<T>() << " -->");
       std::vector<std::pair<epee::net_utils::zone, boost::uuids::uuid>> connections;
       m_p2p->for_each_connection([&exclude_context, &connections](connection_context& context, nodetool::peerid_type peer_id, uint32_t support_flags)
       {
@@ -176,11 +178,11 @@ namespace cryptonote
     std::atomic<bool> m_synchronized;
     std::atomic<bool> m_stopping;
     std::atomic<bool> m_no_sync;
-    boost::mutex m_sync_lock;
+    std::mutex m_sync_lock;
     block_queue m_block_queue;
-    epee::math_helper::periodic_task m_idle_peer_kicker{30s};
-    epee::math_helper::periodic_task m_standby_checker{100ms};
-    epee::math_helper::periodic_task m_sync_search_checker{101s};
+    tools::periodic_task m_idle_peer_kicker{30s};
+    tools::periodic_task m_standby_checker{100ms};
+    tools::periodic_task m_sync_search_checker{101s};
     std::atomic<unsigned int> m_max_out_peers;
     tools::PerformanceTimer m_sync_timer, m_add_timer;
     uint64_t m_last_add_end_time;
@@ -188,13 +190,21 @@ namespace cryptonote
     uint64_t m_sync_download_chain_size, m_sync_download_objects_size;
     size_t m_block_download_max_size;
 
-    boost::mutex m_buffer_mutex;
+    // Values for sync time estimates
+    std::chrono::steady_clock::time_point m_sync_start_time;
+    std::chrono::steady_clock::time_point m_period_start_time;
+    uint64_t m_sync_start_height;
+    uint64_t m_period_start_height;
+    uint64_t get_estimated_remaining_sync_seconds(uint64_t current_blockchain_height, uint64_t target_blockchain_height);
+    std::string get_periodic_sync_estimate(uint64_t current_blockchain_height, uint64_t target_blockchain_height);
+
+    std::mutex m_buffer_mutex;
     boost::circular_buffer<size_t> m_avg_buffer = boost::circular_buffer<size_t>(10);
 
     template<class t_parameter>
       bool post_notify(typename t_parameter::request& arg, cryptonote_connection_context& context)
       {
-        LOG_PRINT_L2("[" << epee::net_utils::print_connection_context_short(context) << "] post " << typeid(t_parameter).name() << " -->");
+        LOG_PRINT_L2("[" << epee::net_utils::print_connection_context_short(context) << "] post " << tools::type_name<t_parameter>() << " -->");
         std::string blob;
         epee::serialization::store_t_to_binary(arg, blob);
         return m_p2p->invoke_notify_to_peer(t_parameter::ID, epee::strspan<uint8_t>(blob), context);

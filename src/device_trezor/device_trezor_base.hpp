@@ -57,8 +57,8 @@ namespace trezor {
       explicit trezor_debug_callback(std::shared_ptr<Transport> & debug_transport);
 
       void on_button_request(uint64_t code=0) override;
-      boost::optional<epee::wipeable_string> on_pin_request() override;
-      boost::optional<epee::wipeable_string> on_passphrase_request(bool on_device) override;
+      std::optional<epee::wipeable_string> on_pin_request() override;
+      std::optional<epee::wipeable_string> on_passphrase_request(bool& on_device) override;
       void on_passphrase_state_request(const std::string &state);
       void on_disconnect();
     protected:
@@ -82,10 +82,10 @@ namespace trezor {
 
       std::string m_full_name;
       std::vector<unsigned int> m_wallet_deriv_path;
-      std::string m_device_state;  // returned after passphrase entry, session
+      epee::wipeable_string m_device_session_id;  // returned after passphrase entry, session
       std::shared_ptr<messages::management::Features> m_features;  // features from the last device reset
-      boost::optional<epee::wipeable_string> m_pin;
-      boost::optional<epee::wipeable_string> m_passphrase;
+      std::optional<epee::wipeable_string> m_pin;
+      std::optional<epee::wipeable_string> m_passphrase;
       messages::MessageType m_last_msg_type;
 
       cryptonote::network_type network_type;
@@ -105,7 +105,7 @@ namespace trezor {
       void require_initialized() const;
       void call_ping_unsafe();
       void test_ping();
-      virtual void device_state_reset_unsafe();
+      virtual void device_state_initialize_unsafe();
       void ensure_derivation_path() noexcept;
 
       // Communication methods
@@ -126,9 +126,9 @@ namespace trezor {
       template<class t_message=google::protobuf::Message>
       std::shared_ptr<t_message>
       client_exchange(const std::shared_ptr<const google::protobuf::Message> &req,
-                      const boost::optional<messages::MessageType> & resp_type = boost::none,
-                      const boost::optional<std::vector<messages::MessageType>> & resp_types = boost::none,
-                      const boost::optional<messages::MessageType*> & resp_type_ptr = boost::none,
+                      const std::optional<messages::MessageType> & resp_type = std::nullopt,
+                      const std::optional<std::vector<messages::MessageType>> & resp_types = std::nullopt,
+                      const std::optional<messages::MessageType*> & resp_type_ptr = std::nullopt,
                       bool open_session = false)
       {
         // Require strictly protocol buffers response in the template.
@@ -139,8 +139,10 @@ namespace trezor {
         }
 
         // Determine type of expected message response
-        const messages::MessageType required_type = accepting_base ? messages::MessageType_Success :
-                  (resp_type ? resp_type.get() : MessageMapper::get_message_wire_number<t_message>());
+        const messages::MessageType required_type =
+            accepting_base ? messages::MessageType_Success :
+            resp_type ? *resp_type :
+            MessageMapper::get_message_wire_number<t_message>();
 
         // Open session if required
         if (open_session){
@@ -169,7 +171,7 @@ namespace trezor {
 
         // Response section
         if (resp_type_ptr){
-          *(resp_type_ptr.get()) = msg_resp.m_type;
+          **resp_type_ptr = msg_resp.m_type;
         }
 
         if (msg_resp.m_type == messages::MessageType_Failure) {
@@ -179,7 +181,7 @@ namespace trezor {
           return message_ptr_retype<t_message>(msg_resp.m_msg);
 
         } else if (accepting_base && (!resp_types ||
-                     std::find(resp_types.get().begin(), resp_types.get().end(), msg_resp.m_type) != resp_types.get().end())) {
+                     std::find(resp_types->begin(), resp_types->end(), msg_resp.m_type) != resp_types->end())) {
             return message_ptr_retype<t_message>(msg_resp.m_msg);
 
         } else {
@@ -192,13 +194,13 @@ namespace trezor {
        */
       template<class t_message>
       void set_msg_addr(t_message * msg,
-                        const boost::optional<std::vector<uint32_t>> & path = boost::none,
-                        const boost::optional<cryptonote::network_type> & network_type = boost::none)
+                        const std::optional<std::vector<uint32_t>> & path = std::nullopt,
+                        const std::optional<cryptonote::network_type> & network_type = std::nullopt)
       {
         CHECK_AND_ASSERT_THROW_MES(msg, "Message is null");
         msg->clear_address_n();
         if (path){
-          for(auto x : path.get()){
+          for(auto x : *path){
             msg->add_address_n(x);
           }
         } else {
@@ -211,11 +213,7 @@ namespace trezor {
           }
         }
 
-        if (network_type){
-          msg->set_network_type(static_cast<uint32_t>(network_type.get()));
-        } else {
-          msg->set_network_type(static_cast<uint32_t>(this->network_type));
-        }
+        msg->set_network_type(static_cast<uint32_t>(network_type ? *network_type : this->network_type));
       }
 
     public:
@@ -303,7 +301,7 @@ namespace trezor {
     void on_button_pressed();
     void on_pin_request(GenericMessage & resp, const messages::common::PinMatrixRequest * msg);
     void on_passphrase_request(GenericMessage & resp, const messages::common::PassphraseRequest * msg);
-    void on_passphrase_state_request(GenericMessage & resp, const messages::common::PassphraseStateRequest * msg);
+    void on_passphrase_state_request(GenericMessage & resp, const messages::common::Deprecated_PassphraseStateRequest * msg);
 
 #ifdef WITH_TREZOR_DEBUGGING
     void set_debug(bool debug){

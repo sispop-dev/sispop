@@ -31,7 +31,6 @@ sispop_add_executable(daemon "sispopd"
   command_parser_executor.cpp
   command_server.cpp
   daemon.cpp
-  executor.cpp
   main.cpp
   rpc_command_executor.cpp
   )
@@ -45,10 +44,9 @@ target_link_libraries(daemon
     daemonizer
     serialization
     daemon_rpc_server
-    epee_readline
     version
-    Boost::chrono
     Boost::filesystem
     Boost::program_options
     Boost::system
+    systemd
     extra)

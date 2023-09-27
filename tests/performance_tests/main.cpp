@@ -28,8 +28,6 @@
 // 
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
-#include <boost/regex.hpp>
-
 #include "common/util.h"
 #include "common/command_line.h"
 #include "performance_tests.h"
@@ -56,10 +54,10 @@
 #include "rct_mlsag.h"
 #include "equality.h"
 #include "range_proof.h"
-#include "rct_mlsag.h"
 #include "bulletproof.h"
 #include "crypto_ops.h"
 #include "multiexp.h"
+#include <chrono>
 
 namespace po = boost::program_options;
 
@@ -94,7 +92,7 @@ int main(int argc, char** argv)
   if (!r)
     return 1;
 
-  const std::string filter = tools::glob_to_regex(command_line::get_arg(vm, arg_filter));
+  const std::string filter = command_line::get_arg(vm, arg_filter);
   const std::string timings_database = command_line::get_arg(vm, arg_timings_database);
   Params p;
   if (!timings_database.empty())
@@ -103,8 +101,7 @@ int main(int argc, char** argv)
   p.stats = command_line::get_arg(vm, arg_stats);
   p.loop_multiplier = command_line::get_arg(vm, arg_loop_multiplier);
 
-  performance_timer timer;
-  timer.start();
+  auto started = std::chrono::steady_clock::now();
 
   TEST_PERFORMANCE3(filter, p, test_construct_tx, 1, 1, false);
   TEST_PERFORMANCE3(filter, p, test_construct_tx, 1, 2, false);
@@ -202,14 +199,8 @@ int main(int argc, char** argv)
   TEST_PERFORMANCE1(filter, p, test_cn_fast_hash, 32);
   TEST_PERFORMANCE1(filter, p, test_cn_fast_hash, 16384);
 
-  TEST_PERFORMANCE3(filter, p, test_ringct_mlsag, 1, 3, false);
-  TEST_PERFORMANCE3(filter, p, test_ringct_mlsag, 1, 5, false);
-  TEST_PERFORMANCE3(filter, p, test_ringct_mlsag, 1, 10, false);
-  TEST_PERFORMANCE3(filter, p, test_ringct_mlsag, 1, 100, false);
-  TEST_PERFORMANCE3(filter, p, test_ringct_mlsag, 1, 3, true);
-  TEST_PERFORMANCE3(filter, p, test_ringct_mlsag, 1, 5, true);
-  TEST_PERFORMANCE3(filter, p, test_ringct_mlsag, 1, 10, true);
-  TEST_PERFORMANCE3(filter, p, test_ringct_mlsag, 1, 100, true);
+  TEST_PERFORMANCE2(filter, p, test_ringct_mlsag, 11, false);
+  TEST_PERFORMANCE2(filter, p, test_ringct_mlsag, 11, true);
 
   TEST_PERFORMANCE2(filter, p, test_equality, memcmp32, true);
   TEST_PERFORMANCE2(filter, p, test_equality, memcmp32, false);
@@ -239,15 +230,6 @@ int main(int argc, char** argv)
   TEST_PERFORMANCE6(filter, p, test_aggregated_bulletproof, false, 2, 1, 1, 0, 64);
   TEST_PERFORMANCE6(filter, p, test_aggregated_bulletproof, true, 2, 1, 1, 0, 64); // 64 proof, each with 2 amounts
 
-  TEST_PERFORMANCE3(filter, p, test_ringct_mlsag, 1, 3, false);
-  TEST_PERFORMANCE3(filter, p, test_ringct_mlsag, 1, 5, false);
-  TEST_PERFORMANCE3(filter, p, test_ringct_mlsag, 1, 10, false);
-  TEST_PERFORMANCE3(filter, p, test_ringct_mlsag, 1, 100, false);
-  TEST_PERFORMANCE3(filter, p, test_ringct_mlsag, 1, 3, true);
-  TEST_PERFORMANCE3(filter, p, test_ringct_mlsag, 1, 5, true);
-  TEST_PERFORMANCE3(filter, p, test_ringct_mlsag, 1, 10, true);
-  TEST_PERFORMANCE3(filter, p, test_ringct_mlsag, 1, 100, true);
-
   TEST_PERFORMANCE1(filter, p, test_crypto_ops, op_sc_add);
   TEST_PERFORMANCE1(filter, p, test_crypto_ops, op_sc_sub);
   TEST_PERFORMANCE1(filter, p, test_crypto_ops, op_sc_mul);
@@ -258,6 +240,7 @@ int main(int argc, char** argv)
   TEST_PERFORMANCE1(filter, p, test_crypto_ops, op_scalarmultKey);
   TEST_PERFORMANCE1(filter, p, test_crypto_ops, op_scalarmultH);
   TEST_PERFORMANCE1(filter, p, test_crypto_ops, op_scalarmult8);
+  TEST_PERFORMANCE1(filter, p, test_crypto_ops, op_scalarmult8_p3);
   TEST_PERFORMANCE1(filter, p, test_crypto_ops, op_ge_dsm_precomp);
   TEST_PERFORMANCE1(filter, p, test_crypto_ops, op_ge_double_scalarmult_base_vartime);
   TEST_PERFORMANCE1(filter, p, test_crypto_ops, op_ge_double_scalarmult_precomp_vartime);
@@ -553,7 +536,7 @@ int main(int argc, char** argv)
   TEST_PERFORMANCE3(filter, p, test_multiexp, multiexp_pippenger, 4096, 9);
 #endif
 
-  std::cout << "Tests finished. Elapsed time: " << timer.elapsed_ms() / 1000 << " sec" << std::endl;
+  std::cout << "Tests finished. Elapsed time: " << elapsed_str(std::chrono::steady_clock::now() - started) << std::endl;
 
   return 0;
   CATCH_ENTRY_L0("main", 1);

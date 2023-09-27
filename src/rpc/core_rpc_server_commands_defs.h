@@ -1,3 +1,4 @@
+// Copyright (c) 2018-2020, The Loki Project
 // Copyright (c) 2014-2019, The Monero Project
 //
 // All rights reserved.
@@ -29,6 +30,9 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #pragma once
+
+#include "string_tools.h"
+
 #include "cryptonote_protocol/cryptonote_protocol_defs.h"
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "cryptonote_basic/verification_context.h"
@@ -45,54 +49,88 @@
 #include "cryptonote_core/service_node_list.h"
 #include "common/sispop.h"
 
-namespace
-{
-  template<typename T>
-  std::string compress_integer_array(const std::vector<T> &v)
-  {
-    std::string s;
-    s.resize(v.size() * (sizeof(T) * 8 / 7 + 1));
-    char *ptr = (char*)s.data();
-    for (const T &t: v)
-      tools::write_varint(ptr, t);
-    s.resize(ptr - s.data());
-    return s;
-  }
+namespace cryptonote {
 
-  template<typename T>
-  std::vector<T> decompress_integer_array(const std::string &s)
-  {
-    std::vector<T> v;
-    v.reserve(s.size());
-    int read = 0;
-    const std::string::const_iterator end = s.end();
-    for (std::string::const_iterator i = s.begin(); i != end; std::advance(i, read))
-    {
-      T t;
-      read = tools::read_varint(std::string::const_iterator(i), s.end(), t);
-      CHECK_AND_ASSERT_THROW_MES(read > 0 && read <= 256, "Error decompressing data");
-      v.push_back(t);
-    }
-    return v;
-  }
-}
+/// Namespace for core RPC commands.  Every RPC commands gets defined here (including its name(s),
+/// access, and data type), and added to `core_rpc_types` list at the bottom of the file.
 
-namespace cryptonote
-{
-  //-----------------------------------------------
-#define CORE_RPC_STATUS_OK   "OK"
-#define CORE_RPC_STATUS_BUSY   "BUSY"
-#define CORE_RPC_STATUS_NOT_MINING "NOT MINING"
-constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_TIMED_OUT[] = "Long polling client timed out before txpool had an update";
-constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon maxed out long polling connections";
+namespace rpc {
+
+  using version_t = std::pair<uint16_t, uint16_t>;
 
 // When making *any* change here, bump minor
 // If the change is incompatible, then bump major and set minor to 0
-// This ensures CORE_RPC_VERSION always increases, that every change
+// This ensures rpc::VERSION always increases, that every change
 // has its own version, and that clients can just test major to see
 // whether they can talk to a given daemon without having to know in
 // advance which version they will stop working with
-  constexpr version_t VERSION = {3, 8};
+  constexpr version_t VERSION = {4, 0};
+
+  /// Makes a version array from a packed 32-bit integer version
+  constexpr version_t make_version(uint32_t version)
+  {
+    return {static_cast<uint16_t>(version >> 16), static_cast<uint16_t>(version & 0xffff)};
+  }
+  /// Packs a version array into a packed 32-bit integer version
+  constexpr uint32_t pack_version(version_t version)
+  {
+    return (uint32_t(version.first) << 16) | version.second;
+  }
+
+  const static std::string
+    STATUS_OK = "OK",
+    STATUS_FAILED = "FAILED",
+    STATUS_BUSY = "BUSY",
+    STATUS_NOT_MINING = "NOT MINING",
+    STATUS_TX_LONG_POLL_TIMED_OUT = "Long polling client timed out before txpool had an update",
+    STATUS_TX_LONG_POLL_MAX_CONNECTIONS = "Daemon maxed out long polling connections";
+
+
+  namespace {
+    /// Returns a constexpr std::array of string_views from an arbitrary list of string literals
+    /// Used to specify RPC names as:
+    /// static constexpr auto names() { return NAMES("primary_name", "some_alias"); }
+    template <size_t... N>
+    constexpr std::array<std::string_view, sizeof...(N)> NAMES(const char (&...names)[N]) {
+      static_assert(sizeof...(N) > 0, "RPC command must have at least one name");
+      return {std::string_view{names, N-1}...};
+    }
+  }
+
+  /// Base command that all RPC commands must inherit from (either directly or via one or more of
+  /// the below tags).  Inheriting from this (and no others) gives you a private, json, non-legacy
+  /// RPC command.  For LMQ RPC the command will be available at `admin.whatever`; for HTTP RPC
+  /// it'll be at `whatever`.
+  struct RPC_COMMAND {};
+
+  /// Tag types that are used (via inheritance) to set rpc endpoint properties
+
+  /// Specifies that the RPC call is public (i.e. available through restricted rpc).  If this is
+  /// *not* inherited from then the command is restricted (i.e. only available to admins).  For LMQ,
+  /// PUBLIC commands are available at `rpc.command` (versus non-PUBLIC ones at `admin.command`).
+  struct PUBLIC : RPC_COMMAND {};
+
+  /// Specifies that the RPC call is binary input/ouput.  If not given then the command is JSON.
+  /// For HTTP RPC this also means the command is *not* available via the HTTP JSON RPC.
+  struct BINARY : RPC_COMMAND {};
+
+  /// Specifies a "legacy" JSON RPC command, available via HTTP JSON at /whatever (in addition to
+  /// json_rpc as "whatever").  When accessed via legacy mode the result is just the .result element
+  /// of the JSON RPC response.  (Only applies to the HTTP RPC interface, and does nothing if BINARY
+  /// if specified).
+  struct LEGACY : RPC_COMMAND {};
+
+
+  /// (Not a tag). Generic, serializable, no-argument request type, use as `struct request : EMPTY {};`
+  struct EMPTY { KV_MAP_SERIALIZABLE };
+
+  /// (Not a tag). Generic response which contains only a status string; use as `struct response : STATUS {};`
+  struct STATUS
+  {
+    std::string status; // General RPC error code. "OK" means everything looks good.
+
+    KV_MAP_SERIALIZABLE
+  };
 
   /// Makes a version array from a packed 32-bit integer version
   constexpr version_t make_version(uint32_t version)
@@ -135,16 +173,12 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
 
   SISPOP_RPC_DOC_INTROSPECT
   // Get the node's current height.
-  struct COMMAND_RPC_GET_HEIGHT
+  struct GET_HEIGHT : PUBLIC, LEGACY
   {
-    struct request_t
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
+    static constexpr auto names() { return NAMES("get_height", "getheight"); }
 
-    struct response_t
+    struct request : EMPTY {};
+    struct response
     {
       uint64_t height;            // The current blockchain height according to the queried daemon.
       std::string status;         // Generic RPC error code. "OK" is the success value.
@@ -153,58 +187,43 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       uint64_t immutable_height;  // The latest height in the blockchain that can not be reorganized from (backed by atleast 2 Service Node, or 1 hardcoded checkpoint, 0 if N/A).
       std::string immutable_hash; // Hash of the highest block in the chain that can not be reorganized.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(height)
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(untrusted)
-        KV_SERIALIZE(hash)
-        KV_SERIALIZE(immutable_height)
-        KV_SERIALIZE(immutable_hash)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Get all blocks info. Binary request.
-  struct COMMAND_RPC_GET_BLOCKS_FAST
+  struct GET_BLOCKS_FAST : PUBLIC, BINARY
   {
+    static constexpr auto names() { return NAMES("get_blocks.bin", "getblocks.bin"); }
 
-    struct request_t
+    static constexpr size_t MAX_COUNT = 1000;
+
+    struct request
     {
       std::list<crypto::hash> block_ids; // First 10 blocks id goes sequential, next goes in pow(2,n) offset, like 2, 4, 8, 16, 32, 64 and so on, and the last one is always genesis block
       uint64_t    start_height;          // The starting block's height.
       bool        prune;                 // Prunes the blockchain, drops off 7/8 off the block iirc.
       bool        no_miner_tx;           // Optional (false by default).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(block_ids)
-        KV_SERIALIZE(start_height)
-        KV_SERIALIZE(prune)
-        KV_SERIALIZE_OPT(no_miner_tx, false)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
     struct tx_output_indices
     {
       std::vector<uint64_t> indices; // Array of unsigned int.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(indices)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
 
     struct block_output_indices
     {
       std::vector<tx_output_indices> indices; // Array of TX output indices:
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(indices)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
 
-    struct response_t
+    struct response
     {
       std::vector<block_complete_entry> blocks;         // Array of block complete entries
       uint64_t    start_height;                         // The starting block's height.
@@ -213,92 +232,66 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       std::vector<block_output_indices> output_indices; // Array of indices.
       bool untrusted;                                   // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(blocks)
-        KV_SERIALIZE(start_height)
-        KV_SERIALIZE(current_height)
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(output_indices)
-        KV_SERIALIZE(untrusted) 
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Get blocks by height. Binary request.
-  struct COMMAND_RPC_GET_BLOCKS_BY_HEIGHT
+  struct GET_BLOCKS_BY_HEIGHT : PUBLIC, BINARY
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("get_blocks_by_height.bin", "getblocksbyheight.bin"); }
+
+    struct request
     {
       std::vector<uint64_t> heights;         // List of block heights
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(heights)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
+    struct response
     {
       std::vector<block_complete_entry> blocks; // Array of block complete entries
       std::string status;                       // General RPC error code. "OK" means everything looks good.
       bool untrusted;                           // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(blocks)
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
 
   SISPOP_RPC_DOC_INTROSPECT
   // Get the known blocks hashes which are not on the main chain.
-  struct COMMAND_RPC_GET_ALT_BLOCKS_HASHES
+  struct GET_ALT_BLOCKS_HASHES : PUBLIC, BINARY
   {
-    struct request_t
-    {
-        BEGIN_KV_SERIALIZE_MAP()
-        END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
+    static constexpr auto names() { return NAMES("get_alt_blocks_hashes.bin"); }
 
-    struct response_t
+    struct request : EMPTY {};
+    struct response
     {
         std::vector<std::string> blks_hashes; // List of alternative blocks hashes to main chain.
         std::string status;                   // General RPC error code. "OK" means everything looks good.
         bool untrusted;                       // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-        BEGIN_KV_SERIALIZE_MAP()
-            KV_SERIALIZE(blks_hashes)
-            KV_SERIALIZE(status)
-            KV_SERIALIZE(untrusted)
-        END_KV_SERIALIZE_MAP()
+        KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Get hashes. Binary request.
-  struct COMMAND_RPC_GET_HASHES_FAST
+  struct GET_HASHES_FAST : PUBLIC, BINARY
   {
+    static constexpr auto names() { return NAMES("get_hashes.bin", "gethashes.bin"); }
 
-    struct request_t
+    struct request
     {
       std::list<crypto::hash> block_ids; // First 10 blocks id goes sequential, next goes in pow(2,n) offset, like 2, 4, 8, 16, 32, 64 and so on, and the last one is always genesis block */
       uint64_t    start_height;          // The starting block's height.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(block_ids)
-        KV_SERIALIZE(start_height)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
+    struct response
     {
       std::vector<crypto::hash> m_block_ids; // Binary array of hashes, See block_ids above.
       uint64_t    start_height;              // The starting block's height.
@@ -306,233 +299,47 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       std::string status;                    // General RPC error code. "OK" means everything looks good.
       bool untrusted;                        // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(m_block_ids)
-        KV_SERIALIZE(start_height)
-        KV_SERIALIZE(current_height)
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
-  };
-
-  SISPOP_RPC_DOC_INTROSPECT
-  struct COMMAND_RPC_GET_RANDOM_OUTS
-  {
-      struct request_t
-      {
-        std::vector<std::string> amounts;
-        uint32_t count;
-
-        BEGIN_KV_SERIALIZE_MAP()
-          KV_SERIALIZE(amounts)
-          KV_SERIALIZE(count)
-        END_KV_SERIALIZE_MAP()
-      };
-      typedef epee::misc_utils::struct_init<request_t> request;
-    
-      
-      struct output {
-        std::string public_key;
-        uint64_t global_index;
-        std::string rct; // 64+64+64 characters long (<rct commit> + <encrypted mask> + <rct amount>)
-
-        BEGIN_KV_SERIALIZE_MAP()
-          KV_SERIALIZE(public_key)
-          KV_SERIALIZE(global_index)
-          KV_SERIALIZE(rct)
-        END_KV_SERIALIZE_MAP()
-      };
-
-      struct amount_out 
-      {
-        uint64_t amount;
-        std::vector<output> outputs;
-
-        BEGIN_KV_SERIALIZE_MAP()
-          KV_SERIALIZE(amount)
-          KV_SERIALIZE(outputs)
-        END_KV_SERIALIZE_MAP()
-      };
-      
-      struct response_t
-      {
-        std::vector<amount_out> amount_outs;
-        std::string Error;
-
-        BEGIN_KV_SERIALIZE_MAP()
-          KV_SERIALIZE(amount_outs)
-          KV_SERIALIZE(Error)
-        END_KV_SERIALIZE_MAP()
-      };
-      typedef epee::misc_utils::struct_init<response_t> response;
-  };
-
-  SISPOP_RPC_DOC_INTROSPECT
-  // TODO: Undocumented light wallet RPC call
-  struct COMMAND_RPC_SUBMIT_RAW_TX
-  {
-      struct request_t
-      {
-        std::string address;
-        std::string view_key;
-        std::string tx;
-        bool blink;
-
-        BEGIN_KV_SERIALIZE_MAP()
-          KV_SERIALIZE(address)
-          KV_SERIALIZE(view_key)
-          KV_SERIALIZE(tx)
-          KV_SERIALIZE_OPT(blink, false)
-        END_KV_SERIALIZE_MAP()
-      };
-      typedef epee::misc_utils::struct_init<request_t> request;
-    
-      
-      struct response_t
-      {
-        std::string status;
-        std::string error;
-
-        BEGIN_KV_SERIALIZE_MAP()
-          KV_SERIALIZE(status)
-          KV_SERIALIZE(error)
-        END_KV_SERIALIZE_MAP()
-      };
-      typedef epee::misc_utils::struct_init<response_t> response;
-  };
-
-  SISPOP_RPC_DOC_INTROSPECT
-  // TODO: Undocumented light wallet RPC call
-  struct COMMAND_RPC_LOGIN
-  {
-      struct request_t
-      {
-        std::string address;
-        std::string view_key;
-        bool create_account;
-
-        BEGIN_KV_SERIALIZE_MAP()
-          KV_SERIALIZE(address)
-          KV_SERIALIZE(view_key)
-          KV_SERIALIZE(create_account)
-        END_KV_SERIALIZE_MAP()
-      };
-      typedef epee::misc_utils::struct_init<request_t> request;
-
-      struct response_t
-      {
-        std::string status;
-        std::string reason;
-        bool new_address;
-
-        BEGIN_KV_SERIALIZE_MAP()
-          KV_SERIALIZE(status)
-          KV_SERIALIZE(reason)
-          KV_SERIALIZE(new_address)
-        END_KV_SERIALIZE_MAP()
-      };
-      typedef epee::misc_utils::struct_init<response_t> response;
-  };
-
-  SISPOP_RPC_DOC_INTROSPECT
-  // TODO: Undocumented light wallet RPC call
-  struct COMMAND_RPC_IMPORT_WALLET_REQUEST
-  {
-      struct request_t
-      {
-        std::string address;
-        std::string view_key;
-
-        BEGIN_KV_SERIALIZE_MAP()
-          KV_SERIALIZE(address)
-          KV_SERIALIZE(view_key)
-        END_KV_SERIALIZE_MAP()
-      };
-      typedef epee::misc_utils::struct_init<request_t> request;
-
-      struct response_t
-      {
-        std::string payment_id;
-        uint64_t import_fee;
-        bool new_request;
-        bool request_fulfilled;
-        std::string payment_address;
-        std::string status;
-
-        BEGIN_KV_SERIALIZE_MAP()
-          KV_SERIALIZE(payment_id)
-          KV_SERIALIZE(import_fee)
-          KV_SERIALIZE(new_request)
-          KV_SERIALIZE(request_fulfilled)
-          KV_SERIALIZE(payment_address)
-          KV_SERIALIZE(status)
-        END_KV_SERIALIZE_MAP()
-      };
-      typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Look up one or more transactions by hash.
-  struct COMMAND_RPC_GET_TRANSACTIONS
+  struct GET_TRANSACTIONS : PUBLIC, LEGACY
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("get_transactions", "gettransactions"); }
+
+    struct request
     {
       std::vector<std::string> txs_hashes; // List of transaction hashes to look up.
       bool decode_as_json;                 // Optional (`false` by default). If set true, the returned transaction information will be decoded rather than binary.
       bool prune;                          // Prunes the blockchain, drops off 7/8 off the block iirc. Optional (`False` by default).
       bool split;                          // Optional (`false` by default).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(txs_hashes)
-        KV_SERIALIZE(decode_as_json) 
-        KV_SERIALIZE_OPT(prune, false)
-        KV_SERIALIZE_OPT(split, false)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
     struct entry
     {
       std::string tx_hash;                  // Transaction hash.
       std::string as_hex;                   // Full transaction information as a hex string.
-      std::string pruned_as_hex; 
+      std::string pruned_as_hex;
       std::string prunable_as_hex;
       std::string prunable_hash;
       std::string as_json;                  // List of transaction info.
       bool in_pool;                         // States if the transaction is in pool (`true`) or included in a block (`false`).
       bool double_spend_seen;               // States if the transaction is a double-spend (`true`) or not (`false`).
       uint64_t block_height;                // Block height including the transaction.
-      uint64_t block_timestamp;             // Unix time at chich the block has been added to the blockchain.
+      uint64_t block_timestamp;             // Unix time at which the block has been added to the blockchain.
       std::vector<uint64_t> output_indices; // List of transaction indexes.
+      uint64_t received_timestamp;          // Timestamp transaction was received in the pool.
       bool relayed;
       bool blink;                           // True if this is an approved, blink transaction (only for in_pool transactions or txes in recent blocks)
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(tx_hash)
-        KV_SERIALIZE(as_hex)
-        KV_SERIALIZE(pruned_as_hex)
-        KV_SERIALIZE(prunable_as_hex)
-        KV_SERIALIZE(prunable_hash)
-        KV_SERIALIZE(as_json)
-        KV_SERIALIZE(in_pool)
-        KV_SERIALIZE(double_spend_seen)
-        if (!this_ref.in_pool)
-        {
-          KV_SERIALIZE(block_height)
-          KV_SERIALIZE(block_timestamp)
-          KV_SERIALIZE(output_indices)
-        }
-        else
-        {
-          KV_SERIALIZE(relayed)
-        }
-        KV_SERIALIZE(blink)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
 
-    struct response_t
+    struct response
     {
       // older compatibility stuff
       std::vector<std::string> txs_as_hex;  // Full transaction information as a hex string (old compatibility parameter)
@@ -546,214 +353,162 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       std::string status;                   // General RPC error code. "OK" means everything looks good.
       bool untrusted;                       // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(txs_as_hex)
-        KV_SERIALIZE(txs_as_json)
-        KV_SERIALIZE(txs)
-        KV_SERIALIZE(missed_tx)
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Check if outputs have been spent using the key image associated with the output.
-  struct COMMAND_RPC_IS_KEY_IMAGE_SPENT
+  struct IS_KEY_IMAGE_SPENT : PUBLIC, LEGACY
   {
-    enum STATUS 
+    static constexpr auto names() { return NAMES("is_key_image_spent"); }
+
+    enum STATUS
     {
       UNSPENT = 0,
       SPENT_IN_BLOCKCHAIN = 1,
       SPENT_IN_POOL = 2,
     };
 
-    struct request_t
+    struct request
     {
       std::vector<std::string> key_images; // List of key image hex strings to check.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(key_images)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
 
-    struct response_t
+    struct response
     {
       std::vector<int> spent_status; // List of statuses for each image checked. Statuses are follows: 0 = unspent, 1 = spent in blockchain, 2 = spent in transaction pool
       std::string status;            // General RPC error code. "OK" means everything looks good.
       bool untrusted;                // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(spent_status)
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
 
   SISPOP_RPC_DOC_INTROSPECT
   // Get global outputs of transactions. Binary request.
-  struct COMMAND_RPC_GET_TX_GLOBAL_OUTPUTS_INDEXES
+  struct GET_TX_GLOBAL_OUTPUTS_INDEXES : PUBLIC, BINARY
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("get_o_indexes.bin"); }
+
+    struct request
     {
       crypto::hash txid; // Binary txid.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE_VAL_POD_AS_BLOB(txid)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
 
-    struct response_t
+    struct response
     {
       std::vector<uint64_t> o_indexes; // List of output indexes
       std::string status;              // General RPC error code. "OK" means everything looks good.
       bool untrusted;                  // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(o_indexes)
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   struct get_outputs_out
   {
-    uint64_t amount; // Amount of Sispop in TXID.
-    uint64_t index;  
+    uint64_t amount; // Amount of sispop in TXID.
+    uint64_t index;
 
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(amount)
-      KV_SERIALIZE(index)
-    END_KV_SERIALIZE_MAP()
+    KV_MAP_SERIALIZABLE
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Get outputs. Binary request.
-  struct COMMAND_RPC_GET_OUTPUTS_BIN
+  struct GET_OUTPUTS_BIN : PUBLIC, BINARY
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("get_outs.bin"); }
+
+    struct request
     {
       std::vector<get_outputs_out> outputs; // Array of structure `get_outputs_out`.
       bool get_txid;                        // TXID
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(outputs)
-        KV_SERIALIZE_OPT(get_txid, true)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
     struct outkey
     {
       crypto::public_key key; // The public key of the output.
-      rct::key mask;        
+      rct::key mask;
       bool unlocked;          // States if output is locked (`false`) or not (`true`).
       uint64_t height;        // Block height of the output.
       crypto::hash txid;      // Transaction id.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE_VAL_POD_AS_BLOB(key)
-        KV_SERIALIZE_VAL_POD_AS_BLOB(mask)
-        KV_SERIALIZE(unlocked)
-        KV_SERIALIZE(height)
-        KV_SERIALIZE_VAL_POD_AS_BLOB(txid)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
 
-    struct response_t
+    struct response
     {
       std::vector<outkey> outs; // List of outkey information.
       std::string status;       // General RPC error code. "OK" means everything looks good.
       bool untrusted;           // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(outs)
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
+
   SISPOP_RPC_DOC_INTROSPECT
-  struct COMMAND_RPC_GET_OUTPUTS
+  struct GET_OUTPUTS : PUBLIC, LEGACY
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("get_outs"); }
+
+    struct request
     {
       std::vector<get_outputs_out> outputs; // Array of structure `get_outputs_out`.
       bool get_txid;                        // Request the TXID/hash of the transaction as well.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(outputs)
-        KV_SERIALIZE(get_txid)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
     struct outkey
     {
       std::string key;  // The public key of the output.
-      std::string mask; 
+      std::string mask;
       bool unlocked;    // States if output is locked (`false`) or not (`true`).
       uint64_t height;  // Block height of the output.
       std::string txid; // Transaction id.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(key)
-        KV_SERIALIZE(mask)
-        KV_SERIALIZE(unlocked)
-        KV_SERIALIZE(height)
-        KV_SERIALIZE(txid)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
 
-    struct response_t
+    struct response
     {
       std::vector<outkey> outs; // List of outkey information.
       std::string status;       // General RPC error code. "OK" means everything looks good.
       bool untrusted;           // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(outs)
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Broadcast a raw transaction to the network.
-  struct COMMAND_RPC_SEND_RAW_TX
+  struct SEND_RAW_TX : PUBLIC, LEGACY
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("send_raw_transaction", "sendrawtransaction"); }
+
+    struct request
     {
       std::string tx_as_hex; // Full transaction information as hexidecimal string.
       bool do_not_relay;     // (Optional: Default false) Stop relaying transaction to other nodes.  Ignored if `blink` is true.
       bool do_sanity_checks; // (Optional: Default true) Verify TX params have sane values.
       bool blink;            // (Optional: Default false) Submit this as a blink tx rather than into the mempool.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(tx_as_hex)
-        KV_SERIALIZE_OPT(do_not_relay, false)
-        KV_SERIALIZE_OPT(do_sanity_checks, true)
-        KV_SERIALIZE_OPT(blink, false)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
+    struct response
     {
       std::string status; // General RPC error code. "OK" means everything looks good. Any other value means that something went wrong.
       std::string reason; // Additional information. Currently empty, "Not relayed" if transaction was accepted but not relayed, or some descriptive message of why the tx failed.
@@ -763,66 +518,70 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       bool sanity_check_failed;
       blink_result blink_status; // 0 for a non-blink tx.  For a blink tx: 1 means rejected, 2 means accepted, 3 means timeout.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(reason)
-        KV_SERIALIZE(not_relayed)
-        KV_SERIALIZE(sanity_check_failed)
-        KV_SERIALIZE(untrusted)
-        KV_SERIALIZE(tvc)
-        KV_SERIALIZE_ENUM(blink_status)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Start mining on the daemon.
-  struct COMMAND_RPC_START_MINING
+  struct START_MINING : LEGACY
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("start_mining"); }
+
+    struct request
     {
       std::string miner_address;        // Account address to mine to.
       uint64_t    threads_count;        // Number of mining thread to run.
-      bool        do_background_mining; // States if the mining should run in background (`true`) or foreground (`false`).
-      bool        ignore_battery;       // States if battery state (on laptop) should be ignored (`true`) or not (`false`).
       uint64_t    num_blocks;           // Mine until the blockchain has this many new blocks, then stop (no limit if 0, the default)
       bool        slow_mining;          // Do slow mining (i.e. don't allocate RandomX cache); primarily intended for testing
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(miner_address)
-        KV_SERIALIZE(threads_count)
-        KV_SERIALIZE(do_background_mining)
-        KV_SERIALIZE(ignore_battery)
-        KV_SERIALIZE_OPT(num_blocks, uint64_t{0})
-        KV_SERIALIZE_OPT(slow_mining, false)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
+    struct response : STATUS {};
+  };
+
+  SISPOP_RPC_DOC_INTROSPECT
+  // Stop mining on the daemon.
+  struct STOP_MINING : LEGACY
+  {
+    static constexpr auto names() { return NAMES("stop_mining"); }
+
+    struct request : EMPTY {};
+    struct response : STATUS {};
+  };
+
+  SISPOP_RPC_DOC_INTROSPECT
+  // Get the mining status of the daemon.
+  struct MINING_STATUS : LEGACY
+  {
+    static constexpr auto names() { return NAMES("mining_status"); }
+
+    struct request : EMPTY {};
+    struct response
     {
-      std::string status; // General RPC error code. "OK" means everything looks good. Any other value means that something went wrong.
+      std::string status;                // General RPC error code. "OK" means everything looks good. Any other value means that something went wrong.
+      bool active;                       // States if mining is enabled (`true`) or disabled (`false`).
+      uint64_t speed;                    // Mining power in hashes per seconds.
+      uint32_t threads_count;            // Number of running mining threads.
+      std::string address;               // Account address daemon is mining to. Empty if not mining.
+      std::string pow_algorithm;         // Current hashing algorithm name
+      uint32_t block_target;             // The expected time to solve per block, i.e. DIFFICULTY_TARGET_V2
+      uint64_t block_reward;             // Block reward for the current block being mined.
+      uint64_t difficulty;               // The difficulty for the current block being mined.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Retrieve general information about the state of your node and the network.
-  struct COMMAND_RPC_GET_INFO
+  struct GET_INFO : PUBLIC, LEGACY
   {
-    struct request_t
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
+    static constexpr auto names() { return NAMES("get_info", "getinfo"); }
 
-    struct response_t
+    struct request : EMPTY {};
+    struct response
     {
       std::string status;                   // General RPC error code. "OK" means everything looks good.
       uint64_t height;                      // Current length of longest chain known to daemon.
@@ -850,6 +609,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       uint64_t block_size_median;           // Median block size of latest 100 blocks.
       uint64_t block_weight_median;         // Median block weight of latest 100 blocks.
       uint64_t start_time;                  // Start time of the daemon, as UNIX time.
+      bool service_node;                    // Will be true if the node is running in --service-node mode.
       uint64_t last_storage_server_ping;    // Last ping time of the storage server (0 if never or not running as a service node)
       uint64_t last_sispopnet_ping;           // Last ping time of sispopnet (0 if never or not running as a service node)
       uint64_t free_space;                  // Available disk space on the node.
@@ -861,64 +621,20 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       uint64_t database_size;               // Current size of Blockchain data.
       bool update_available;                // States if a update is available ('true') and if one is not available ('false').
       std::string version;                  // Current version of software running.
+      std::string status_line;              // A short one-line summary status of the node (requires an admin/unrestricted connection for most details)
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(height)
-        KV_SERIALIZE(target_height)
-        KV_SERIALIZE(immutable_height)
-        KV_SERIALIZE(difficulty)
-        KV_SERIALIZE(target)
-        KV_SERIALIZE(tx_count)
-        KV_SERIALIZE(tx_pool_size)
-        KV_SERIALIZE(alt_blocks_count)
-        KV_SERIALIZE(outgoing_connections_count)
-        KV_SERIALIZE(incoming_connections_count)
-        KV_SERIALIZE(rpc_connections_count)
-        KV_SERIALIZE(white_peerlist_size)
-        KV_SERIALIZE(grey_peerlist_size)
-        KV_SERIALIZE(mainnet)
-        KV_SERIALIZE(testnet)
-        KV_SERIALIZE(stagenet)
-        KV_SERIALIZE(nettype)
-        KV_SERIALIZE(top_block_hash)
-        KV_SERIALIZE(immutable_block_hash)
-        KV_SERIALIZE(cumulative_difficulty)
-        KV_SERIALIZE(block_size_limit)
-        KV_SERIALIZE_OPT(block_weight_limit, (uint64_t)0)
-        KV_SERIALIZE(block_size_median)
-        KV_SERIALIZE_OPT(block_weight_median, (uint64_t)0)
-        KV_SERIALIZE(start_time)
-        KV_SERIALIZE(last_storage_server_ping)
-        KV_SERIALIZE(last_sispopnet_ping)
-        KV_SERIALIZE(free_space)
-        KV_SERIALIZE(offline)
-        KV_SERIALIZE(untrusted)
-        KV_SERIALIZE(bootstrap_daemon_address)
-        KV_SERIALIZE(height_without_bootstrap)
-        KV_SERIALIZE(was_bootstrap_ever_used)
-        KV_SERIALIZE(database_size)
-        KV_SERIALIZE(update_available)
-        KV_SERIALIZE(version)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   //-----------------------------------------------
   SISPOP_RPC_DOC_INTROSPECT
-  struct COMMAND_RPC_GET_NET_STATS
+  struct GET_NET_STATS : LEGACY
   {
-    struct request_t
-    {
+    static constexpr auto names() { return NAMES("get_net_stats"); }
 
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
-
-
-    struct response_t
+    struct request : EMPTY {};
+    struct response
     {
       std::string status;
       uint64_t start_time;
@@ -927,158 +643,72 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       uint64_t total_packets_out;
       uint64_t total_bytes_out;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(start_time)
-        KV_SERIALIZE(total_packets_in)
-        KV_SERIALIZE(total_bytes_in)
-        KV_SERIALIZE(total_packets_out)
-        KV_SERIALIZE(total_bytes_out)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  SISPOP_RPC_DOC_INTROSPECT
-  // Stop mining on the daemon.
-  struct COMMAND_RPC_STOP_MINING
-  {
-    struct request_t
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
-
-    struct response_t
-    {
-      std::string status; // General RPC error code. "OK" means everything looks good. Any other value means that something went wrong.
-
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<response_t> response;
-  };
 
   SISPOP_RPC_DOC_INTROSPECT
-  // Get the mining status of the daemon.
-  struct COMMAND_RPC_MINING_STATUS
-  {
-    struct request_t
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
-
-
-    struct response_t
-    {
-      std::string status;                // General RPC error code. "OK" means everything looks good. Any other value means that something went wrong.
-      bool active;                       // States if mining is enabled (`true`) or disabled (`false`).
-      uint64_t speed;                    // Mining power in hashes per seconds.
-      uint32_t threads_count;            // Number of running mining threads.
-      std::string address;               // Account address daemon is mining to. Empty if not mining.
-      std::string pow_algorithm;         // Current hashing algorithm name
-      bool is_background_mining_enabled; // States if the mining is running in background (`true`) or foreground (`false`).
-      uint8_t bg_idle_threshold;         // Background mining, the minimum amount of time in average the CPU should idle in percentage.
-      uint8_t bg_min_idle_seconds;       // Background mining, how long the minimum amount of time is for the idle threshold.
-      bool bg_ignore_battery;            // Background mining, if true mining does not adjust power depending on battery percentage remaining.
-      uint8_t bg_target;                 // Background mining, how much percentage of CPU(?) to consume, default 40%.
-      uint32_t block_target;             // The expected time to solve per block, i.e. DIFFICULTY_TARGET_V2
-      uint64_t block_reward;             // Block reward for the current block being mined.
-      uint64_t difficulty;               // The difficulty for the current block being mined.
-
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(active)
-        KV_SERIALIZE(speed)
-        KV_SERIALIZE(threads_count)
-        KV_SERIALIZE(address)
-        KV_SERIALIZE(pow_algorithm)
-        KV_SERIALIZE(is_background_mining_enabled)
-        KV_SERIALIZE(bg_idle_threshold)
-        KV_SERIALIZE(bg_min_idle_seconds)
-        KV_SERIALIZE(bg_ignore_battery)
-        KV_SERIALIZE(bg_target)
-        KV_SERIALIZE(block_target)
-        KV_SERIALIZE(block_reward)
-        KV_SERIALIZE(difficulty)
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<response_t> response;
-  };
-
-  SISPOP_RPC_DOC_INTROSPECT
-  // Save the blockchain. The blockchain does not need saving and is always saved when modified, 
+  // Save the blockchain. The blockchain does not need saving and is always saved when modified,
   // however it does a sync to flush the filesystem cache onto the disk for safety purposes against Operating System or Hardware crashes.
-  struct COMMAND_RPC_SAVE_BC
+  struct SAVE_BC : LEGACY
   {
-    struct request_t
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
+    static constexpr auto names() { return NAMES("save_bc"); }
 
-    struct response_t
-    {
-      std::string status; // General RPC error code. "OK" means everything looks good. Any other value means that something went wrong.
-
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<response_t> response;
+    struct request : EMPTY {};
+    struct response : STATUS {};
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Look up how many blocks are in the longest chain known to the node.
-  struct COMMAND_RPC_GETBLOCKCOUNT
+  struct GETBLOCKCOUNT : PUBLIC
   {
-    typedef std::list<std::string> request;
+    static constexpr auto names() { return NAMES("get_block_count", "getblockcount"); }
 
-    struct response_t
+    struct request : EMPTY {};
+    struct response
     {
       uint64_t count;     // Number of blocks in longest chain seen by the node.
       std::string status; // General RPC error code. "OK" means everything looks good.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(count)
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Look up a block's hash by its height.
-  struct COMMAND_RPC_GETBLOCKHASH
+  struct GETBLOCKHASH : PUBLIC
   {
-    typedef std::vector<uint64_t> request; // Block height (int array of length 1).
-    typedef std::string response;          // Block hash (string).
+    static constexpr auto names() { return NAMES("get_block_hash", "on_get_block_hash", "on_getblockhash"); }
+
+    struct request {
+      std::vector<uint64_t> height; // Block height (int array of length 1).
+
+      // epee serialization; this is a bit hacky because epee serialization makes things hacky.
+      bool load(epee::serialization::portable_storage& ps, epee::serialization::section* hparent_section = nullptr);
+      bool store(epee::serialization::portable_storage& ps, epee::serialization::section* hparent_section = nullptr);
+    };
+
+    using response = std::string;          // Block hash (string).
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Get a block template on which mining a new block.
-  struct COMMAND_RPC_GETBLOCKTEMPLATE
+  struct GETBLOCKTEMPLATE : PUBLIC
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("get_block_template", "getblocktemplate"); }
+
+    struct request
     {
       uint64_t reserve_size;      // Max 255 bytes
       std::string wallet_address; // Address of wallet to receive coinbase transactions if block is successfully mined.
       std::string prev_block;
+      std::string extra_nonce;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(reserve_size)
-        KV_SERIALIZE(wallet_address)
-        KV_SERIALIZE(prev_block)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
+    struct response
     {
       uint64_t difficulty;         // Difficulty of next block.
       uint64_t height;             // Height on which to mine.
@@ -1092,72 +722,50 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       std::string status;          // General RPC error code. "OK" means everything looks good.
       bool untrusted;              // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(difficulty)
-        KV_SERIALIZE(height)
-        KV_SERIALIZE(reserved_offset)
-        KV_SERIALIZE(expected_reward)
-        KV_SERIALIZE(prev_hash)
-        KV_SERIALIZE(blocktemplate_blob)
-        KV_SERIALIZE(blockhashing_blob)
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(untrusted)
-        KV_SERIALIZE(seed_hash)
-        KV_SERIALIZE(next_seed_hash)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Submit a mined block to the network.
-  struct COMMAND_RPC_SUBMITBLOCK
+  struct SUBMITBLOCK : PUBLIC
   {
-    typedef std::vector<std::string> request; // Block blob data - array of strings; list of block blobs which have been mined. See get_block_template to get a blob on which to mine.
-    struct response_t
-    {
-      std::string status; // Block submit status.
+    static constexpr auto names() { return NAMES("submit_block", "submitblock"); }
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
+    struct request {
+      std::vector<std::string> blob; // Block blob data - array containing exactly one block blob string which has been mined. See get_block_template to get a blob on which to mine.
+
+      // epee serialization; this is a bit hacky because epee serialization makes things hacky.
+      bool load(epee::serialization::portable_storage& ps, epee::serialization::section* hparent_section = nullptr);
+      bool store(epee::serialization::portable_storage& ps, epee::serialization::section* hparent_section = nullptr);
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
+    struct response : STATUS {};
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Developer only.
-  struct COMMAND_RPC_GENERATEBLOCKS
+  struct GENERATEBLOCKS : RPC_COMMAND
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("generateblocks"); }
+
+    struct request
     {
-      uint64_t amount_of_blocks; 
+      uint64_t amount_of_blocks;
       std::string wallet_address;
       std::string prev_block;
       uint32_t starting_nonce;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(amount_of_blocks)
-        KV_SERIALIZE(wallet_address)
-        KV_SERIALIZE(prev_block)
-        KV_SERIALIZE_OPT(starting_nonce, (uint32_t)0)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
+    struct response
     {
       uint64_t height;
       std::vector<std::string> blocks;
       std::string status; // General RPC error code. "OK" means everything looks good.
-      
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(height)
-        KV_SERIALIZE(blocks)
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
+
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
@@ -1172,10 +780,10 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       uint64_t height;                        // The number of blocks preceding this block on the blockchain.
       uint64_t depth;                         // The number of blocks succeeding this block on the blockchain. A larger number means an older block.
       std::string hash;                       // The hash of this block.
-      difficulty_type difficulty;             // The strength of the Sispop network based on mining power.
-      difficulty_type cumulative_difficulty;  // The cumulative strength of the Sispop network based on mining power.
-      uint64_t reward;                        // The amount of new generated in this block and rewarded to the miner, foundation and service Nodes. Note: 1 SISPOP = 1e12 atomic units.
-      uint64_t miner_reward;                  // The amount of new generated in this block and rewarded to the miner. Note: 1 SISPOP = 1e12 atomic units. 
+      difficulty_type difficulty;             // The strength of the sispop network based on mining power.
+      difficulty_type cumulative_difficulty;  // The cumulative strength of the sispop network based on mining power.
+      uint64_t reward;                        // The amount of new generated in this block and rewarded to the miner, foundation and service Nodes. Note: 1 sispop = 1e9 atomic units.
+      uint64_t miner_reward;                  // The amount of new generated in this block and rewarded to the miner. Note: 1 sispop = 1e9 atomic units.
       uint64_t block_size;                    // The block size in bytes.
       uint64_t block_weight;                  // The block weight in bytes.
       uint64_t num_txes;                      // Number of transactions in the block, not counting the coinbase tx.
@@ -1184,304 +792,263 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       std::string miner_tx_hash;              // The TX hash of the miner transaction
       std::string service_node_winner;        // Service node that received a reward for this block
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(major_version)
-        KV_SERIALIZE(minor_version)
-        KV_SERIALIZE(timestamp)
-        KV_SERIALIZE(prev_hash)
-        KV_SERIALIZE(nonce)
-        KV_SERIALIZE(orphan_status)
-        KV_SERIALIZE(height)
-        KV_SERIALIZE(depth)
-        KV_SERIALIZE(hash)
-        KV_SERIALIZE(difficulty)
-        KV_SERIALIZE(cumulative_difficulty)
-        KV_SERIALIZE(reward)
-        KV_SERIALIZE(miner_reward)
-        KV_SERIALIZE(block_size)
-        KV_SERIALIZE_OPT(block_weight, (uint64_t)0)
-        KV_SERIALIZE(num_txes)
-        KV_SERIALIZE(pow_hash)
-        KV_SERIALIZE_OPT(long_term_weight, (uint64_t)0)
-        KV_SERIALIZE(miner_tx_hash)
-        KV_SERIALIZE(service_node_winner)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Block header information for the most recent block is easily retrieved with this method. No inputs are needed.
-  struct COMMAND_RPC_GET_LAST_BLOCK_HEADER
+  struct GET_LAST_BLOCK_HEADER : PUBLIC
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("get_last_block_header", "getlastblockheader"); }
+
+    struct request
     {
       bool fill_pow_hash; // Tell the daemon if it should fill out pow_hash field.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE_OPT(fill_pow_hash, false);
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
+    struct response
     {
       std::string status;                 // General RPC error code. "OK" means everything looks good.
       block_header_response block_header; // A structure containing block header information.
       bool untrusted;                     // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(block_header)
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Block header information can be retrieved using either a block's hash or height. This method includes a block's hash as an input parameter to retrieve basic information about the block.
-  struct COMMAND_RPC_GET_BLOCK_HEADER_BY_HASH
+  struct GET_BLOCK_HEADER_BY_HASH : PUBLIC
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("get_block_header_by_hash", "getblockheaderbyhash"); }
+
+    struct request
     {
       std::string hash;   // The block's SHA256 hash.
+      std::vector<std::string> hashes; // Request multiple blocks via an array of hashes
       bool fill_pow_hash; // Tell the daemon if it should fill out pow_hash field.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(hash)
-        KV_SERIALIZE_OPT(fill_pow_hash, false);
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
+    struct response
     {
       std::string status;                 // General RPC error code. "OK" means everything looks good.
       block_header_response block_header; // A structure containing block header information.
+      std::vector<block_header_response> block_headers; // Result of multiple blocks requested via hashes
       bool untrusted;                     // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(block_header)
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Similar to get_block_header_by_hash above, this method includes a block's height as an input parameter to retrieve basic information about the block.
-  struct COMMAND_RPC_GET_BLOCK_HEADER_BY_HEIGHT
+  struct GET_BLOCK_HEADER_BY_HEIGHT : PUBLIC
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("get_block_header_by_height", "getblockheaderbyheight"); }
+
+    struct request
     {
       uint64_t height;    // The block's height.
       bool fill_pow_hash; // Tell the daemon if it should fill out pow_hash field.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(height)
-        KV_SERIALIZE_OPT(fill_pow_hash, false);
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
+    struct response
     {
       std::string status;                 // General RPC error code. "OK" means everything looks good.
       block_header_response block_header; // A structure containing block header information.
       bool untrusted;                     // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(block_header)
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
+
   SISPOP_RPC_DOC_INTROSPECT
-  // Full block information can be retrieved by either block height or hash, like with the above block header calls. 
+  // Full block information can be retrieved by either block height or hash, like with the above block header calls.
   // For full block information, both lookups use the same method, but with different input parameters.
-  struct COMMAND_RPC_GET_BLOCK
+  struct GET_BLOCK
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("get_block", "getblock"); }
+
+    struct request
     {
       std::string hash;   // The block's hash.
       uint64_t height;    // The block's height.
       bool fill_pow_hash; // Tell the daemon if it should fill out pow_hash field.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(hash)
-        KV_SERIALIZE(height)
-        KV_SERIALIZE_OPT(fill_pow_hash, false);
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
+    struct response
     {
       std::string status;                 // General RPC error code. "OK" means everything looks good.
       block_header_response block_header; // A structure containing block header information. See get_last_block_header.
-      std::string miner_tx_hash;          // Miner transaction information
       std::vector<std::string> tx_hashes; // List of hashes of non-coinbase transactions in the block. If there are no other transactions, this will be an empty list.
       std::string blob;                   // Hexadecimal blob of block information.
       std::string json;                   // JSON formatted block details.
       bool untrusted;                     // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(block_header)
-        KV_SERIALIZE(miner_tx_hash)
-        KV_SERIALIZE(tx_hashes)
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(blob)
-        KV_SERIALIZE(json)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
-  };
-
-  SISPOP_RPC_DOC_INTROSPECT
-  struct peer 
-  {
-    uint64_t id;           // Peer id.
-    std::string host;      // IP address in string format.
-    uint32_t ip;           // IP address in integer format.
-    uint16_t port;         // TCP port the peer is using to connect to sispop network.
-    uint16_t rpc_port;     // RPC port the peer is using
-    uint64_t last_seen;    // Unix time at which the peer has been seen for the last time
-    uint32_t pruning_seed; //
-
-    peer() = default;
-
-    peer(uint64_t id, const std::string &host, uint64_t last_seen, uint32_t pruning_seed, uint16_t rpc_port)
-      : id(id), host(host), ip(0), port(0), rpc_port(rpc_port), last_seen(last_seen), pruning_seed(pruning_seed)
-    {}
-    peer(uint64_t id, const std::string &host, uint16_t port, uint64_t last_seen, uint32_t pruning_seed, uint16_t rpc_port)
-      : id(id), host(host), ip(0), port(port), rpc_port(rpc_port), last_seen(last_seen), pruning_seed(pruning_seed)
-    {}
-    peer(uint64_t id, uint32_t ip, uint16_t port, uint64_t last_seen, uint32_t pruning_seed, uint16_t rpc_port)
-      : id(id), host(std::to_string(ip)), ip(ip), port(port), rpc_port(rpc_port), last_seen(last_seen), pruning_seed(pruning_seed)
-    {}
-
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(id)
-      KV_SERIALIZE(host)
-      KV_SERIALIZE(ip)
-      KV_SERIALIZE(port)
-      KV_SERIALIZE_OPT(rpc_port, (uint16_t)0)
-      KV_SERIALIZE(last_seen)
-      KV_SERIALIZE_OPT(pruning_seed, (uint32_t)0)
-    END_KV_SERIALIZE_MAP()
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Get the known peers list.
-  struct COMMAND_RPC_GET_PEER_LIST
+  struct GET_PEER_LIST : LEGACY
   {
-    struct request_t
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
+    static constexpr auto names() { return NAMES("get_peer_list"); }
 
-    struct response_t
+    struct request
+    {
+      bool public_only;
+      KV_MAP_SERIALIZABLE
+    };
+
+    struct peer
+    {
+      uint64_t id;           // Peer id.
+      std::string host;      // IP address in string format.
+      uint32_t ip;           // IP address in integer format.
+      uint16_t port;         // TCP port the peer is using to connect to sispop network.
+      uint16_t rpc_port;     // RPC port the peer is using
+      uint64_t last_seen;    // Unix time at which the peer has been seen for the last time
+      uint32_t pruning_seed; //
+
+      peer() = default;
+
+      peer(uint64_t id, const std::string &host, uint64_t last_seen, uint32_t pruning_seed, uint16_t rpc_port)
+        : id(id), host(host), ip(0), port(0), rpc_port(rpc_port), last_seen(last_seen), pruning_seed(pruning_seed)
+      {}
+      peer(uint64_t id, const std::string &host, uint16_t port, uint64_t last_seen, uint32_t pruning_seed, uint16_t rpc_port)
+        : id(id), host(host), ip(0), port(port), rpc_port(rpc_port), last_seen(last_seen), pruning_seed(pruning_seed)
+      {}
+      peer(uint64_t id, uint32_t ip, uint16_t port, uint64_t last_seen, uint32_t pruning_seed, uint16_t rpc_port)
+        : id(id), host(epee::string_tools::get_ip_string_from_int32(ip)), ip(ip), port(port), rpc_port(rpc_port), last_seen(last_seen), pruning_seed(pruning_seed)
+      {}
+
+      KV_MAP_SERIALIZABLE
+    };
+
+    struct response
     {
       std::string status;           // General RPC error code. "OK" means everything looks good. Any other value means that something went wrong.
       std::vector<peer> white_list; // Array of online peer structure.
       std::vector<peer> gray_list;  // Array of offline peer structure.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(white_list)
-        KV_SERIALIZE(gray_list)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
+
+
+  SISPOP_RPC_DOC_INTROSPECT
+  struct public_node
+  {
+    std::string host;
+    uint64_t last_seen;
+    uint16_t rpc_port;
+
+    public_node() = default;
+    public_node(const GET_PEER_LIST::peer &peer) : host(peer.host), last_seen(peer.last_seen), rpc_port(peer.rpc_port) {}
+
+    KV_MAP_SERIALIZABLE
+  };
+
+  SISPOP_RPC_DOC_INTROSPECT
+  // Query the daemon's peerlist and retrieve peers who have set their public rpc port.
+  struct GET_PUBLIC_NODES : RPC_COMMAND
+  {
+    static constexpr auto names() { return NAMES("get_public_nodes"); }
+
+    struct request
+    {
+      bool gray; // Get peers that have recently gone offline.
+      bool white; // Get peers that are online
+
+      KV_MAP_SERIALIZABLE
+    };
+
+    struct response
+    {
+      std::string status; // General RPC error code. "OK" means everything looks good. Any other value means that something went wrong.
+      std::vector<public_node> gray; // Graylist peers
+      std::vector<public_node> white; // Whitelist peers
+
+      KV_MAP_SERIALIZABLE
+    };
+  };
+
 
   SISPOP_RPC_DOC_INTROSPECT
   // Set the log hash rate display mode.
-  struct COMMAND_RPC_SET_LOG_HASH_RATE
+  struct SET_LOG_HASH_RATE : LEGACY
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("set_log_hash_rate"); }
+
+    struct request
     {
       bool visible; // States if hash rate logs should be visible (true) or hidden (false)
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(visible)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
-    {
-      std::string status; // General RPC error code. "OK" means everything looks good. Any other value means that something went wrong.
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<response_t> response;
+    struct response : STATUS {};
   };
 
   SISPOP_RPC_DOC_INTROSPECT
-  // Set the daemon log level. By default, log level is set to `0`.
-  struct COMMAND_RPC_SET_LOG_LEVEL
+  // Set the daemon log level. By default, log level is set to `0`.  For more fine-tuned logging
+  // control set the set_log_categories command instead.
+  struct SET_LOG_LEVEL : LEGACY
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("set_log_level"); }
+
+    struct request
     {
       int8_t level; // Daemon log level to set from `0` (less verbose) to `4` (most verbose)
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(level)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
-    {
-      std::string status; // General RPC error code. "OK" means everything looks good. Any other value means that something went wrong.
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<response_t> response;
+    struct response : STATUS {};
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Set the daemon log categories. Categories are represented as a comma separated list of `<Category>:<level>` (similarly to syslog standard `<Facility>:<Severity-level>`), where:
   // Category is one of the following: * (all facilities), default, net, net.http, net.p2p, logging, net.trottle, blockchain.db, blockchain.db.lmdb, bcutil, checkpoints, net.dns, net.dl,
-  // i18n, perf,stacktrace, updates, account, cn ,difficulty, hardfork, miner, blockchain, txpool, cn.block_queue, net.cn, daemon, debugtools.deserialize, debugtools.objectsizes, device.ledger, 
+  // i18n, perf,stacktrace, updates, account, cn ,difficulty, hardfork, miner, blockchain, txpool, cn.block_queue, net.cn, daemon, debugtools.deserialize, debugtools.objectsizes, device.ledger,
   // wallet.gen_multisig, multisig, bulletproofs, ringct, daemon.rpc, wallet.simplewallet, WalletAPI, wallet.ringdb, wallet.wallet2, wallet.rpc, tests.core.
   //
   // Level is one of the following: FATAL - higher level, ERROR, WARNING, INFO, DEBUG, TRACE.
   // Lower level A level automatically includes higher level. By default, categories are set to:
   // `*:WARNING,net:FATAL,net.p2p:FATAL,net.cn:FATAL,global:INFO,verify:FATAL,stacktrace:INFO,logging:INFO,msgwriter:INFO`
   // Setting the categories to "" prevent any logs to be outputed.
-  struct COMMAND_RPC_SET_LOG_CATEGORIES
+  //
+  // You can append to the current the log level for updating just one or more categories while
+  // leaving other log levels unchanged by specifying one or more "<category>:<level>" pairs
+  // preceded by a "+", for example "+difficulty:DEBUG,net:WARNING".
+  struct SET_LOG_CATEGORIES : LEGACY
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("set_log_categories"); }
+
+    struct request
     {
       std::string categories; // Optional, daemon log categories to enable
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(categories)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
+    struct response
     {
       std::string status;     // General RPC error code. "OK" means everything looks good. Any other value means that something went wrong.
       std::string categories; // Daemon log enabled categories
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(categories)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
@@ -1505,24 +1072,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     std::string tx_blob;                // Hexadecimal blob represnting the transaction.
     bool blink;                         // True if this is a signed blink transaction
 
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(id_hash)
-      KV_SERIALIZE(tx_json)
-      KV_SERIALIZE(blob_size)
-      KV_SERIALIZE_OPT(weight, (uint64_t)0)
-      KV_SERIALIZE(fee)
-      KV_SERIALIZE(max_used_block_id_hash)
-      KV_SERIALIZE(max_used_block_height)
-      KV_SERIALIZE(kept_by_block)
-      KV_SERIALIZE(last_failed_height)
-      KV_SERIALIZE(last_failed_id_hash)
-      KV_SERIALIZE(receive_time)
-      KV_SERIALIZE(relayed)
-      KV_SERIALIZE(last_relayed_time)
-      KV_SERIALIZE(do_not_relay)
-      KV_SERIALIZE(double_spend_seen)
-      KV_SERIALIZE(tx_blob)
-    END_KV_SERIALIZE_MAP()
+    KV_MAP_SERIALIZABLE
   };
 
   SISPOP_RPC_DOC_INTROSPECT
@@ -1531,129 +1081,93 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     std::string id_hash;                 // Key image.
     std::vector<std::string> txs_hashes; // List of tx hashes of the txes (usually one) spending that key image.
 
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(id_hash)
-      KV_SERIALIZE(txs_hashes)
-    END_KV_SERIALIZE_MAP()
+    KV_MAP_SERIALIZABLE
   };
 
   SISPOP_RPC_DOC_INTROSPECT
-  // Show information about valid transactions seen by the node but not yet mined into a block, 
+  // Show information about valid transactions seen by the node but not yet mined into a block,
   // as well as spent key image information for the txpool in the node's memory.
-  struct COMMAND_RPC_GET_TRANSACTION_POOL
+  struct GET_TRANSACTION_POOL : PUBLIC, LEGACY
   {
-    struct request_t
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
+    static constexpr auto names() { return NAMES("get_transaction_pool"); }
 
-    struct response_t
+    struct request : EMPTY {};
+
+    struct response
     {
       std::string status;                                 // General RPC error code. "OK" means everything looks good.
       std::vector<tx_info> transactions;                  // List of transactions in the mempool are not in a block on the main chain at the moment:
       std::vector<spent_key_image_info> spent_key_images; // List of spent output key images:
       bool untrusted;                                     // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(transactions)
-        KV_SERIALIZE(spent_key_images)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Get hashes from transaction pool. Binary request.
-  struct COMMAND_RPC_GET_TRANSACTION_POOL_HASHES_BIN
+  struct GET_TRANSACTION_POOL_HASHES_BIN : PUBLIC, BINARY
   {
-    struct request_t
-    {
-      bool         long_poll;        // Optional: If true, this call is blocking until timeout OR tx pool has changed since the last query. TX pool change is detected by comparing the hash of all the hashes in the tx pool.
-      crypto::hash tx_pool_checksum; // Optional: If `long_poll` is true the caller must pass the hashes of all their known tx pool hashes, XOR'ed together.
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE_OPT(long_poll, false)
-        KV_SERIALIZE_VAL_POD_AS_BLOB_OPT(tx_pool_checksum, crypto::hash{})
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
+    static constexpr auto names() { return NAMES("get_transaction_pool_hashes.bin"); }
 
-    struct response_t
+    struct request
+    {
+      bool         long_poll;        // Optional: If true, this call is blocking until timeout OR tx pool has changed since the last query. TX pool change is detected by comparing the hash of all the hashes in the tx pool.  Ignored when using LMQ RPC.
+      crypto::hash tx_pool_checksum; // Optional: If `long_poll` is true the caller must pass the hashes of all their known tx pool hashes, XOR'ed together.  Ignored when using LMQ RPC.
+      KV_MAP_SERIALIZABLE
+    };
+
+    struct response
     {
       std::string status;                  // General RPC error code. "OK" means everything looks good.
       std::vector<crypto::hash> tx_hashes; // List of transaction hashes,
       bool untrusted;                      // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(tx_hashes)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Get hashes from transaction pool.
-  struct COMMAND_RPC_GET_TRANSACTION_POOL_HASHES
+  struct GET_TRANSACTION_POOL_HASHES : PUBLIC, LEGACY
   {
-    struct request_t
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
+    static constexpr auto names() { return NAMES("get_transaction_pool_hashes"); }
 
-    struct response_t
+    struct request : EMPTY {};
+    struct response
     {
       std::string status;                 // General RPC error code. "OK" means everything looks good.
       std::vector<std::string> tx_hashes; // List of transaction hashes,
       bool untrusted;                     // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(tx_hashes)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   struct tx_backlog_entry
   {
-    uint64_t weight;       // 
-    uint64_t fee;          // Fee in Sispop measured in atomic units.
+    uint64_t weight;       //
+    uint64_t fee;          // Fee in sispop measured in atomic units.
     uint64_t time_in_pool;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Get all transaction pool backlog.
-  struct COMMAND_RPC_GET_TRANSACTION_POOL_BACKLOG
+  struct GET_TRANSACTION_POOL_BACKLOG
   {
-    struct request_t
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
+    static constexpr auto names() { return NAMES("get_txpool_backlog"); }
 
-    struct response_t
+    struct request : EMPTY {};
+
+    struct response
     {
       std::string status;                    // General RPC error code. "OK" means everything looks good.
       std::vector<tx_backlog_entry> backlog; // Array of structures tx_backlog_entry (in binary form):
       bool untrusted;                        // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE_CONTAINER_POD_AS_BLOB(backlog)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
@@ -1662,10 +1176,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     uint32_t txs;   // Number of transactions.
     uint64_t bytes; // Size in bytes.
 
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(txs)
-      KV_SERIALIZE(bytes)
-    END_KV_SERIALIZE_MAP()
+    KV_MAP_SERIALIZABLE
   };
 
   SISPOP_RPC_DOC_INTROSPECT
@@ -1687,252 +1198,197 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
 
     txpool_stats(): bytes_total(0), bytes_min(0), bytes_max(0), bytes_med(0), fee_total(0), oldest(0), txs_total(0), num_failing(0), num_10m(0), num_not_relayed(0), histo_98pc(0), num_double_spends(0) {}
 
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(bytes_total)
-      KV_SERIALIZE(bytes_min)
-      KV_SERIALIZE(bytes_max)
-      KV_SERIALIZE(bytes_med)
-      KV_SERIALIZE(fee_total)
-      KV_SERIALIZE(oldest)
-      KV_SERIALIZE(txs_total)
-      KV_SERIALIZE(num_failing)
-      KV_SERIALIZE(num_10m)
-      KV_SERIALIZE(num_not_relayed)
-      KV_SERIALIZE(histo_98pc)
-      KV_SERIALIZE_CONTAINER_POD_AS_BLOB(histo)
-      KV_SERIALIZE(num_double_spends)
-    END_KV_SERIALIZE_MAP()
+    KV_MAP_SERIALIZABLE
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Get the transaction pool statistics.
-  struct COMMAND_RPC_GET_TRANSACTION_POOL_STATS
+  struct GET_TRANSACTION_POOL_STATS : PUBLIC, LEGACY
   {
-    struct request_t
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
+    static constexpr auto names() { return NAMES("get_transaction_pool_stats"); }
 
-    struct response_t
+    struct request : EMPTY {};
+
+    struct response
     {
       std::string status;      // General RPC error code. "OK" means everything looks good.
       txpool_stats pool_stats; // List of pool stats:
       bool untrusted;          // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(pool_stats)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Retrieve information about incoming and outgoing connections to your node.
-  struct COMMAND_RPC_GET_CONNECTIONS
+  struct GET_CONNECTIONS : RPC_COMMAND
   {
-    struct request_t
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
+    static constexpr auto names() { return NAMES("get_connections"); }
 
-    struct response_t
+    struct request : EMPTY {};
+
+    struct response
     {
       std::string status; // General RPC error code. "OK" means everything looks good.
       std::list<connection_info> connections; // List of all connections and their info:
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(connections)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
+
   SISPOP_RPC_DOC_INTROSPECT
-  // Similar to get_block_header_by_height above, but for a range of blocks. 
-  // This method includes a starting block height and an ending block height as 
+  // Similar to get_block_header_by_height above, but for a range of blocks.
+  // This method includes a starting block height and an ending block height as
   // parameters to retrieve basic information about the range of blocks.
-  struct COMMAND_RPC_GET_BLOCK_HEADERS_RANGE
+  struct GET_BLOCK_HEADERS_RANGE : PUBLIC
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("get_block_headers_range", "getblockheadersrange"); }
+
+    struct request
     {
       uint64_t start_height; // The starting block's height.
       uint64_t end_height;   // The ending block's height.
       bool fill_pow_hash;    // Tell the daemon if it should fill out pow_hash field.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(start_height)
-        KV_SERIALIZE(end_height)
-        KV_SERIALIZE_OPT(fill_pow_hash, false);
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
+    struct response
     {
       std::string status;                         // General RPC error code. "OK" means everything looks good.
       std::vector<block_header_response> headers; // Array of block_header (a structure containing block header information. See get_last_block_header).
       bool untrusted;                             // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(headers)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
+  };
+
+  SISPOP_RPC_DOC_INTROSPECT
+  // Set the bootstrap daemon to use for data on the blockchain whilst syncing the chain.
+  struct SET_BOOTSTRAP_DAEMON : RPC_COMMAND
+  {
+    static constexpr auto names() { return NAMES("set_bootstrap_daemon"); }
+    struct request
+    {
+
+      std::string address;
+      std::string username;
+      std::string password;
+
+      KV_MAP_SERIALIZABLE
+    };
+
+    struct response : STATUS {};
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Send a command to the daemon to safely disconnect and shut down.
-  struct COMMAND_RPC_STOP_DAEMON
+  struct STOP_DAEMON : LEGACY
   {
-    struct request_t
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
+    static constexpr auto names() { return NAMES("stop_daemon"); }
 
-    struct response_t
-    {
-      std::string status; // General RPC error code. "OK" means everything looks good.
-
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<response_t> response;
+    struct request : EMPTY {};
+    struct response : STATUS {};
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Get daemon bandwidth limits.
-  struct COMMAND_RPC_GET_LIMIT
+  struct GET_LIMIT : LEGACY
   {
-    struct request_t
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
+    static constexpr auto names() { return NAMES("get_limit"); }
 
-    typedef epee::misc_utils::struct_init<request_t> request;
-    struct response_t
+    struct request : EMPTY {};
+
+    struct response
     {
       std::string status;  // General RPC error code. "OK" means everything looks good.
       uint64_t limit_up;   // Upload limit in kBytes per second.
       uint64_t limit_down; // Download limit in kBytes per second.
       bool untrusted;      // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(limit_up)
-        KV_SERIALIZE(limit_down)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Set daemon bandwidth limits.
-  struct COMMAND_RPC_SET_LIMIT
+  struct SET_LIMIT : LEGACY
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("set_limit"); }
+
+    struct request
     {
       int64_t limit_down;  // Download limit in kBytes per second (-1 reset to default, 0 don't change the current limit)
       int64_t limit_up;    // Upload limit in kBytes per second (-1 reset to default, 0 don't change the current limit)
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(limit_down)
-        KV_SERIALIZE(limit_up)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
-    
-    struct response_t
+
+    struct response
     {
       std::string status; // General RPC error code. "OK" means everything looks good.
       int64_t limit_up;   // Upload limit in kBytes per second.
       int64_t limit_down; // Download limit in kBytes per second.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(limit_up)
-        KV_SERIALIZE(limit_down)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Limit number of Outgoing peers.
-  struct COMMAND_RPC_OUT_PEERS
+  struct OUT_PEERS : LEGACY
   {
-    struct request_t
-    {
-	  uint64_t out_peers; // Max number of outgoing peers
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(out_peers)
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
-    
-    struct response_t
-    {
-      std::string status; // General RPC error code. "OK" means everything looks good.
+    static constexpr auto names() { return NAMES("out_peers"); }
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
+    struct request
+    {
+      bool set; // If true, set the number of outgoing peers, otherwise the response returns the current limit of outgoing peers. (Defaults to true)
+	  uint32_t out_peers; // Max number of outgoing peers
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
+
+    struct response {
+      uint32_t out_peers; // The current limit set for outgoing peers
+      std::string status; // General RPC error code. "OK" means everything looks good.
+      KV_MAP_SERIALIZABLE
+    };
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Limit number of Incoming peers.
-  struct COMMAND_RPC_IN_PEERS
+  struct IN_PEERS : LEGACY
   {
-    struct request_t
-    {
-      uint64_t in_peers;
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(in_peers)
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
+    static constexpr auto names() { return NAMES("in_peers"); }
 
-    struct response_t
+    struct request
     {
+      bool set; // If true, set the number of incoming peers, otherwise the response returns the current limit of incoming peers. (Defaults to true)
+      uint32_t in_peers; // Max number of incoming peers
+      KV_MAP_SERIALIZABLE
+    };
+
+    struct response {
+      uint32_t in_peers; // The current limit set for outgoing peers
       std::string status; // General RPC error code. "OK" means everything looks good.
-
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Look up information regarding hard fork voting and readiness.
-  struct COMMAND_RPC_HARD_FORK_INFO
+  struct HARD_FORK_INFO : PUBLIC
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("hard_fork_info"); }
+
+    struct request
     {
       uint8_t version; // The major block version for the fork.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(version)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
+    struct response
     {
       uint8_t version;          // The major block version for the fork.
       bool enabled;             // Tells if hard fork is enforced.
@@ -1945,63 +1401,42 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       std::string status;       // General RPC error code. "OK" means everything looks good.
       bool untrusted;           // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(version)
-        KV_SERIALIZE(enabled)
-        KV_SERIALIZE(window)
-        KV_SERIALIZE(votes)
-        KV_SERIALIZE(threshold)
-        KV_SERIALIZE(voting)
-        KV_SERIALIZE(state)
-        KV_SERIALIZE(earliest_height)
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Get list of banned IPs.
-  struct COMMAND_RPC_GETBANS
+  struct GETBANS : RPC_COMMAND
   {
+    static constexpr auto names() { return NAMES("get_bans"); }
+
+    struct request : EMPTY {};
+
     struct ban
     {
       std::string host; // Banned host (IP in A.B.C.D form).
       uint32_t ip;      // Banned IP address, in Int format.
       uint32_t seconds; // Local Unix time that IP is banned until.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(host)
-        KV_SERIALIZE(ip)
-        KV_SERIALIZE(seconds)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
 
-    struct request_t
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
-
-    struct response_t
+    struct response
     {
       std::string status;    // General RPC error code. "OK" means everything looks good.
       std::vector<ban> bans; // List of banned nodes:
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(bans)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Ban another node by IP.
-  struct COMMAND_RPC_SETBANS
+  struct SETBANS : RPC_COMMAND
   {
+    static constexpr auto names() { return NAMES("set_bans"); }
+
     struct ban
     {
       std::string host; // Host to ban (IP in A.B.C.D form - will support I2P address in the future).
@@ -2009,95 +1444,66 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       bool ban;         // Set true to ban.
       uint32_t seconds; // Number of seconds to ban node.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(host)
-        KV_SERIALIZE(ip)
-        KV_SERIALIZE(ban)
-        KV_SERIALIZE(seconds)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
 
-    struct request_t
+    struct request
     {
       std::vector<ban> bans; // List of nodes to ban.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(bans)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
-    {
-      std::string status; // General RPC error code. "OK" means everything looks good.
-
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<response_t> response;
+    struct response : STATUS {};
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Determine whether a given IP address is banned
-  struct COMMAND_RPC_BANNED
+  struct BANNED : RPC_COMMAND
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("banned"); }
+
+    struct request
     {
       std::string address; // The IP address to check
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(address)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
+    struct response
     {
       std::string status; // General RPC error code. "OK" means everything looks good.
       bool banned;        // True if the given address is banned, false otherwise.
       uint32_t seconds;   // The number of seconds remaining in the ban.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(banned)
-        KV_SERIALIZE(seconds)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Flush tx ids from transaction pool..
-  struct COMMAND_RPC_FLUSH_TRANSACTION_POOL
+  struct FLUSH_TRANSACTION_POOL : RPC_COMMAND
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("flush_txpool"); }
+
+    struct request
     {
       std::vector<std::string> txids; // Optional, list of transactions IDs to flush from pool (all tx ids flushed if empty).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(txids)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
-    {
-      std::string status; // General RPC error code. "OK" means everything looks good.
-
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<response_t> response;
+    struct response : STATUS {};
   };
 
   SISPOP_RPC_DOC_INTROSPECT
-  // Get a histogram of output amounts. For all amounts (possibly filtered by parameters), 
+  // Get a histogram of output amounts. For all amounts (possibly filtered by parameters),
   // gives the number of outputs on the chain for that amount. RingCT outputs counts as 0 amount.
-  struct COMMAND_RPC_GET_OUTPUT_HISTOGRAM
+  struct GET_OUTPUT_HISTOGRAM : PUBLIC
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("get_output_histogram"); }
+
+    struct request
     {
       std::vector<uint64_t> amounts; // list of amounts in Atomic Units.
       uint64_t min_count;            // The minimum amounts you are requesting.
@@ -2105,15 +1511,8 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       bool unlocked;                 // Look for locked only.
       uint64_t recent_cutoff;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(amounts);
-        KV_SERIALIZE(min_count);
-        KV_SERIALIZE(max_count);
-        KV_SERIALIZE(unlocked);
-        KV_SERIALIZE(recent_cutoff);
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
     struct entry
     {
@@ -2122,107 +1521,80 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       uint64_t unlocked_instances;
       uint64_t recent_instances;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(amount);
-        KV_SERIALIZE(total_instances);
-        KV_SERIALIZE(unlocked_instances);
-        KV_SERIALIZE(recent_instances);
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
 
       entry(uint64_t amount, uint64_t total_instances, uint64_t unlocked_instances, uint64_t recent_instances):
           amount(amount), total_instances(total_instances), unlocked_instances(unlocked_instances), recent_instances(recent_instances) {}
-      entry() {}
+      entry() = default;
     };
 
-    struct response_t
+    struct response
     {
       std::string status;           // General RPC error code. "OK" means everything looks good.
       std::vector<entry> histogram; // List of histogram entries:
       bool untrusted;               // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(histogram)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
-  // Get node current version.
-  struct COMMAND_RPC_GET_VERSION
+  // Get current RPC protocol version.
+  struct GET_VERSION : PUBLIC
   {
-    struct request_t
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
+    static constexpr auto names() { return NAMES("get_version"); }
 
-    struct response_t
+    struct request : EMPTY {};
+
+    struct response
     {
       std::string status; // General RPC error code. "OK" means everything looks good.
-      uint32_t version;   // Node current version.
+      uint32_t version;   // RPC current version.
       bool untrusted;     // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(version)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Get the coinbase amount and the fees amount for n last blocks starting at particular height.
-  struct COMMAND_RPC_GET_COINBASE_TX_SUM
+  struct GET_COINBASE_TX_SUM : RPC_COMMAND
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("get_coinbase_tx_sum"); }
+
+    struct request
     {
       uint64_t height; // Block height from which getting the amounts.
       uint64_t count;  // Number of blocks to include in the sum.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(height);
-        KV_SERIALIZE(count);
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
+    struct response
     {
       std::string status;       // General RPC error code. "OK" means everything looks good.
       uint64_t emission_amount; // Amount of coinbase reward in atomic units.
       uint64_t fee_amount;      // Amount of fees in atomic units.
       uint64_t burn_amount;      // Amount of burnt sispop.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(emission_amount)
-        KV_SERIALIZE(fee_amount)
-        KV_SERIALIZE(burn_amount)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Gives an estimation of per-output + per-byte fees
-  struct COMMAND_RPC_GET_BASE_FEE_ESTIMATE
+  struct GET_BASE_FEE_ESTIMATE : PUBLIC
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("get_fee_estimate"); }
+
+    struct request
     {
       uint64_t grace_blocks; // Optional
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(grace_blocks)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
+    struct response
     {
       std::string status;         // General RPC error code. "OK" means everything looks good.
       uint64_t fee_per_byte;      // Amount of fees estimated per byte in atomic units
@@ -2230,27 +1602,17 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       uint64_t quantization_mask;
       bool untrusted;             // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(fee_per_byte)
-        KV_SERIALIZE(fee_per_output)
-        KV_SERIALIZE_OPT(quantization_mask, (uint64_t)1)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Display alternative chains seen by the node.
-  struct COMMAND_RPC_GET_ALTERNATE_CHAINS
+  struct GET_ALTERNATE_CHAINS : RPC_COMMAND
   {
-    struct request_t
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
+    static constexpr auto names() { return NAMES("get_alternative_chains"); }
+
+    struct request : EMPTY {};
 
     struct chain_info
     {
@@ -2258,49 +1620,36 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       uint64_t height;                       // The block height of the first diverging block of this alternative chain.
       uint64_t length;                       // The length in blocks of this alternative chain, after divergence.
       uint64_t difficulty;                   // The cumulative difficulty of all blocks in the alternative chain.
-      std::vector<std::string> block_hashes; 
+      std::vector<std::string> block_hashes;
       std::string main_chain_parent_block;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(block_hash)
-        KV_SERIALIZE(height)
-        KV_SERIALIZE(length)
-        KV_SERIALIZE(difficulty)
-        KV_SERIALIZE(block_hashes)
-        KV_SERIALIZE(main_chain_parent_block)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
 
-    struct response_t
+    struct response
     {
-      std::string status;           // General RPC error code. "OK" means everything looks good.
-      std::list<chain_info> chains; // Array of Chains.
+      std::string status;             // General RPC error code. "OK" means everything looks good.
+      std::vector<chain_info> chains; // Array of Chains.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(chains)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Update daemon.
-  struct COMMAND_RPC_UPDATE
+  struct UPDATE : LEGACY
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("update"); }
+
+    struct request
     {
       std::string command; // Command to use, either check or download.
       std::string path;    // Optional, path where to download the update.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(command);
-        KV_SERIALIZE(path);
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
+    struct response
     {
       std::string status;   // General RPC error code. "OK" means everything looks good.
       bool update;          // States if an update is available to download (`true`) or not (`false`).
@@ -2310,62 +1659,39 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       std::string hash;
       std::string path;     // Path to download the update.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(update)
-        KV_SERIALIZE(version)
-        KV_SERIALIZE(user_uri)
-        KV_SERIALIZE(auto_uri)
-        KV_SERIALIZE(hash)
-        KV_SERIALIZE(path)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Relay a list of transaction IDs.
-  struct COMMAND_RPC_RELAY_TX
+  struct RELAY_TX : RPC_COMMAND
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("relay_tx"); }
+
+    struct request
     {
-      std::vector<std::string> txids; // Optional, list of transactions IDs to flush from pool (all tx ids flushed if empty).
+      std::vector<std::string> txids; // List of transactions IDs to relay from pool.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(txids)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
-    {
-      std::string status; // General RPC error code. "OK" means everything looks good.
-
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<response_t> response;
+    struct response : STATUS {};
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Get synchronisation information.
-  struct COMMAND_RPC_SYNC_INFO
+  struct SYNC_INFO : RPC_COMMAND
   {
-    struct request_t
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
+    static constexpr auto names() { return NAMES("sync_info"); }
+
+    struct request : EMPTY {};
 
     struct peer
     {
       connection_info info; // Structure of connection info, as defined in get_connections.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(info)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
 
     struct span
@@ -2378,18 +1704,10 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       uint64_t size;               // Total number of bytes in that span's blocks (including txes).
       std::string remote_address;  // Peer address the node is downloading (or has downloaded) than span from.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(start_block_height)
-        KV_SERIALIZE(nblocks)
-        KV_SERIALIZE(connection_id)
-        KV_SERIALIZE(rate)
-        KV_SERIALIZE(speed)
-        KV_SERIALIZE(size)
-        KV_SERIALIZE(remote_address)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
 
-    struct response_t
+    struct response
     {
       std::string status;                // General RPC error code. "OK" means everything looks good. Any other value means that something went wrong.
       uint64_t height;                   // Block height.
@@ -2399,173 +1717,120 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       std::list<span> spans;             // Array of Span Structure.
       std::string overview;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(height)
-        KV_SERIALIZE(target_height)
-        KV_SERIALIZE(next_needed_pruning_seed)
-        KV_SERIALIZE(peers)
-        KV_SERIALIZE(spans)
-        KV_SERIALIZE(overview)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
-  struct COMMAND_RPC_GET_OUTPUT_DISTRIBUTION
+  struct GET_OUTPUT_DISTRIBUTION : PUBLIC
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("get_output_distribution"); }
+
+    struct request
     {
       std::vector<uint64_t> amounts; // Amounts to look for in atomic units.
       uint64_t from_height;          // (optional, default is 0) starting height to check from.
       uint64_t to_height;            // (optional, default is 0) ending height to check up to.
       bool cumulative;               // (optional, default is false) States if the result should be cumulative (true) or not (false).
-      bool binary; 
+      bool binary;
       bool compress;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(amounts)
-        KV_SERIALIZE_OPT(from_height, (uint64_t)0)
-        KV_SERIALIZE_OPT(to_height, (uint64_t)0)
-        KV_SERIALIZE_OPT(cumulative, false)
-        KV_SERIALIZE_OPT(binary, true)
-        KV_SERIALIZE_OPT(compress, false)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
     struct distribution
     {
       rpc::output_distribution_data data;
-      uint64_t amount; 
+      uint64_t amount;
       std::string compressed_data;
       bool binary;
       bool compress;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(amount)
-        KV_SERIALIZE_N(data.start_height, "start_height")
-        KV_SERIALIZE(binary)
-        KV_SERIALIZE(compress)
-        if (this_ref.binary)
-        {
-          if (is_store)
-          {
-            if (this_ref.compress)
-            {
-              const_cast<std::string&>(this_ref.compressed_data) = compress_integer_array(this_ref.data.distribution);
-              KV_SERIALIZE(compressed_data)
-            }
-            else
-              KV_SERIALIZE_CONTAINER_POD_AS_BLOB_N(data.distribution, "distribution")
-          }
-          else
-          {
-            if (this_ref.compress)
-            {
-              KV_SERIALIZE(compressed_data)
-              const_cast<std::vector<uint64_t>&>(this_ref.data.distribution) = decompress_integer_array<uint64_t>(this_ref.compressed_data);
-            }
-            else
-              KV_SERIALIZE_CONTAINER_POD_AS_BLOB_N(data.distribution, "distribution")
-          }
-        }
-        else
-          KV_SERIALIZE_N(data.distribution, "distribution")
-        KV_SERIALIZE_N(data.base, "base")
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
 
-    struct response_t
+    struct response
     {
       std::string status;                      // General RPC error code. "OK" means everything looks good.
-      std::vector<distribution> distributions; // 
+      std::vector<distribution> distributions; //
       bool untrusted;                          // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(distributions)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
-  struct COMMAND_RPC_POP_BLOCKS
+  // Exactly like GET_OUTPUT_DISTRIBUTION, but does a binary RPC transfer instead of JSON
+  struct GET_OUTPUT_DISTRIBUTION_BIN : BINARY
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("get_output_distribution.bin"); }
+
+    struct request : GET_OUTPUT_DISTRIBUTION::request {};
+    using response = GET_OUTPUT_DISTRIBUTION::response;
+  };
+
+  SISPOP_RPC_DOC_INTROSPECT
+  struct POP_BLOCKS : LEGACY
+  {
+    static constexpr auto names() { return NAMES("pop_blocks"); }
+
+    struct request
     {
       uint64_t nblocks; // Number of blocks in that span.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(nblocks);
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
+    struct response
     {
       std::string status; // General RPC error code. "OK" means everything looks good.
       uint64_t height;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(height)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
+
   SISPOP_RPC_DOC_INTROSPECT
-  struct COMMAND_RPC_PRUNE_BLOCKCHAIN
+  struct PRUNE_BLOCKCHAIN : RPC_COMMAND
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("prune_blockchain"); }
+
+    struct request
     {
       bool check;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE_OPT(check, false)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
+    struct response
     {
       bool pruned;
       uint32_t pruning_seed;
       std::string status;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(pruned)
-        KV_SERIALIZE(pruning_seed)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
 
   SISPOP_RPC_DOC_INTROSPECT
   // Get the quorum state which is the list of public keys of the nodes who are voting, and the list of public keys of the nodes who are being tested.
-  struct COMMAND_RPC_GET_QUORUM_STATE
+  struct GET_QUORUM_STATE : PUBLIC
   {
+    static constexpr auto names() { return NAMES("get_quorum_state"); }
+
+    static constexpr size_t MAX_COUNT = 256;
     static constexpr uint64_t HEIGHT_SENTINEL_VALUE = UINT64_MAX;
     static constexpr uint8_t ALL_QUORUMS_SENTINEL_VALUE = 255;
-    struct request_t
+    struct request
     {
       uint64_t start_height; // (Optional): Start height, omit both start and end height to request the latest quorum
       uint64_t end_height;   // (Optional): End height, omit both start and end height to request the latest quorum
       uint8_t  quorum_type;  // (Optional): Set value to request a specific quorum, 0 = Obligation, 1 = Checkpointing, 255 = all quorums, default is all quorums;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE_OPT(start_height, HEIGHT_SENTINEL_VALUE)
-        KV_SERIALIZE_OPT(end_height, HEIGHT_SENTINEL_VALUE)
-        KV_SERIALIZE_OPT(quorum_type, ALL_QUORUMS_SENTINEL_VALUE)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
     struct quorum_worker
     {
@@ -2602,10 +1867,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       std::vector<quorum_validator> validators;
       std::vector<quorum_worker> workers;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(validators)
-        KV_SERIALIZE(workers)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
 
       BEGIN_SERIALIZE() // NOTE: For store_t_to_json
         FIELD(validators)
@@ -2618,11 +1880,8 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       uint64_t height;          // The height the quorums are relevant for
       uint8_t  quorum_type;     // The quorum type
       quorum_t quorum;          // Quorum of Service Nodes
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(height)
-        KV_SERIALIZE(quorum_type)
-        KV_SERIALIZE(quorum)
-      END_KV_SERIALIZE_MAP()
+
+      KV_MAP_SERIALIZABLE
 
       BEGIN_SERIALIZE() // NOTE: For store_t_to_json
         FIELD(height)
@@ -2631,164 +1890,119 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       END_SERIALIZE()
     };
 
-    struct response_t
+    struct response
     {
       std::string status;                     // Generic RPC error code. "OK" is the success value.
       std::vector<quorum_for_height> quorums; // An array of quorums associated with the requested height
       bool untrusted;                         // If the result is obtained using bootstrap mode, and therefore not trusted `true`, or otherwise `false`.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(quorums)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
-  struct COMMAND_RPC_GET_SERVICE_NODE_REGISTRATION_CMD_RAW
+  struct GET_SERVICE_NODE_REGISTRATION_CMD_RAW : RPC_COMMAND
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("get_service_node_registration_cmd_raw"); }
+
+    struct request
     {
       std::vector<std::string> args; // (Developer) The arguments used in raw registration, i.e. portions
       bool make_friendly;            // Provide information about how to use the command in the result.
       uint64_t staking_requirement;  // The staking requirement to become a Service Node the registration command will be generated upon
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(args)
-        KV_SERIALIZE(make_friendly)
-        KV_SERIALIZE(staking_requirement)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
+    struct response
     {
       std::string status;           // Generic RPC error code. "OK" is the success value.
       std::string registration_cmd; // The command to execute in the wallet CLI to register the queried daemon as a Service Node.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(registration_cmd)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
-  struct COMMAND_RPC_GET_SERVICE_NODE_REGISTRATION_CMD
+  struct GET_SERVICE_NODE_REGISTRATION_CMD : RPC_COMMAND
   {
+    static constexpr auto names() { return NAMES("get_service_node_registration_cmd"); }
+
     struct contribution_t
     {
       std::string address; // The wallet address for the contributor
       uint64_t amount;     // The amount that the contributor will reserve in Sispop atomic units towards the staking requirement
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(address)
-        KV_SERIALIZE(amount)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
 
-    struct request_t
+    struct request
     {
       std::string operator_cut;                  // The percentage of cut per reward the operator receives expressed as a string, i.e. "1.1%"
       std::vector<contribution_t> contributions; // Array of contributors for this Service Node
       uint64_t staking_requirement;              // The staking requirement to become a Service Node the registration command will be generated upon
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(operator_cut)
-        KV_SERIALIZE(contributions)
-        KV_SERIALIZE(staking_requirement)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
-    {
-      std::string status;           // Generic RPC error code. "OK" is the success value.
-      std::string registration_cmd; // The command to execute in the wallet CLI to register the queried daemon as a Service Node.
-
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(registration_cmd)
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<response_t> response;
+    using response = GET_SERVICE_NODE_REGISTRATION_CMD_RAW::response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
-  // Get the service node public keys of the queried daemon, encoded in hex.
-  // The daemon must be started in --service-node mode otherwise this RPC command will fail.
-  struct COMMAND_RPC_GET_SERVICE_NODE_KEY
+  // Get the service public keys of the queried daemon, encoded in hex.  All three keys are used
+  // when running as a service node; when running as a regular node only the x25519 key is regularly
+  // used for some RPC and and node-to-SN communication requests.
+  struct GET_SERVICE_KEYS : RPC_COMMAND
   {
-    struct request_t
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
+    static constexpr auto names() { return NAMES("get_service_keys", "get_service_node_key"); }
 
-    struct response_t
+    struct request : EMPTY {};
+
+    struct response
     {
-      std::string service_node_pubkey;         // The queried daemon's service node public key.
-      std::string service_node_ed25519_pubkey; // The daemon's service node ed25519 auxiliary public key.
-      std::string service_node_x25519_pubkey;  // The daemon's service node x25519 auxiliary public key.
+      std::string service_node_pubkey;         // The queried daemon's service node public key.  Will be empty if not running as a service node.
+      std::string service_node_ed25519_pubkey; // The daemon's ed25519 auxiliary public key.
+      std::string service_node_x25519_pubkey;  // The daemon's x25519 auxiliary public key.
       std::string status;                      // Generic RPC error code. "OK" is the success value.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(service_node_pubkey)
-        KV_SERIALIZE(service_node_ed25519_pubkey)
-        KV_SERIALIZE(service_node_x25519_pubkey)
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
-  // Get the service node private keys of the queried daemon, encoded in hex.  Do not ever share
-  // these keys: they would allow someone to impersonate your service node.
-  // The daemon must be started in --service-node mode otherwise this RPC command will fail.
-  struct COMMAND_RPC_GET_SERVICE_NODE_PRIVKEY
+  // Get the service private keys of the queried daemon, encoded in hex.  Do not ever share
+  // these keys: they would allow someone to impersonate your service node.  All three keys are used
+  // when running as a service node; when running as a regular node only the x25519 key is regularly
+  // used for some RPC and and node-to-SN communication requests.
+  struct GET_SERVICE_PRIVKEYS : RPC_COMMAND
   {
-    struct request_t
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
+    static constexpr auto names() { return NAMES("get_service_privkeys", "get_service_node_privkey"); }
 
-    struct response_t
+    struct request : EMPTY {};
+
+    struct response
     {
-      std::string service_node_privkey;         // The queried daemon's service node private key.
-      std::string service_node_ed25519_privkey; // The daemon's service node ed25519 private key (note that this is in sodium's format, which consists of the private and public keys concatenated together)
-      std::string service_node_x25519_privkey;  // The daemon's service node x25519 private key.
+      std::string service_node_privkey;         // The queried daemon's service node private key.  Will be empty if not running as a service node.
+      std::string service_node_ed25519_privkey; // The daemon's ed25519 private key (note that this is in sodium's format, which consists of the private and public keys concatenated together)
+      std::string service_node_x25519_privkey;  // The daemon's x25519 private key.
       std::string status;                       // Generic RPC error code. "OK" is the success value.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(service_node_privkey)
-        KV_SERIALIZE(service_node_ed25519_privkey)
-        KV_SERIALIZE(service_node_x25519_privkey)
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // TODO: Undocumented, -- unused
-  struct COMMAND_RPC_PERFORM_BLOCKCHAIN_TEST
+  struct PERFORM_BLOCKCHAIN_TEST : RPC_COMMAND
   {
+    static constexpr auto names() { return NAMES("perform_blockchain_test"); }
+
     struct request
     {
       uint64_t max_height;
       uint64_t seed;
 
-      BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(max_height)
-      KV_SERIALIZE(seed)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
 
     struct response
@@ -2796,10 +2010,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       std::string status;
       uint64_t res_height;
 
-      BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(status)
-      KV_SERIALIZE(res_height)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
   };
 
@@ -2810,11 +2021,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     std::string key_image_pub_key; // The contribution's key image, public key component
     uint64_t    amount;            // The amount that is locked in this contribution.
 
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(key_image)
-      KV_SERIALIZE(key_image_pub_key)
-      KV_SERIALIZE(amount)
-    END_KV_SERIALIZE_MAP()
+    KV_MAP_SERIALIZABLE
   };
 
   SISPOP_RPC_DOC_INTROSPECT
@@ -2825,174 +2032,18 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
     std::string address;                                         // The wallet address for this contributor rewards are sent to and contributions came from.
     std::vector<service_node_contribution> locked_contributions; // Array of contributions from this contributor.
 
-    BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(amount)
-      KV_SERIALIZE(reserved)
-      KV_SERIALIZE(address)
-      KV_SERIALIZE(locked_contributions)
-    END_KV_SERIALIZE_MAP()
+    KV_MAP_SERIALIZABLE
   };
 
   SISPOP_RPC_DOC_INTROSPECT
-  // Get information on Service Nodes.
-  struct COMMAND_RPC_GET_SERVICE_NODES
+  // Get information on some, all, or a random subset of Service Nodes.
+  struct GET_SERVICE_NODES : PUBLIC
   {
-    struct request_t
-    {
-      std::vector<std::string> service_node_pubkeys; // Array of public keys of active Service Nodes to get information about. Pass the empty array to query all Service Nodes.
-      bool include_json;                             // When set, the response's as_json member is filled out.
+    static constexpr auto names() { return NAMES("get_service_nodes", "get_n_service_nodes", "get_all_service_nodes"); }
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(service_node_pubkeys);
-        KV_SERIALIZE(include_json);
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
-
-    struct response_t
-    {
-      struct entry
-      {
-        std::string                           service_node_pubkey;           // The public key of the Service Node.
-        uint64_t                              registration_height;           // The height at which the registration for the Service Node arrived on the blockchain.
-        uint16_t                              registration_hf_version;       // The hard fork at which the registration for the Service Node arrived on the blockchain.
-        uint64_t                              requested_unlock_height;       // The height at which contributions will be released and the Service Node expires. 0 if not requested yet.
-        uint64_t                              last_reward_block_height;      // The last height at which this Service Node received a reward.
-        uint32_t                              last_reward_transaction_index; // When multiple Service Nodes register on the same height, the order the transaction arrive dictate the order you receive rewards.
-        bool                                  active;                        // True if fully funded and not currently decommissioned (and so `active && !funded` implicitly defines decommissioned)
-        bool                                  funded;                        // True if the required stakes have been submitted to activate this Service Node
-        uint64_t                              state_height;                  // If active: the state at which registration was completed; if decommissioned: the decommissioning height; if awaiting: the last contribution (or registration) height
-        uint32_t                              decommission_count;            // The number of times the Service Node has been decommissioned since registration
-        int64_t                               earned_downtime_blocks;        // The number of blocks earned towards decommissioning, or the number of blocks remaining until deregistration if currently decommissioned
-        std::array<uint16_t, 3>               service_node_version;          // The major, minor, patch version of the Service Node respectively.
-        std::vector<service_node_contributor> contributors;                  // Array of contributors, contributing to this Service Node.
-        uint64_t                              total_contributed;             // The total amount of Sispop in atomic units contributed to this Service Node.
-        uint64_t                              total_reserved;                // The total amount of Sispop in atomic units reserved in this Service Node.
-        uint64_t                              staking_requirement;           // The staking requirement in atomic units that is required to be contributed to become a Service Node.
-        uint64_t                              portions_for_operator;         // The operator percentage cut to take from each reward expressed in portions, see cryptonote_config.h's STAKING_PORTIONS.
-        uint64_t                              swarm_id;                      // The identifier of the Service Node's current swarm.
-        std::string                           operator_address;              // The wallet address of the operator to which the operator cut of the staking reward is sent to.
-        std::string                           public_ip;                     // The public ip address of the service node
-        uint16_t                              storage_port;                  // The port number associated with the storage server
-        uint16_t                              storage_lmq_port;              // The port number associated with the storage server (sispopmq interface)
-        uint16_t                              quorumnet_port;                // The port for direct SN-to-SN communication
-        std::string                           pubkey_ed25519;                // The service node's ed25519 public key for auxiliary services
-        std::string                           pubkey_x25519;                 // The service node's x25519 public key for auxiliary services
-
-
-        // Service Node Testing
-        uint64_t                                           last_uptime_proof;                   // The last time this Service Node's uptime proof was relayed by at least 1 Service Node other than itself in unix epoch time.
-        bool                                               storage_server_reachable;            // Whether the node's storage server has been reported as unreachable for a long time
-        uint64_t                                           storage_server_reachable_timestamp;  // The last time this Service Node's storage server was contacted
-        uint16_t                                           version_major;                       // Major version the node is currently running
-        uint16_t                                           version_minor;                       // Minor version the node is currently running
-        uint16_t                                           version_patch;                       // Patch version the node is currently running
-        std::vector<service_nodes::checkpoint_vote_record> votes;                               // Of the last N checkpoints the Service Node is in a checkpointing quorum, record whether or not the Service Node voted to checkpoint a block
-
-        BEGIN_KV_SERIALIZE_MAP()
-            KV_SERIALIZE(service_node_pubkey)
-            KV_SERIALIZE(registration_height)
-            KV_SERIALIZE(registration_hf_version)
-            KV_SERIALIZE(requested_unlock_height)
-            KV_SERIALIZE(last_reward_block_height)
-            KV_SERIALIZE(last_reward_transaction_index)
-            KV_SERIALIZE(active)
-            KV_SERIALIZE(funded)
-            KV_SERIALIZE(state_height)
-            KV_SERIALIZE(decommission_count)
-            KV_SERIALIZE(earned_downtime_blocks)
-            KV_SERIALIZE(service_node_version)
-            KV_SERIALIZE(contributors)
-            KV_SERIALIZE(total_contributed)
-            KV_SERIALIZE(total_reserved)
-            KV_SERIALIZE(staking_requirement)
-            KV_SERIALIZE(portions_for_operator)
-            KV_SERIALIZE(swarm_id)
-            KV_SERIALIZE(operator_address)
-            KV_SERIALIZE(public_ip)
-            KV_SERIALIZE(storage_port)
-            KV_SERIALIZE(storage_lmq_port)
-            KV_SERIALIZE(quorumnet_port)
-            KV_SERIALIZE(pubkey_ed25519)
-            KV_SERIALIZE(pubkey_x25519)
-
-            KV_SERIALIZE(last_uptime_proof)
-            KV_SERIALIZE(storage_server_reachable)
-            KV_SERIALIZE(storage_server_reachable_timestamp)
-            KV_SERIALIZE(version_major)
-            KV_SERIALIZE(version_minor)
-            KV_SERIALIZE(version_patch)
-            KV_SERIALIZE(votes)
-        END_KV_SERIALIZE_MAP()
-      };
-
-      std::vector<entry> service_node_states; // Array of service node registration information
-      uint64_t    height;                     // Current block's height.
-      std::string block_hash;                 // Current block's hash.
-      std::string status;                     // Generic RPC error code. "OK" is the success value.
-      std::string as_json;                    // If `include_json` is set in the request, this contains the json representation of the `entry` data structure
-
-
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(service_node_states)
-        KV_SERIALIZE(height)
-        KV_SERIALIZE(block_hash)
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(as_json)
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<response_t> response;
-  };
-
-  SISPOP_RPC_DOC_INTROSPECT
-  // Get information on the queried daemon's Service Node state.
-  struct COMMAND_RPC_GET_SERVICE_NODE_STATUS
-  {
-    struct request_t
-    {
-      bool include_json;                             // When set, the response's as_json member is filled out.
-
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(include_json);
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
-
-    struct response_t
-    {
-
-      cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response_t::entry service_node_state; // Service node registration information
-      uint64_t    height;                     // Current block's height.
-      std::string block_hash;                 // Current block's hash.
-      std::string status;                     // Generic RPC error code. "OK" is the success value.
-      std::string as_json;                    // If `include_json` is set in the request, this contains the json representation of the `entry` data structure
-
-
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(service_node_state)
-        KV_SERIALIZE(height)
-        KV_SERIALIZE(block_hash)
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(as_json)
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<response_t> response;
-  };
-
-  #define KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(var) \
-  if (this_ref.requested_fields.var || !this_ref.requested_fields.explicitly_set) KV_SERIALIZE(var)
-
-  SISPOP_RPC_DOC_INTROSPECT
-  // Get information on a all (or optionally a random subset) of Service Nodes.
-  struct COMMAND_RPC_GET_N_SERVICE_NODES
-  {
-
-    // Boolean values indicate whether corresponding
-    // fields should be included in the response
+    // Boolean values indicate whether corresponding fields should be included in the response
     struct requested_fields_t {
-
-      bool explicitly_set = false;          // internal use only: incicates whether one of the other parameters has been explicitly set
-
+      bool all = true; // If set, overrides any individual requested fields
       bool service_node_pubkey;
       bool registration_height;
       bool registration_hf_version;
@@ -3033,75 +2084,26 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       bool height;
       bool target_height;
       bool hardfork;
-
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE_OPT2(service_node_pubkey, false)
-        KV_SERIALIZE_OPT2(registration_height, false)
-        KV_SERIALIZE_OPT2(registration_hf_version, false)
-        KV_SERIALIZE_OPT2(requested_unlock_height, false)
-        KV_SERIALIZE_OPT2(last_reward_block_height, false)
-        KV_SERIALIZE_OPT2(last_reward_transaction_index, false)
-        KV_SERIALIZE_OPT2(active, false)
-        KV_SERIALIZE_OPT2(funded, false)
-        KV_SERIALIZE_OPT2(state_height, false)
-        KV_SERIALIZE_OPT2(decommission_count, false)
-        KV_SERIALIZE_OPT2(earned_downtime_blocks, false)
-        KV_SERIALIZE_OPT2(service_node_version, false)
-        KV_SERIALIZE_OPT2(contributors, false)
-        KV_SERIALIZE_OPT2(total_contributed, false)
-        KV_SERIALIZE_OPT2(total_reserved, false)
-        KV_SERIALIZE_OPT2(staking_requirement, false)
-        KV_SERIALIZE_OPT2(portions_for_operator, false)
-        KV_SERIALIZE_OPT2(swarm_id, false)
-        KV_SERIALIZE_OPT2(operator_address, false)
-        KV_SERIALIZE_OPT2(public_ip, false)
-        KV_SERIALIZE_OPT2(storage_port, false)
-        KV_SERIALIZE_OPT2(storage_lmq_port, false)
-        KV_SERIALIZE_OPT2(quorumnet_port, false)
-        KV_SERIALIZE_OPT2(pubkey_ed25519, false)
-        KV_SERIALIZE_OPT2(pubkey_x25519, false)
-        KV_SERIALIZE_OPT2(block_hash, false)
-        KV_SERIALIZE_OPT2(height, false)
-        KV_SERIALIZE_OPT2(target_height, false)
-        KV_SERIALIZE_OPT2(hardfork, false)
-
-        KV_SERIALIZE_OPT2(last_uptime_proof, false)
-        KV_SERIALIZE_OPT2(storage_server_reachable, false)
-        KV_SERIALIZE_OPT2(storage_server_reachable_timestamp, false)
-        KV_SERIALIZE_OPT2(version_major, false)
-        KV_SERIALIZE_OPT2(version_minor, false)
-        KV_SERIALIZE_OPT2(version_patch, false)
-        KV_SERIALIZE_OPT2(votes, false)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
 
-    struct request_t
+    struct request
     {
-      uint32_t limit; // If non-zero, select a random sample (in random order) of the given number of service nodes to return from the full list.
-      bool active_only; // If true, only include results for active (fully staked, not decommissioned) service nodes.
+      std::vector<std::string> service_node_pubkeys; // Array of public keys of registered Service Nodes to get information about. Omit to query all Service Nodes.
+      bool include_json;                             // When set, the response's as_json member is filled out.
+      uint32_t limit;                                // If non-zero, select a random sample (in random order) of the given number of service nodes to return from the full list.
+      bool active_only;                              // If true, only include results for active (fully staked, not decommissioned) service nodes.
       requested_fields_t fields;
 
-      std::string poll_block_hash; // If specified this changes the behaviour to only return service node records if the block hash is *not* equal to the given hash; otherwise it omits the records and instead sets `"unchanged": true` in the response. This is primarily used to poll for new results where the requested results only change with new blocks.
+      std::string poll_block_hash;                   // If specified this changes the behaviour to only return service node records if the block hash is *not* equal to the given hash; otherwise it omits the records and instead sets `"unchanged": true` in the response. This is primarily used to poll for new results where the requested results only change with new blocks.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(limit)
-        KV_SERIALIZE(active_only)
-        KV_SERIALIZE(fields)
-        KV_SERIALIZE(poll_block_hash)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
+    struct response
     {
 
       struct entry {
-        const requested_fields_t& requested_fields;
-
-        entry(const requested_fields_t& res)
-          : requested_fields(res)
-        {}
-
         std::string                           service_node_pubkey;           // The public key of the Service Node.
         uint64_t                              registration_height;           // The height at which the registration for the Service Node arrived on the blockchain.
         uint16_t                              registration_hf_version;       // The hard fork at which the registration for the Service Node arrived on the blockchain.
@@ -3129,16 +2131,13 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
         std::string                           pubkey_x25519;                 // The service node's x25519 public key for auxiliary services
 
         // Service Node Testing
-        uint64_t                                last_uptime_proof;                   // The last time this Service Node's uptime proof was relayed by at least 1 Service Node other than itself in unix epoch time.
-        bool                                    storage_server_reachable;            // True if this storage server is currently passing tests for the purposes of SN node testing: true if the last test passed, or if it has been unreachable for less than an hour; false if it has been failing tests for more than an hour (and thus is considered unreachable).
-        uint64_t                                storage_server_first_unreachable;    // If the last test we received was a failure, this field contains the timestamp when failures started.  Will be 0 if the last result was a success or the node has not yet been tested.  (To disinguish between these cases check storage_server_last_reachable).
-        uint64_t                                storage_server_last_unreachable;     // The last time this Service Node failed a ping test (regardless of whether or not it is currently failing); 0 if it never failed a test since startup.
-        uint64_t                                storage_server_last_reachable;       // The last time we received a successful ping response for this Service Node (whether or not it is currently failing); 0 if we have never received a success since startup.
-
-        std::vector<service_nodes::participation_entry> checkpoint_participation;    // Of the last N checkpoints the Service Node is in a checkpointing quorum, record whether or not the Service Node voted to checkpoint a block
-        std::vector<service_nodes::participation_entry> pulse_participation;         // Of the last N pulse blocks the Service Node is in a pulse quorum, record whether or not the Service Node voted (participated) in that block
-        std::vector<service_nodes::timestamp_participation_entry> timestamp_participation;         // Of the last N timestamp messages, record whether or not the Service Node was in sync with the network
-        std::vector<service_nodes::timesync_entry> timesync_status;         // Of the last N timestamp messages, record whether or not the Service Node responded
+        uint64_t                                           last_uptime_proof;                   // The last time this Service Node's uptime proof was relayed by at least 1 Service Node other than itself in unix epoch time.
+        bool                                               storage_server_reachable;            // Whether the node's storage server has been reported as unreachable for a long time
+        uint64_t                                           storage_server_reachable_timestamp;  // The last time this Service Node's storage server was contacted
+        uint16_t                                           version_major;                       // Major version the node is currently running
+        uint16_t                                           version_minor;                       // Minor version the node is currently running
+        uint16_t                                           version_patch;                       // Patch version the node is currently running
+        std::vector<service_nodes::checkpoint_vote_record> votes;                               // Of the last N checkpoints the Service Node is in a checkpointing quorum, record whether or not the Service Node voted to checkpoint a block
 
         KV_MAP_SERIALIZABLE
       };
@@ -3153,119 +2152,101 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       bool        unchanged;                  // Will be true (and `service_node_states` omitted) if you gave the current block hash to poll_block_hash
       uint8_t     hardfork;                   // Current hardfork version.
       std::string status;                     // Generic RPC error code. "OK" is the success value.
+      std::string as_json;                    // If `include_json` is set in the request, this contains the json representation of the `entry` data structure
 
-      BEGIN_KV_SERIALIZE_MAP()
-        if (!this_ref.unchanged) {
-          KV_SERIALIZE(service_node_states)
-        }
-        KV_SERIALIZE(status)
-        if (this_ref.fields.height) {
-          KV_SERIALIZE(height)
-        }
-        if (this_ref.fields.target_height) {
-          KV_SERIALIZE(target_height)
-        }
-        if (this_ref.fields.block_hash || (this_ref.polling_mode && !this_ref.unchanged)) {
-          KV_SERIALIZE(block_hash)
-        }
-        if (this_ref.fields.hardfork) {
-          KV_SERIALIZE(hardfork)
-        }
-        if (this_ref.polling_mode) {
-          KV_SERIALIZE(unchanged);
-        }
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
+
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
-  struct COMMAND_RPC_STORAGE_SERVER_PING
+  // Get information on the queried daemon's Service Node state.
+  struct GET_SERVICE_NODE_STATUS : RPC_COMMAND
   {
+    static constexpr auto names() { return NAMES("get_service_node_status"); }
+
+    struct request
+    {
+      bool include_json;                             // When set, the response's as_json member is filled out.
+
+      KV_MAP_SERIALIZABLE
+    };
+
+    struct response
+    {
+      GET_SERVICE_NODES::response::entry service_node_state; // Service node registration information
+      uint64_t    height;                     // Current block's height.
+      std::string block_hash;                 // Current block's hash.
+      std::string status;                     // Generic RPC error code. "OK" is the success value.
+      std::string as_json;                    // If `include_json` is set in the request, this contains the json representation of the `entry` data structure
+
+      KV_MAP_SERIALIZABLE
+    };
+  };
+
+  SISPOP_RPC_DOC_INTROSPECT
+  struct STORAGE_SERVER_PING : RPC_COMMAND
+  {
+    static constexpr auto names() { return NAMES("storage_server_ping"); }
+
     struct request
     {
       int version_major; // Storage Server Major version
       int version_minor; // Storage Server Minor version
       int version_patch; // Storage Server Patch version
       uint16_t storage_lmq_port; // Storage Server lmq port to include in uptime proofs
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(version_major);
-        KV_SERIALIZE(version_minor);
-        KV_SERIALIZE(version_patch);
-        KV_SERIALIZE(storage_lmq_port);
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
 
-    struct response
-    {
-      std::string status; // Generic RPC error code. "OK" is the success value.
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
-    };
+    struct response : STATUS {};
   };
 
   SISPOP_RPC_DOC_INTROSPECT
-  struct COMMAND_RPC_SISPOPNET_PING
+  struct SISPOPNET_PING : RPC_COMMAND
   {
+    static constexpr auto names() { return NAMES("sispopnet_ping"); }
+
     struct request
     {
-      std::array<int, 3> version; // Sispopnet version
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(version);
-      END_KV_SERIALIZE_MAP()
+      std::array<int, 3> version; // sispopnet version
+      KV_MAP_SERIALIZABLE
     };
 
-    struct response
-    {
-      std::string status; // Generic RPC error code. "OK" is the success value.
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
-    };
+    struct response : STATUS {};
   };
 
   SISPOP_RPC_DOC_INTROSPECT
-  // Get the required amount of Sispop to become a Service Node at the queried height. 
-  // For stagenet and testnet values, ensure the daemon is started with the 
+  // Get the required amount of sispop to become a Service Node at the queried height.
+  // For stagenet and testnet values, ensure the daemon is started with the
   // `--stagenet` or `--testnet` flags respectively.
-  struct COMMAND_RPC_GET_STAKING_REQUIREMENT
+  struct GET_STAKING_REQUIREMENT : PUBLIC
   {
-    struct request_t
+    static constexpr auto names() { return NAMES("get_staking_requirement"); }
+
+    struct request
     {
       uint64_t height; // The height to query the staking requirement for.  0 (or omitting) means current height.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(height)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
+    struct response
     {
       uint64_t staking_requirement; // The staking requirement in Sispop, in atomic units.
       uint64_t height;              // The height requested (or current height if 0 was requested)
       std::string status;           // Generic RPC error code. "OK" is the success value.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(staking_requirement)
-        KV_SERIALIZE(height)
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Get information on blacklisted Service Node key images.
-  struct COMMAND_RPC_GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES
+  struct GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES : PUBLIC
   {
-    struct request_t
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
+    static constexpr auto names() { return NAMES("get_service_node_blacklisted_key_images"); }
+
+    struct request : EMPTY {};
 
     struct entry
     {
@@ -3273,71 +2254,53 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       uint64_t unlock_height; // The height at which the key image is removed from the blacklist and becomes spendable.
       uint64_t amount;        // The total amount of locked Sispop in atomic units in this blacklisted stake.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(key_image)
-        KV_SERIALIZE(unlock_height)
-        KV_SERIALIZE(amount)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
 
-    struct response_t
+    struct response
     {
       std::vector<entry> blacklist; // Array of blacklisted key images, i.e. unspendable transactions
       std::string status;           // Generic RPC error code. "OK" is the success value.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(blacklist)
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Get information on output blacklist.
-  struct COMMAND_RPC_GET_OUTPUT_BLACKLIST
+  struct GET_OUTPUT_BLACKLIST : PUBLIC, BINARY
   {
-    struct request_t
-    {
-      BEGIN_KV_SERIALIZE_MAP() 
-      END_KV_SERIALIZE_MAP() 
-    };
-    typedef epee::misc_utils::struct_init<request_t> request;
+    static constexpr auto names() { return NAMES("get_output_blacklist.bin"); }
 
-    struct response_t
+    struct request : EMPTY {};
+
+    struct response
     {
       std::vector<uint64_t> blacklist; // (Developer): Array of indexes from the global output list, corresponding to blacklisted key images.
       std::string status;              // Generic RPC error code. "OK" is the success value.
       bool untrusted;                  // If the result is obtained using bootstrap mode, and therefore not trusted `true`, or otherwise `false`.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(blacklist)
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Query hardcoded/service node checkpoints stored for the blockchain. Omit all arguments to retrieve the latest "count" checkpoints.
-  struct COMMAND_RPC_GET_CHECKPOINTS
+  struct GET_CHECKPOINTS : PUBLIC
   {
-    constexpr static uint32_t NUM_CHECKPOINTS_TO_QUERY_BY_DEFAULT = 60;
-    constexpr static uint64_t HEIGHT_SENTINEL_VALUE               = (UINT64_MAX - 1);
-    struct request_t
+    static constexpr auto names() { return NAMES("get_checkpoints"); }
+
+    static constexpr size_t MAX_COUNT = 256;
+    static constexpr uint32_t NUM_CHECKPOINTS_TO_QUERY_BY_DEFAULT = 60;
+    static constexpr uint64_t HEIGHT_SENTINEL_VALUE               = std::numeric_limits<uint64_t>::max() - 1;
+    struct request
     {
       uint64_t start_height; // Optional: Get the first count checkpoints starting from this height. Specify both start and end to get the checkpoints inbetween.
       uint64_t end_height;   // Optional: Get the first count checkpoints before end height. Specify both start and end to get the checkpoints inbetween.
       uint32_t count;        // Optional: Number of checkpoints to query.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE_OPT(start_height, HEIGHT_SENTINEL_VALUE)
-        KV_SERIALIZE_OPT(end_height, HEIGHT_SENTINEL_VALUE)
-        KV_SERIALIZE_OPT(count, NUM_CHECKPOINTS_TO_QUERY_BY_DEFAULT)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
     struct voter_to_signature_serialized
     {
@@ -3349,10 +2312,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       : voter_index(entry.voter_index)
       , signature(epee::string_tools::pod_to_hex(entry.signature)) { }
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(voter_index);
-        KV_SERIALIZE(signature);
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
 
       BEGIN_SERIALIZE() // NOTE: For store_t_to_json
         FIELD(voter_index)
@@ -3382,14 +2342,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
           signatures.push_back(entry);
       }
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(version);
-        KV_SERIALIZE(type);
-        KV_SERIALIZE(height);
-        KV_SERIALIZE(block_hash);
-        KV_SERIALIZE(signatures);
-        KV_SERIALIZE(prev_height);
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
 
       BEGIN_SERIALIZE() // NOTE: For store_t_to_json
         FIELD(version)
@@ -3401,40 +2354,32 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       END_SERIALIZE()
     };
 
-    struct response_t
+    struct response
     {
       std::vector<checkpoint_serialized> checkpoints; // Array of requested checkpoints
       std::string status;                             // Generic RPC error code. "OK" is the success value.
       bool untrusted;                                 // If the result is obtained using bootstrap mode, and therefore not trusted `true`, or otherwise `false`.
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(checkpoints)
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(untrusted)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Query hardcoded/service node checkpoints stored for the blockchain. Omit all arguments to retrieve the latest "count" checkpoints.
-  struct COMMAND_RPC_GET_SN_STATE_CHANGES
+  struct GET_SN_STATE_CHANGES : PUBLIC
   {
-    constexpr static uint32_t NUM_BLOCKS_TO_SCAN_BY_DEFAULT = 720;
-    constexpr static uint64_t HEIGHT_SENTINEL_VALUE         = (UINT64_MAX - 1);
-    struct request_t
+    static constexpr auto names() { return NAMES("get_service_nodes_state_changes"); }
+
+    static constexpr uint64_t HEIGHT_SENTINEL_VALUE = std::numeric_limits<uint64_t>::max() - 1;
+    struct request
     {
       uint64_t start_height;
       uint64_t end_height;   // Optional: If omitted, the tally runs until the current block
 
-      BEGIN_KV_SERIALIZE_MAP()
-      KV_SERIALIZE(start_height)
-      KV_SERIALIZE_OPT(end_height, HEIGHT_SENTINEL_VALUE)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<request_t> request;
 
-    struct response_t
+    struct response
     {
       std::string status;                    // Generic RPC error code. "OK" is the success value.
       bool untrusted;                        // If the result is obtained using bootstrap mode, and therefore not trusted `true`, or otherwise `false`.
@@ -3447,81 +2392,61 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       uint64_t start_height;
       uint64_t end_height;
 
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-        KV_SERIALIZE(untrusted)
-        KV_SERIALIZE(total_deregister)
-        KV_SERIALIZE(total_ip_change_penalty)
-        KV_SERIALIZE(total_decommission)
-        KV_SERIALIZE(total_recommission)
-        KV_SERIALIZE(start_height)
-        KV_SERIALIZE(end_height)
-      END_KV_SERIALIZE_MAP()
+      KV_MAP_SERIALIZABLE
     };
-    typedef epee::misc_utils::struct_init<response_t> response;
   };
 
 
+
   SISPOP_RPC_DOC_INTROSPECT
-  struct COMMAND_RPC_REPORT_PEER_SS_STATUS
+  struct REPORT_PEER_SS_STATUS
   {
+    static constexpr auto names() { return NAMES("report_peer_storage_server_status"); }
+
     struct request
     {
       std::string type; // test type (currently used: ["reachability"])
       std::string pubkey; // service node pubkey
       bool passed; // whether the node is passing the test
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(type)
-        KV_SERIALIZE(pubkey)
-        KV_SERIALIZE(passed)
-      END_KV_SERIALIZE_MAP()
+
+      KV_MAP_SERIALIZABLE
     };
 
-    struct response
-    {
-      std::string status; // Generic RPC error code. "OK" is the success value.
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
-    };
+    struct response : STATUS {};
   };
 
   // Deliberately undocumented; this RPC call is really only useful for testing purposes to reset
   // the resync idle timer (which normally fires every 60s) for the test suite.
-  struct COMMAND_RPC_TEST_TRIGGER_P2P_RESYNC
+  struct TEST_TRIGGER_P2P_RESYNC : RPC_COMMAND
   {
-    struct request { BEGIN_KV_SERIALIZE_MAP() END_KV_SERIALIZE_MAP() };
-    struct response {
-      std::string status;
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
-    };
+    static constexpr auto names() { return NAMES("test_trigger_p2p_resync"); }
+
+    struct request : EMPTY {};
+    struct response : STATUS {};
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Get the name mapping for a Sispop Name Service entry. Sispop currently supports mappings
   // for Session.
-  struct COMMAND_RPC_LNS_NAMES_TO_OWNERS
+  struct LNS_NAMES_TO_OWNERS : PUBLIC
   {
-    static size_t const MAX_REQUEST_ENTRIES      = 256;
-    static size_t const MAX_TYPE_REQUEST_ENTRIES = 8;
+    static constexpr auto names() { return NAMES("lns_names_to_owners"); }
+
+    static constexpr size_t MAX_REQUEST_ENTRIES      = 256;
+    static constexpr size_t MAX_TYPE_REQUEST_ENTRIES = 8;
     struct request_entry
     {
       std::string name_hash; // The name hashed using libsodium's crypto_generichash_blake2b in base64 to resolve to a public key via Sispop Name Service
       std::vector<uint16_t> types; // If empty, query all types. Currently only Session(0). In future updates more mapping types will be available.
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(name_hash)
-        KV_SERIALIZE(types)
-      END_KV_SERIALIZE_MAP()
+
+      KV_MAP_SERIALIZABLE
     };
 
     struct request
     {
       std::vector<request_entry> entries;
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(entries)
-      END_KV_SERIALIZE_MAP()
+
+      KV_MAP_SERIALIZABLE
     };
 
     struct response_entry
@@ -3536,43 +2461,33 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       uint64_t update_height;   // The last height that this Sispop Name Service entry was updated on the Blockchain.
       std::string txid;         // The txid of who purchased the mapping, null hash if not applicable.
       std::string prev_txid;    // The previous txid that purchased the mapping, null hash if not applicable.
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(entry_index)
-        KV_SERIALIZE(type)
-        KV_SERIALIZE(name_hash)
-        KV_SERIALIZE(owner)
-        KV_SERIALIZE(backup_owner)
-        KV_SERIALIZE(encrypted_value)
-        KV_SERIALIZE(register_height)
-        KV_SERIALIZE(update_height)
-        KV_SERIALIZE(txid)
-        KV_SERIALIZE(prev_txid)
-      END_KV_SERIALIZE_MAP()
+
+      KV_MAP_SERIALIZABLE
     };
 
     struct response
     {
       std::vector<response_entry> entries;
       std::string status; // Generic RPC error code. "OK" is the success value.
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(entries)
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
+
+      KV_MAP_SERIALIZABLE
     };
   };
 
   SISPOP_RPC_DOC_INTROSPECT
   // Get all the name mappings for the queried owner. The owner can be either a ed25519 public key or Monero style
   // public key; by default purchases are owned by the spend public key of the purchasing wallet.
-  struct COMMAND_RPC_LNS_OWNERS_TO_NAMES
+  struct LNS_OWNERS_TO_NAMES : PUBLIC
   {
-    static size_t const MAX_REQUEST_ENTRIES = 256;
+    static constexpr auto names() { return NAMES("lns_owners_to_names"); }
+
+    static constexpr size_t MAX_REQUEST_ENTRIES = 256;
     struct request
     {
-      std::vector<std::string> entries; // The owner's public key to find all Sispop Name Service entries for.
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(entries)
-      END_KV_SERIALIZE_MAP()
+
+      std::vector<std::string> entries; // The owner's public key to find all sispop Name Service entries for.
+
+      KV_MAP_SERIALIZABLE
     };
 
     struct response_entry
@@ -3587,28 +2502,123 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       uint64_t    update_height;   // The last height that this Sispop Name Service entry was updated on the Blockchain.
       std::string txid;            // The txid of who purchases the mapping.
       std::string prev_txid;       // The previous txid that purchased the mapping, null hash if not applicable.
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(request_index)
-        KV_SERIALIZE(type)
-        KV_SERIALIZE(name_hash)
-        KV_SERIALIZE(owner)
-        KV_SERIALIZE(backup_owner)
-        KV_SERIALIZE(encrypted_value)
-        KV_SERIALIZE(register_height)
-        KV_SERIALIZE(update_height)
-        KV_SERIALIZE(txid)
-        KV_SERIALIZE(prev_txid)
-      END_KV_SERIALIZE_MAP()
+
+      KV_MAP_SERIALIZABLE
     };
 
     struct response
     {
       std::vector<response_entry> entries;
       std::string status; // Generic RPC error code. "OK" is the success value.
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(entries)
-        KV_SERIALIZE(status)
-      END_KV_SERIALIZE_MAP()
+
+      KV_MAP_SERIALIZABLE
     };
   };
-}
+
+  SISPOP_RPC_DOC_INTROSPECT
+  // Clear TXs from the daemon cache, currently only the cache storing TX hashes that were previously verified bad by the daemon.
+  struct FLUSH_CACHE : RPC_COMMAND
+  {
+    static constexpr auto names() { return NAMES("flush_cache"); }
+    struct request
+    {
+      bool bad_txs; // Clear the cache storing TXs that failed verification.
+      bool bad_blocks; // Clear the cache storing blocks that failed verfication.
+      KV_MAP_SERIALIZABLE;
+    };
+
+    struct response : STATUS { };
+  };
+
+  template <typename...> struct type_list {};
+
+  /// List of all supported rpc command structs to allow compile-time enumeration of all supported
+  /// RPC types.  Every type added above that has an RPC endpoint needs to be added here, and needs
+  /// a core_rpc_server::invoke() overload that takes a <TYPE>::request and returns a
+  /// <TYPE>::response.  The <TYPE>::request has to be unique (for overload resolution);
+  /// <TYPE>::response does not.
+  using core_rpc_types = type_list<
+    GET_HEIGHT,
+    GET_BLOCKS_FAST,
+    GET_BLOCKS_BY_HEIGHT,
+    GET_ALT_BLOCKS_HASHES,
+    GET_HASHES_FAST,
+    GET_TRANSACTIONS,
+    IS_KEY_IMAGE_SPENT,
+    GET_TX_GLOBAL_OUTPUTS_INDEXES,
+    GET_OUTPUTS_BIN,
+    GET_OUTPUTS,
+    SEND_RAW_TX,
+    START_MINING,
+    STOP_MINING,
+    MINING_STATUS,
+    GET_INFO,
+    GET_NET_STATS,
+    SAVE_BC,
+    GETBLOCKCOUNT,
+    GETBLOCKHASH,
+    GETBLOCKTEMPLATE,
+    SUBMITBLOCK,
+    GENERATEBLOCKS,
+    GET_LAST_BLOCK_HEADER,
+    GET_BLOCK_HEADER_BY_HASH,
+    GET_BLOCK_HEADER_BY_HEIGHT,
+    GET_BLOCK,
+    GET_PEER_LIST,
+    GET_PUBLIC_NODES,
+    SET_LOG_HASH_RATE,
+    SET_LOG_LEVEL,
+    SET_LOG_CATEGORIES,
+    GET_TRANSACTION_POOL,
+    GET_TRANSACTION_POOL_HASHES_BIN,
+    GET_TRANSACTION_POOL_HASHES,
+    GET_TRANSACTION_POOL_BACKLOG,
+    GET_TRANSACTION_POOL_STATS,
+    GET_CONNECTIONS,
+    GET_BLOCK_HEADERS_RANGE,
+    SET_BOOTSTRAP_DAEMON,
+    STOP_DAEMON,
+    GET_LIMIT,
+    SET_LIMIT,
+    OUT_PEERS,
+    IN_PEERS,
+    HARD_FORK_INFO,
+    GETBANS,
+    SETBANS,
+    BANNED,
+    FLUSH_TRANSACTION_POOL,
+    GET_OUTPUT_HISTOGRAM,
+    GET_VERSION,
+    GET_COINBASE_TX_SUM,
+    GET_BASE_FEE_ESTIMATE,
+    GET_ALTERNATE_CHAINS,
+    UPDATE,
+    RELAY_TX,
+    SYNC_INFO,
+    GET_OUTPUT_DISTRIBUTION,
+    GET_OUTPUT_DISTRIBUTION_BIN,
+    POP_BLOCKS,
+    PRUNE_BLOCKCHAIN,
+    GET_QUORUM_STATE,
+    GET_SERVICE_NODE_REGISTRATION_CMD_RAW,
+    GET_SERVICE_NODE_REGISTRATION_CMD,
+    GET_SERVICE_KEYS,
+    GET_SERVICE_PRIVKEYS,
+    PERFORM_BLOCKCHAIN_TEST,
+    GET_SERVICE_NODES,
+    GET_SERVICE_NODE_STATUS,
+    STORAGE_SERVER_PING,
+    SISPOPNET_PING,
+    GET_STAKING_REQUIREMENT,
+    GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES,
+    GET_OUTPUT_BLACKLIST,
+    GET_CHECKPOINTS,
+    GET_SN_STATE_CHANGES,
+    REPORT_PEER_SS_STATUS,
+    TEST_TRIGGER_P2P_RESYNC,
+    LNS_NAMES_TO_OWNERS,
+    LNS_OWNERS_TO_NAMES,
+    FLUSH_CACHE
+  >;
+
+} } // namespace cryptonote::rpc

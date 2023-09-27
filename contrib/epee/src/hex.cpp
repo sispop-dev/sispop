@@ -32,6 +32,9 @@
 #include <limits>
 #include <ostream>
 #include <stdexcept>
+#include <string_view>
+#include <cctype>
+#include <algorithm>
 
 namespace epee
 {
@@ -84,7 +87,7 @@ namespace epee
     return write_hex(out, src);
   }
 
-  std::vector<uint8_t> from_hex::vector(boost::string_ref src)
+  std::vector<uint8_t> from_hex::vector(std::string_view src)
   {
     // should we include a specific character
     auto include = [](char input) {

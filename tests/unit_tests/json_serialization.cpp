@@ -1,9 +1,9 @@
 
-#include <boost/optional/optional.hpp>
 #include <boost/range/adaptor/indexed.hpp>
 #include <gtest/gtest.h>
 #include <rapidjson/document.h>
 #include <vector>
+#include <optional>
 
 #include "crypto/hash.h"
 #include "cryptonote_basic/account.h"
@@ -54,7 +54,7 @@ namespace
             bool is_miner_tx = false;
             for (cryptonote::txin_v const &txin_type : source.vin)
             {
-              is_miner_tx = (txin_type.type() == typeid(cryptonote::txin_gen));
+              is_miner_tx = std::holds_alternative<cryptonote::txin_gen>(txin_type);
               if (is_miner_tx) break;
             }
 
@@ -66,7 +66,7 @@ namespace
             {
                 cryptonote::tx_out const& tx_out_entry = source.vout[output_index];
                 source_amount += tx_out_entry.amount;
-                auto const& key = boost::get<cryptonote::txout_to_key>(tx_out_entry.target);
+                auto const& key = std::get<cryptonote::txout_to_key>(tx_out_entry.target);
 
                 actual_sources.push_back(
                     {{}, 0, key_field.pub_key, {}, static_cast<size_t>(output_index), tx_out_entry.amount, rct, rct::identity()}
@@ -92,7 +92,7 @@ namespace
         cryptonote::sispop_construct_tx_params tx_params;
         tx_params.hf_version = cryptonote::network_version_10_bulletproofs - 1;
         if (bulletproof) tx_params.hf_version = cryptonote::network_version_count - 1;
-        if (!cryptonote::construct_tx_and_get_tx_key(from, subaddresses, actual_sources, to, boost::none, {}, tx, 0, tx_key, extra_keys, { bulletproof ? rct::RangeProofBulletproof : rct::RangeProofBorromean, bulletproof ? 2 : 0 }, nullptr, tx_params))
+        if (!cryptonote::construct_tx_and_get_tx_key(from, subaddresses, actual_sources, to, std::nullopt, {}, tx, 0, tx_key, extra_keys, { bulletproof ? rct::RangeProofBulletproof : rct::RangeProofBorromean, bulletproof ? 2 : 0 }, nullptr, tx_params))
             throw std::runtime_error{"transaction construction error"};
 
         return tx;

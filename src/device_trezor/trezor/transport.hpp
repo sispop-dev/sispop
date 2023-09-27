@@ -32,12 +32,11 @@
 
 
 #include <boost/asio.hpp>
-#include <boost/asio/deadline_timer.hpp>
-#include <boost/array.hpp>
-#include <boost/utility/string_ref.hpp>
+#include <boost/asio/steady_timer.hpp>
 
-#include <typeinfo>
+#include <string_view>
 #include <type_traits>
+#include <chrono>
 #include "net/http_client.h"
 
 #include "rapidjson/document.h"
@@ -55,6 +54,7 @@
 
 namespace hw {
 namespace trezor {
+  using namespace std::literals;
 
   using json = rapidjson::Document;
   using json_val = rapidjson::Value;
@@ -66,15 +66,17 @@ namespace trezor {
 
   // Base HTTP comm serialization.
   bool t_serialize(const std::string & in, std::string & out);
+  bool t_serialize(const epee::wipeable_string & in, std::string & out);
   bool t_serialize(const json_val & in, std::string & out);
   std::string t_serialize(const json_val & in);
 
   bool t_deserialize(const std::string & in, std::string & out);
+  bool t_deserialize(std::string & in, epee::wipeable_string & out);
   bool t_deserialize(const std::string & in, json & out);
 
   // Flexible json serialization. HTTP client tailored for bridge API
   template<class t_req, class t_res, class t_transport>
-  bool invoke_bridge_http(const boost::string_ref uri, const t_req & out_struct, t_res & result_struct, t_transport& transport, const boost::string_ref method = "POST", std::chrono::milliseconds timeout = std::chrono::seconds(180))
+  bool invoke_bridge_http(std::string_view uri, const t_req & out_struct, t_res & result_struct, t_transport& transport, std::string_view method = "POST"sv, std::chrono::milliseconds timeout = 180s)
   {
     std::string req_param;
     t_serialize(out_struct, req_param);
@@ -84,6 +86,13 @@ namespace trezor {
     additional_params.push_back(std::make_pair("Content-Type","application/json; charset=utf-8"));
 
     const http::http_response_info* pri = nullptr;
+    const auto data_cleaner = epee::misc_utils::create_scope_leave_handler([&]() {
+      if (!req_param.empty()) {
+        memwipe(&req_param[0], req_param.size());
+      }
+      transport.wipe_response();
+    });
+
     if(!transport.invoke(uri, method, req_param, timeout, &pri, std::move(additional_params)))
     {
       MERROR("Failed to invoke http request to  " << uri);
@@ -103,7 +112,7 @@ namespace trezor {
       return false;
     }
 
-    return t_deserialize(pri->m_body, result_struct);
+    return t_deserialize(const_cast<http::http_response_info*>(pri)->m_body, result_struct);
   }
 
   // Forward decl
@@ -162,8 +171,8 @@ namespace trezor {
   class BridgeTransport : public Transport {
   public:
     BridgeTransport(
-        boost::optional<std::string> device_path = boost::none,
-        boost::optional<std::string> bridge_host = boost::none);
+        std::optional<std::string> device_path = std::nullopt,
+        std::optional<std::string> bridge_host = std::nullopt);
 
     virtual ~BridgeTransport() = default;
 
@@ -178,16 +187,16 @@ namespace trezor {
     void write(const google::protobuf::Message &req) override;
     void read(std::shared_ptr<google::protobuf::Message> & msg, messages::MessageType * msg_type=nullptr) override;
 
-    const boost::optional<json> & device_info() const;
+    const std::optional<json> & device_info() const;
     std::ostream& dump(std::ostream& o) const override;
 
   private:
     epee::net_utils::http::http_simple_client m_http_client;
     std::string m_bridge_host;
-    boost::optional<std::string> m_device_path;
-    boost::optional<std::string> m_session;
-    boost::optional<std::string> m_response;
-    boost::optional<json> m_device_info;
+    std::optional<std::string> m_device_path;
+    std::optional<std::string> m_session;
+    std::optional<epee::wipeable_string> m_response;
+    std::optional<json> m_device_info;
   };
 
   // UdpTransport transport
@@ -197,8 +206,8 @@ namespace trezor {
   public:
 
     explicit UdpTransport(
-        boost::optional<std::string> device_path=boost::none,
-        boost::optional<std::shared_ptr<Protocol>> proto=boost::none);
+        std::optional<std::string> device_path=std::nullopt,
+        std::optional<std::shared_ptr<Protocol>> proto=std::nullopt);
 
     virtual ~UdpTransport() = default;
 
@@ -224,11 +233,9 @@ namespace trezor {
 
   private:
     void require_socket();
-    ssize_t receive(void * buff, size_t size, boost::system::error_code * error_code=nullptr, bool no_throw=false, boost::posix_time::time_duration timeout=boost::posix_time::seconds(10));
+    ssize_t receive(void * buff, size_t size, boost::system::error_code * error_code=nullptr, bool no_throw=false, std::chrono::milliseconds timeout = 10s);
     void check_deadline();
-    static void handle_receive(const boost::system::error_code& ec, std::size_t length,
-                               boost::system::error_code* out_ec, std::size_t* out_length);
-    bool ping_int(boost::posix_time::time_duration timeout=boost::posix_time::milliseconds(1500));
+    bool ping_int(std::chrono::milliseconds timeout = 1500ms);
 
     std::shared_ptr<Protocol> m_proto;
     std::string m_device_host;
@@ -236,7 +243,7 @@ namespace trezor {
 
     std::unique_ptr<udp::socket> m_socket;
     boost::asio::io_service m_io_service;
-    boost::asio::deadline_timer m_deadline;
+    boost::asio::steady_timer m_deadline;
     udp::endpoint m_endpoint;
   };
 
@@ -247,8 +254,8 @@ namespace trezor {
   public:
 
     explicit WebUsbTransport(
-        boost::optional<libusb_device_descriptor*> descriptor = boost::none,
-        boost::optional<std::shared_ptr<Protocol>> proto = boost::none
+        std::optional<libusb_device_descriptor*> descriptor = std::nullopt,
+        std::optional<std::shared_ptr<Protocol>> proto = std::nullopt
     );
 
     virtual ~WebUsbTransport();
@@ -371,10 +378,10 @@ namespace trezor {
   template<class t_message=google::protobuf::Message>
   std::shared_ptr<t_message>
       exchange_message(Transport & transport, const google::protobuf::Message & req,
-                       boost::optional<messages::MessageType> resp_type = boost::none)
+                       std::optional<messages::MessageType> resp_type = std::nullopt)
   {
     // Require strictly protocol buffers response in the template.
-    BOOST_STATIC_ASSERT(boost::is_base_of<google::protobuf::Message, t_message>::value);
+    static_assert(std::is_base_of_v<google::protobuf::Message, t_message>);
 
     // Write the request
     transport.write(req);
@@ -385,7 +392,7 @@ namespace trezor {
     transport.read(msg_resp, &msg_resp_type);
 
     // Determine type of expected message response
-    messages::MessageType required_type = resp_type ? resp_type.get() : MessageMapper::get_message_wire_number<t_message>();
+    messages::MessageType required_type = resp_type ? *resp_type : MessageMapper::get_message_wire_number<t_message>();
 
     if (msg_resp_type == required_type) {
       return message_ptr_retype<t_message>(msg_resp);

@@ -42,16 +42,17 @@
 #define INCLUDED_p2p_connection_basic_hpp
 
 
+#include <mutex>
 #include <string>
 #include <atomic>
 #include <memory>
+#include <deque>
 
 #include <boost/asio.hpp>
 #include <boost/asio/ssl.hpp>
 
-#include "net/net_utils_base.h"
+#include "shared_sv.h"
 #include "net/net_ssl.h"
-#include "syncobj.h"
 
 namespace epee
 {
@@ -99,17 +100,17 @@ class connection_basic_pimpl; // PIMPL for this class
 
 class connection_basic { // not-templated base class for rapid developmet of some code parts
 		// beware of removing const, net_utils::connection is sketchily doing a cast to prevent storing ptr twice
-		const boost::shared_ptr<connection_basic_shared_state> m_state;
+		const std::shared_ptr<connection_basic_shared_state> m_state;
 	public:
 
 		std::unique_ptr< connection_basic_pimpl > mI; // my Implementation
 
 		// moved here from orginal connecton<> - common member variables that do not depend on template in connection<>
-    volatile uint32_t m_want_close_connection;
+    std::atomic<bool> m_want_close_connection;
     std::atomic<bool> m_was_shutdown;
-    critical_section m_send_que_lock;
-    std::list<std::string> m_send_que;
-    volatile bool m_is_multithreaded;
+    std::mutex m_send_que_lock;
+    std::deque<shared_sv> m_send_que;
+    std::atomic<bool> m_is_multithreaded;
     /// Strand to ensure the connection's handlers are not called concurrently.
     boost::asio::io_service::strand strand_;
     /// Socket for the connection.
@@ -118,8 +119,8 @@ class connection_basic { // not-templated base class for rapid developmet of som
 
 	public:
 		// first counter is the ++/-- count of current sockets, the other socket_number is only-increasing ++ number generator
-		connection_basic(boost::asio::ip::tcp::socket&& socket, boost::shared_ptr<connection_basic_shared_state> state, ssl_support_t ssl_support);
-		connection_basic(boost::asio::io_service &io_service, boost::shared_ptr<connection_basic_shared_state> state, ssl_support_t ssl_support);
+		connection_basic(boost::asio::ip::tcp::socket&& socket, std::shared_ptr<connection_basic_shared_state> state, ssl_support_t ssl_support);
+		connection_basic(boost::asio::io_service &io_service, std::shared_ptr<connection_basic_shared_state> state, ssl_support_t ssl_support);
 
 		virtual ~connection_basic() noexcept(false);
 

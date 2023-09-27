@@ -27,13 +27,15 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <stdlib.h>
-#include <string.h>
-#include <ctype.h>
+#include "i18n.h"
+#include <cstdlib>
+#include <cstring>
+#include <cctype>
+#include <cstdint>
 #include <string>
 #include <map>
+#include <utility>
 #include "file_io_utils.h"
-#include "common/i18n.h"
 
 #undef SISPOP_DEFAULT_LOG_CATEGORY
 #define SISPOP_DEFAULT_LOG_CATEGORY "i18n"
@@ -43,6 +45,8 @@
 static const unsigned char qm_magic[16] = {0x3c, 0xb8, 0x64, 0x18, 0xca, 0xef, 0x9c, 0x95, 0xcd, 0x21, 0x1c, 0xbf, 0x60, 0xa1, 0xbd, 0xdd};
 
 static std::map<std::string,std::string> i18n_entries;
+
+using namespace std::literals;
 
 /* Logging isn't initialized yet when this is run */
 /* add std::flush, because std::endl doesn't seem to flush, contrary to expected */
@@ -282,7 +286,7 @@ int i18n_set_language(const char *directory, const char *base, std::string langu
       chunk_type = data[idx++];
       chunk_size = 0;
       if (chunk_type == 0x01) {
-        i18n_entries[context + std::string("",1) + source] = translation;
+        i18n_entries[context + "\0"s + source] = translation;
         context = std::string();
         source = std::string();
         translation = std::string();
@@ -320,7 +324,7 @@ int i18n_set_language(const char *directory, const char *base, std::string langu
 /* The entries is constant by that time */
 const char *i18n_translate(const char *s, const std::string &context)
 {
-  const std::string key = context + std::string("", 1) + s;
+  const std::string key = context + "\0"s + s;
   std::map<std::string,std::string>::const_iterator i = i18n_entries.find(key);
   if (i == i18n_entries.end())
     return s;

@@ -27,7 +27,6 @@
 #pragma once
 
 #include <system_error>
-#include <type_traits>
 
 enum class common_error : int
 {

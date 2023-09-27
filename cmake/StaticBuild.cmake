@@ -280,7 +280,7 @@ build_external(boost
   CONFIGURE_COMMAND
     ${CMAKE_COMMAND} -E env ${boost_bootstrap_cxx}
     ./bootstrap.sh --without-icu --prefix=${DEPS_DESTDIR} --with-toolset=${boost_toolset}
-      --with-libraries=chrono,filesystem,program_options,system,thread,date_time,regex,serialization,locale,atomic
+      --with-libraries=filesystem,program_options,system,thread,date_time,serialization,locale,atomic
   BUILD_COMMAND true
   INSTALL_COMMAND
     ./b2 -d0 variant=release link=static runtime-link=static optimization=speed ${boost_extra}
@@ -289,12 +289,10 @@ build_external(boost
       install
   BUILD_BYPRODUCTS
     ${DEPS_DESTDIR}/lib/libboost_atomic.a
-    ${DEPS_DESTDIR}/lib/libboost_chrono.a
     ${DEPS_DESTDIR}/lib/libboost_date_time.a
     ${DEPS_DESTDIR}/lib/libboost_filesystem.a
     ${DEPS_DESTDIR}/lib/libboost_locale.a
     ${DEPS_DESTDIR}/lib/libboost_program_options.a
-    ${DEPS_DESTDIR}/lib/libboost_regex.a
     ${DEPS_DESTDIR}/lib/libboost_serialization.a
     ${DEPS_DESTDIR}/lib/libboost_system.a
     ${DEPS_DESTDIR}/lib/libboost_thread.a
@@ -304,7 +302,7 @@ add_library(boost_core INTERFACE)
 add_dependencies(boost_core INTERFACE boost_external)
 target_include_directories(boost_core SYSTEM INTERFACE ${DEPS_DESTDIR}/include)
 add_library(Boost::boost ALIAS boost_core)
-foreach(boostlib atomic chrono date_time filesystem locale program_options regex serialization system thread)
+foreach(boostlib atomic date_time filesystem locale program_options serialization system thread)
   add_static_target(Boost::${boostlib} boost_external libboost_${boostlib}.a)
   target_link_libraries(Boost::${boostlib} INTERFACE boost_core)
 endforeach()
@@ -315,7 +313,7 @@ set(Boost_VERSION ${BOOST_VERSION})
 
 
 build_external(sqlite3)
-add_static_target(sqlite3 sqlite_external libsqlite3.a)
+add_static_target(sqlite3 sqlite3_external libsqlite3.a)
 
 
 
@@ -408,8 +406,12 @@ build_external(hidapi
 )
 set(HIDAPI_FOUND TRUE)
 add_static_target(hidapi_libusb hidapi_external ${hidapi_libusb_lib})
+set(hidapi_links "libusb_vendor;libudev")
+if(WIN32)
+  list(APPEND hidapi_links setupapi)
+endif()
 set_target_properties(hidapi_libusb PROPERTIES
-    INTERFACE_LINK_LIBRARIES "libusb_vendor;libudev"
+    INTERFACE_LINK_LIBRARIES "${hidapi_links}"
     INTERFACE_COMPILE_DEFINITIONS HAVE_HIDAPI)
 
 
@@ -455,4 +457,6 @@ if(CMAKE_CROSSCOMPILING AND ARCH_TRIPLET MATCHES mingw)
   list(APPEND libzmq_link_libs iphlpapi)
 endif()
 
-set_target_properties(libzmq PROPERTIES INTERFACE_LINK_LIBRARIES "${libzmq_link_libs}")
+set_target_properties(libzmq PROPERTIES
+    INTERFACE_LINK_LIBRARIES "${libzmq_link_libs}"
+    INTERFACE_COMPILE_DEFINITIONS "ZMQ_STATIC")

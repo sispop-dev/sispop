@@ -31,17 +31,13 @@
 
 #include "checkpoints.h"
 
-#include "common/dns_utils.h"
 #include "string_tools.h"
 #include "storages/portable_storage_template_helper.h" // epee json include
 #include "serialization/keyvalue_serialization.h"
 #include "cryptonote_core/service_node_rules.h"
 #include <vector>
-#include "syncobj.h"
 #include "blockchain_db/blockchain_db.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
-
-using namespace epee;
 
 #include "common/sispop_integration_test_hooks.h"
 #include "common/sispop.h"

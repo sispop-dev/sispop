@@ -36,10 +36,6 @@
 #include <stdexcept>
 #include <chrono>
 
-using namespace std::chrono;
-
-#define CRYPTONOTE_DNS_TIMEOUT_MS                       20000
-
 #define CRYPTONOTE_MAX_BLOCK_NUMBER                     500000000
 #define CRYPTONOTE_MAX_TX_SIZE                          1000000
 #define CRYPTONOTE_MAX_TX_PER_BLOCK                     0x10000000
@@ -97,10 +93,16 @@ static_assert(STAKING_PORTIONS % 12 == 0, "Use a multiple of twelve, so that it 
 #define CRYPTONOTE_MEMPOOL_TX_FROM_ALT_BLOCK_LIVETIME     (86400*7) //seconds, one week
 
 #define MEMPOOL_PRUNE_NON_STANDARD_TX_LIFETIME          (2 * 60 * 60) // seconds, 2 hours
+// see src/cryptonote_protocol/levin_notify.cpp
+#define CRYPTONOTE_NOISE_MIN_EPOCH                      5      // minutes
+#define CRYPTONOTE_NOISE_EPOCH_RANGE                    30     // seconds
+#define CRYPTONOTE_NOISE_MIN_DELAY                      10     // seconds
+#define CRYPTONOTE_NOISE_DELAY_RANGE                    5      // seconds
+#define CRYPTONOTE_NOISE_BYTES                          3*1024 // 3 KiB
+#define CRYPTONOTE_NOISE_CHANNELS                       2      // Max outgoing connections per zone used for noise/covert sending
 
-#define COMMAND_RPC_GET_BLOCKS_FAST_MAX_COUNT           1000
-#define COMMAND_RPC_GET_CHECKPOINTS_MAX_COUNT           256
-#define COMMAND_RPC_GET_QUORUM_STATE_MAX_COUNT          256
+#define CRYPTONOTE_MAX_FRAGMENTS                        20 // ~20 * NOISE_BYTES max payload size for covert/noise send
+
 
 #define P2P_LOCAL_WHITE_PEERLIST_LIMIT                  1000
 #define P2P_LOCAL_GRAY_PEERLIST_LIMIT                   5000
@@ -149,6 +151,10 @@ static_assert(STAKING_PORTIONS % 12 == 0, "Use a multiple of twelve, so that it 
 #define HF_VERSION_ED25519_KEY                  cryptonote::network_version_13_enforce_checkpoints
 #define HF_VERSION_FEE_BURNING                  cryptonote::network_version_14_blink
 #define HF_VERSION_BLINK                        cryptonote::network_version_14_blink
+#define HF_VERSION_MIN_2_OUTPUTS                cryptonote::network_version_16
+#define HF_VERSION_REJECT_SIGS_IN_COINBASE      cryptonote::network_version_16
+#define HF_VERSION_ENFORCE_MIN_AGE              cryptonote::network_version_16
+#define HF_VERSION_EFFECTIVE_SHORT_TERM_MEDIAN_IN_PENALTY cryptonote::network_version_16
 
 #define PER_KB_FEE_QUANTIZATION_DECIMALS        8
 
@@ -166,11 +172,13 @@ static_assert(STAKING_PORTIONS % 12 == 0, "Use a multiple of twelve, so that it 
 // New constants are intended to go here
 namespace config
 {
+  using namespace std::literals;
+
+  constexpr auto DNS_TIMEOUT = 20s;
   uint64_t const DEFAULT_FEE_ATOMIC_XMR_PER_KB = 500; // Just a placeholder!  Change me!
   uint8_t const FEE_CALCULATION_MAX_RETRIES = 10;
   uint64_t const DEFAULT_DUST_THRESHOLD = ((uint64_t)2000000000); // 2 * pow(10, 9)
   uint64_t const BASE_REWARD_CLAMP_THRESHOLD = ((uint64_t)100000000); // pow(10, 8)
-  std::string const P2P_REMOTE_DEBUG_TRUSTED_PUB_KEY = "0000000000000000000000000000000000000000000000000000000000000000";
 
   uint64_t const CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 18;
   uint64_t const CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 19;
@@ -192,26 +200,16 @@ namespace config
     "49HsfhWTvKZgc4qH1hwcEpM99Ng2TqmcxVHJoSkSQvV3N9iVJP1NT6gJTWRvuTWMNqeDgHNUcrpYVdnXW5Ep33W33YfwqRe",
   };
 
-  inline constexpr auto UPTIME_PROOF_TOLERANCE = 5min; // How much an uptime proof timestamp can deviate from our timestamp before we refuse it
-  inline constexpr auto UPTIME_PROOF_STARTUP_DELAY = 30s; // How long to wait after startup before broadcasting a proof
-  inline constexpr auto UPTIME_PROOF_CHECK_INTERVAL = 30s; // How frequently to check whether we need to broadcast a proof
-  inline constexpr auto UPTIME_PROOF_FREQUENCY = 1h; // How often to send proofs out to the network since the last proof we successfully sent.  (Approximately; this can be up to CHECK_INTERFACE/2 off in either direction).  The minimum accepted time between proofs is half of this.
-  inline constexpr auto UPTIME_PROOF_VALIDITY = 2h + 5min; // The maximum time that we consider an uptime proof to be valid (i.e. after this time since the last proof we consider the SN to be down)
-  inline constexpr auto SS_MAX_FAILURE_VALIDITY = 10min; // If we don't hear any SS ping test failures for more than this long then we start considering the SN as passing for the purpose of obligation testing until we get another test result.  This should be somewhat larger than SS's max re-test backoff (5min).
-
   // Hash domain separators
-  inline constexpr std::string_view HASH_KEY_BULLETPROOF_EXPONENT = "bulletproof"sv;
-  inline constexpr std::string_view HASH_KEY_RINGDB = "ringdsb\0"sv;
-  inline constexpr std::string_view HASH_KEY_SUBADDRESS = "SubAddr\0"sv;
-  inline constexpr unsigned char HASH_KEY_ENCRYPTED_PAYMENT_ID = 0x8d;
-  inline constexpr unsigned char HASH_KEY_WALLET = 0x8c;
-  inline constexpr unsigned char HASH_KEY_WALLET_CACHE = 0x8d;
-  inline constexpr unsigned char HASH_KEY_RPC_PAYMENT_NONCE = 0x58;
-  inline constexpr unsigned char HASH_KEY_MEMORY = 'k';
-  inline constexpr std::string_view HASH_KEY_MULTISIG = "Multisig\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"sv;
-  inline constexpr std::string_view HASH_KEY_CLSAG_ROUND = "CLSAG_round"sv;
-  inline constexpr std::string_view HASH_KEY_CLSAG_AGG_0 = "CLSAG_agg_0"sv;
-  inline constexpr std::string_view HASH_KEY_CLSAG_AGG_1 = "CLSAG_agg_1"sv;
+  const char HASH_KEY_BULLETPROOF_EXPONENT[] = "bulletproof";
+  const char HASH_KEY_RINGDB[] = "ringdsb";
+  const char HASH_KEY_SUBADDRESS[] = "SubAddr";
+  const unsigned char HASH_KEY_ENCRYPTED_PAYMENT_ID = 0x8d;
+  const unsigned char HASH_KEY_WALLET = 0x8c;
+  const unsigned char HASH_KEY_WALLET_CACHE = 0x8d;
+  const unsigned char HASH_KEY_RPC_PAYMENT_NONCE = 0x58;
+  const unsigned char HASH_KEY_MEMORY = 'k';
+  const unsigned char HASH_KEY_MULTISIG[] = {'M', 'u', 'l', 't' , 'i', 's', 'i', 'g', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 
   namespace testnet
   {

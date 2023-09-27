@@ -50,14 +50,12 @@ int BulletproofFuzzer::run(const std::string &filename)
     std::cout << "Error: failed to load file " << filename << std::endl;
     return 1;
   }
-  std::stringstream ss;
-  ss << s;
-  binary_archive<false> ba(ss);
+  serialization::binary_string_unarchiver ba{s};
   rct::Bulletproof proof{};
-  bool r = ::serialization::serialize(ba, proof);
-  if(!r)
-  {
-    std::cout << "Error: failed to parse bulletproof from file  " << filename << std::endl;
+  try {
+    serialization::serialize(ba, proof);
+  } catch (const std::exception& e) {
+    std::cout << "Error: failed to parse bulletproof from file " << filename << ": " << e.what() << "\n";
     return 1;
   }
   return 0;

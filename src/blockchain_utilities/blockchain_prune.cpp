@@ -28,14 +28,13 @@
 
 #include <array>
 #include <lmdb.h>
-#include <boost/algorithm/string.hpp>
 #include "common/command_line.h"
 #include "common/pruning.h"
+#include "common/string_util.h"
 #include "cryptonote_core/cryptonote_core.h"
 #include "cryptonote_core/blockchain.h"
 #include "blockchain_db/blockchain_db.h"
 #include "blockchain_db/lmdb/db_lmdb.h"
-#include "blockchain_db/db_types.h"
 #include "blockchain_objects.h"
 #include "version.h"
 
@@ -45,7 +44,6 @@
 #define MDB_val_set(var, val)   MDB_val var = {sizeof(val), (void *)&val}
 
 namespace po = boost::program_options;
-using namespace epee;
 using namespace cryptonote;
 
 static std::string db_path;
@@ -158,10 +156,10 @@ static void copy_table(MDB_env *env0, MDB_env *env1, const char *table, unsigned
 
   MINFO("Copying " << table);
 
-  epee::misc_utils::auto_scope_leave_caller txn_dtor = epee::misc_utils::create_scope_leave_handler([&](){
+  SISPOP_DEFER {
     if (tx_active1) mdb_txn_abort(txn1);
     if (tx_active0) mdb_txn_abort(txn0);
-  });
+  };
 
   dbr = mdb_txn_begin(env0, NULL, MDB_RDONLY, &txn0);
   if (dbr) throw std::runtime_error("Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
@@ -242,7 +240,7 @@ static bool is_v1_tx(MDB_cursor *c_txs_pruned, MDB_val *tx_id)
     throw std::runtime_error("Failed to find transaction pruned data: " + std::string(mdb_strerror(ret)));
   if (v.mv_size == 0)
     throw std::runtime_error("Invalid transaction pruned data");
-  return cryptonote::is_v1_tx(cryptonote::blobdata_ref{(const char*)v.mv_data, v.mv_size});
+  return cryptonote::is_v1_tx(std::string_view{(const char*)v.mv_data, v.mv_size});
 }
 
 static void prune(MDB_env *env0, MDB_env *env1)
@@ -255,10 +253,10 @@ static void prune(MDB_env *env0, MDB_env *env1)
 
   MGINFO("Creating pruned txs_prunable");
 
-  epee::misc_utils::auto_scope_leave_caller txn_dtor = epee::misc_utils::create_scope_leave_handler([&](){
+  SISPOP_DEFER {
     if (tx_active1) mdb_txn_abort(txn1);
     if (tx_active0) mdb_txn_abort(txn0);
-  });
+  };
 
   dbr = mdb_txn_begin(env0, NULL, MDB_RDONLY, &txn0);
   if (dbr) throw std::runtime_error("Failed to create LMDB transaction: " + std::string(mdb_strerror(dbr)));
@@ -385,9 +383,7 @@ static void prune(MDB_env *env0, MDB_env *env1)
 
 static bool parse_db_sync_mode(std::string db_sync_mode, uint64_t &db_flags)
 {
-  std::vector<std::string> options;
-  boost::trim(db_sync_mode);
-  boost::split(options, db_sync_mode, boost::is_any_of(" :"));
+  auto options = tools::split_any(db_sync_mode, " :", true);
 
   for(const auto &option : options)
     MDEBUG("option: " << option);
@@ -427,7 +423,8 @@ static bool parse_db_sync_mode(std::string db_sync_mode, uint64_t &db_flags)
   if(options.size() >= 2 && !safemode)
   {
     char *endptr;
-    uint64_t bps = strtoull(options[1].c_str(), &endptr, 0);
+    std::string bpsstr{options[1]};
+    uint64_t bps = strtoull(bpsstr.c_str(), &endptr, 0);
     if (*endptr != '\0')
       return false;
     records_per_sync = bps;
@@ -442,23 +439,17 @@ int main(int argc, char* argv[])
 
   epee::string_tools::set_module_name_and_folder(argv[0]);
 
-  std::string default_db_type = "lmdb";
-
-  std::string available_dbs = cryptonote::blockchain_db_types(", ");
-  available_dbs = "available: " + available_dbs;
-
   uint32_t log_level = 0;
 
   tools::on_startup();
 
   boost::filesystem::path output_file_path;
 
-  po::options_description desc_cmd_only("Command line options");
-  po::options_description desc_cmd_sett("Command line options and settings options");
+  auto opt_size = command_line::boost_option_sizes();
+
+  po::options_description desc_cmd_only("Command line options", opt_size.first, opt_size.second);
+  po::options_description desc_cmd_sett("Command line options and settings options", opt_size.first, opt_size.second);
   const command_line::arg_descriptor<std::string> arg_log_level  = {"log-level",  "0-4 or categories", ""};
-  const command_line::arg_descriptor<std::string> arg_database = {
-    "database", available_dbs.c_str(), default_db_type
-  };
   const command_line::arg_descriptor<std::string> arg_db_sync_mode = {
     "db-sync-mode"
   , "Specify sync option, using format [safe|fast|fastest]:[nrecords_per_sync]."
@@ -470,7 +461,6 @@ int main(int argc, char* argv[])
   command_line::add_arg(desc_cmd_sett, cryptonote::arg_testnet_on);
   command_line::add_arg(desc_cmd_sett, cryptonote::arg_stagenet_on);
   command_line::add_arg(desc_cmd_sett, arg_log_level);
-  command_line::add_arg(desc_cmd_sett, arg_database);
   command_line::add_arg(desc_cmd_sett, arg_db_sync_mode);
   command_line::add_arg(desc_cmd_sett, arg_copy_pruned_database);
   command_line::add_arg(desc_cmd_only, command_line::arg_help);
@@ -491,7 +481,7 @@ int main(int argc, char* argv[])
 
   if (command_line::get_arg(vm, command_line::arg_help))
   {
-    std::cout << "Sispop '" << SISPOP_RELEASE_NAME << "' (v" << SISPOP_VERSION_FULL << ")" << ENDL << ENDL;
+    std::cout << "Sispop '" << SISPOP_RELEASE_NAME << "' (v" << SISPOP_VERSION_FULL << ")\n\n";
     std::cout << desc_options << std::endl;
     return 1;
   }
@@ -509,20 +499,8 @@ int main(int argc, char* argv[])
   network_type net_type = opt_testnet ? TESTNET : opt_stagenet ? STAGENET : MAINNET;
   bool opt_copy_pruned_database = command_line::get_arg(vm, arg_copy_pruned_database);
   std::string data_dir = command_line::get_arg(vm, cryptonote::arg_data_dir);
-  while (boost::ends_with(data_dir, "/") || boost::ends_with(data_dir, "\\"))
+  while (tools::ends_with(data_dir, "/") || tools::ends_with(data_dir, "\\"))
     data_dir.pop_back();
-
-  std::string db_type = command_line::get_arg(vm, arg_database);
-  if (!cryptonote::blockchain_valid_db_type(db_type))
-  {
-    MERROR("Invalid database type: " << db_type);
-    return 1;
-  }
-  if (db_type != "lmdb")
-  {
-    MERROR("Unsupported database type: " << db_type << ". Only lmdb is supported");
-    return 1;
-  }
 
   std::string db_sync_mode = command_line::get_arg(vm, arg_db_sync_mode);
   uint64_t db_flags = 0;
@@ -552,13 +530,12 @@ int main(int argc, char* argv[])
     blockchain_objects_t *blockchain_objects = new blockchain_objects_t();
     core_storage[n] = &(blockchain_objects->m_blockchain);
 
-    BlockchainDB* db = new_db(db_type);
+    BlockchainDB* db = new_db();
     if (db == NULL)
     {
-      MERROR("Attempted to use non-existent database type: " << db_type);
-      throw std::runtime_error("Attempting to use non-existent database type");
+      MERROR("Failed to initialize a database");
+      throw std::runtime_error("Failed to initialize a database");
     }
-    MDEBUG("database: " << db_type);
 
     if (n == 1)
     {

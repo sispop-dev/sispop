@@ -28,8 +28,6 @@
 # STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import print_function
-
 """Test misc proofs (tx key, send, receive, reserve)
 """
 
@@ -44,12 +42,14 @@ class ProofsTest():
         txid, tx_key, amount = self.transfer()
         self.check_tx_key(txid, tx_key, amount)
         self.check_tx_proof(txid, amount)
+        self.check_spend_proof(txid)
         self.check_reserve_proof()
 
     def reset(self):
         print('Resetting blockchain')
         daemon = Daemon()
-        daemon.pop_blocks(1000)
+        res = daemon.get_height()
+        daemon.pop_blocks(res.height - 1)
         daemon.flush_txpool()
 
     def mine(self, address, blocks):
@@ -217,6 +217,40 @@ class ProofsTest():
         except: ok = True
         assert ok or not res.good
 
+    def check_spend_proof(self, txid):
+        daemon = Daemon()
+
+        print('Checking spend proof')
+
+        self.wallet[0].refresh()
+        self.wallet[1].refresh()
+
+        res = self.wallet[0].get_spend_proof(txid, message = 'foo')
+        assert len(res.signature) > 0
+        signature = res.signature
+        res = self.wallet[1].check_spend_proof(txid, message = 'foo', signature = signature)
+        assert res.good
+
+        res = self.wallet[0].get_spend_proof(txid, message = 'foobar')
+        assert len(res.signature) > 0
+        signature2 = res.signature
+        res = self.wallet[1].check_spend_proof(txid, message = 'foobar', signature = signature2)
+        assert res.good
+
+        ok = False
+        try: res = self.wallet[1].check_spend_proof('0' * 64, message = 'foo', signature = signature)
+        except: ok = True
+        assert ok or not res.good
+
+        ok = False
+        try: res = self.wallet[1].check_spend_proof(txid, message = 'bar', signature = signature)
+        except: ok = True
+        assert ok or not res.good
+
+        ok = False
+        try: res = self.wallet[1].check_spend_proof(txid, message = 'foo', signature = signature2)
+        except: ok = True
+        assert ok or not res.good
 
     def check_reserve_proof(self):
         daemon = Daemon()

@@ -33,14 +33,12 @@
 #include "cryptonote_core/cryptonote_core.h"
 #include "blockchain_objects.h"
 #include "blockchain_db/blockchain_db.h"
-#include "blockchain_db/db_types.h"
 #include "version.h"
 
 #undef SISPOP_DEFAULT_LOG_CATEGORY
 #define SISPOP_DEFAULT_LOG_CATEGORY "bcutil"
 
 namespace po = boost::program_options;
-using namespace epee;
 using namespace cryptonote;
 
 int main(int argc, char* argv[])
@@ -49,23 +47,17 @@ int main(int argc, char* argv[])
 
   epee::string_tools::set_module_name_and_folder(argv[0]);
 
-  std::string default_db_type = "lmdb";
-
-  std::string available_dbs = cryptonote::blockchain_db_types(", ");
-  available_dbs = "available: " + available_dbs;
-
   uint32_t log_level = 0;
 
   tools::on_startup();
 
   boost::filesystem::path output_file_path;
 
-  po::options_description desc_cmd_only("Command line options");
-  po::options_description desc_cmd_sett("Command line options and settings options");
+  auto opt_size = command_line::boost_option_sizes();
+
+  po::options_description desc_cmd_only("Command line options", opt_size.first, opt_size.second);
+  po::options_description desc_cmd_sett("Command line options and settings options", opt_size.first, opt_size.second);
   const command_line::arg_descriptor<std::string> arg_log_level  = {"log-level",  "0-4 or categories", ""};
-  const command_line::arg_descriptor<std::string> arg_database = {
-    "database", available_dbs.c_str(), default_db_type
-  };
   const command_line::arg_descriptor<std::string> arg_txid  = {"txid", "Get min depth for this txid", ""};
   const command_line::arg_descriptor<uint64_t> arg_height  = {"height", "Get min depth for all txes at this height", 0};
   const command_line::arg_descriptor<bool> arg_include_coinbase  = {"include-coinbase", "Include coinbase in the average", false};
@@ -74,7 +66,6 @@ int main(int argc, char* argv[])
   command_line::add_arg(desc_cmd_sett, cryptonote::arg_testnet_on);
   command_line::add_arg(desc_cmd_sett, cryptonote::arg_stagenet_on);
   command_line::add_arg(desc_cmd_sett, arg_log_level);
-  command_line::add_arg(desc_cmd_sett, arg_database);
   command_line::add_arg(desc_cmd_sett, arg_txid);
   command_line::add_arg(desc_cmd_sett, arg_height);
   command_line::add_arg(desc_cmd_sett, arg_include_coinbase);
@@ -96,7 +87,7 @@ int main(int argc, char* argv[])
 
   if (command_line::get_arg(vm, command_line::arg_help))
   {
-    std::cout << "Sispop '" << SISPOP_RELEASE_NAME << "' (v" << SISPOP_VERSION_FULL << ")" << ENDL << ENDL;
+    std::cout << "Sispop '" << SISPOP_RELEASE_NAME << "' (v" << SISPOP_VERSION_FULL << ")\n\n";
     std::cout << desc_options << std::endl;
     return 1;
   }
@@ -132,23 +123,16 @@ int main(int argc, char* argv[])
     }
   }
 
-  std::string db_type = command_line::get_arg(vm, arg_database);
-  if (!cryptonote::blockchain_valid_db_type(db_type))
-  {
-    std::cerr << "Invalid database type: " << db_type << std::endl;
-    return 1;
-  }
-
   LOG_PRINT_L0("Initializing source blockchain (BlockchainDB)");
   blockchain_objects_t blockchain_objects = {};
   Blockchain *core_storage = &blockchain_objects.m_blockchain;
-  BlockchainDB *db = new_db(db_type);
+  BlockchainDB *db = new_db();
   if (db == NULL)
   {
-    LOG_ERROR("Attempted to use non-existent database type: " << db_type);
-    throw std::runtime_error("Attempting to use non-existent database type");
+    LOG_ERROR("Failed to initialize a database");
+    throw std::runtime_error("Failed to initialize a database");
   }
-  LOG_PRINT_L0("database: " << db_type);
+  LOG_PRINT_L0("database: LMDB");
 
   const std::string filename = (boost::filesystem::path(opt_data_dir) / db->get_db_name()).string();
   LOG_PRINT_L0("Loading blockchain from folder " << filename << " ...");
@@ -221,15 +205,15 @@ int main(int argc, char* argv[])
         }
         for (size_t ring = 0; ring < tx.vin.size(); ++ring)
         {
-          if (tx.vin[ring].type() == typeid(cryptonote::txin_gen))
+          if (std::holds_alternative<cryptonote::txin_gen>(tx.vin[ring]))
           {
             MDEBUG(txid << " is a coinbase transaction");
             coinbase = true;
             goto done;
           }
-          if (tx.vin[ring].type() == typeid(cryptonote::txin_to_key))
+          if (std::holds_alternative<cryptonote::txin_to_key>(tx.vin[ring]))
           {
-            const cryptonote::txin_to_key &txin = boost::get<cryptonote::txin_to_key>(tx.vin[ring]);
+            const auto& txin = std::get<cryptonote::txin_to_key>(tx.vin[ring]);
             const uint64_t amount = txin.amount;
             auto absolute_offsets = cryptonote::relative_output_offsets_to_absolute(txin.key_offsets);
             for (uint64_t offset: absolute_offsets)
@@ -247,9 +231,9 @@ int main(int argc, char* argv[])
               bool found = false;
               for (size_t out = 0; out < b.miner_tx.vout.size(); ++out)
               {
-                if (b.miner_tx.vout[out].target.type() == typeid(cryptonote::txout_to_key))
+                if (std::holds_alternative<cryptonote::txout_to_key>(b.miner_tx.vout[out].target))
                 {
-                  const auto &txout = boost::get<cryptonote::txout_to_key>(b.miner_tx.vout[out].target);
+                  const auto& txout = std::get<cryptonote::txout_to_key>(b.miner_tx.vout[out].target);
                   if (txout.key == od.pubkey)
                   {
                     found = true;
@@ -281,9 +265,9 @@ int main(int argc, char* argv[])
                 }
                 for (size_t out = 0; out < tx2.vout.size(); ++out)
                 {
-                  if (tx2.vout[out].target.type() == typeid(cryptonote::txout_to_key))
+                  if (std::holds_alternative<cryptonote::txout_to_key>(tx2.vout[out].target))
                   {
-                    const auto &txout = boost::get<cryptonote::txout_to_key>(tx2.vout[out].target);
+                    const auto& txout = std::get<cryptonote::txout_to_key>(tx2.vout[out].target);
                     if (txout.key == od.pubkey)
                     {
                       found = true;

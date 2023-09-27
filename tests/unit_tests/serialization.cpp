@@ -39,7 +39,6 @@
 #include "ringct/rctSigs.h"
 #include "serialization/binary_archive.h"
 #include "serialization/json_archive.h"
-#include "serialization/debug_archive.h"
 #include "serialization/variant.h"
 #include "serialization/vector.h"
 #include "serialization/binary_utils.h"
@@ -47,9 +46,12 @@
 #include "gtest/gtest.h"
 #include "unit_tests_utils.h"
 #include "device/device.hpp"
-using namespace std;
+
+using namespace std::literals;
 using namespace crypto;
 
+namespace whatever
+{
 struct Struct
 {
   int32_t a;
@@ -58,64 +60,52 @@ struct Struct
 };
 
 template <class Archive>
-struct serializer<Archive, Struct>
+void serialize_value(Archive& ar, Struct& s)
 {
-  static bool serialize(Archive &ar, Struct &s) {
-    ar.begin_object();
-    ar.tag("a");
-    ar.serialize_int(s.a);
-    ar.tag("b");
-    ar.serialize_int(s.b);
-    ar.tag("blob");
-    ar.serialize_blob(s.blob, sizeof(s.blob));
-    ar.end_object();
-    return true;
-  }
-};
+  auto obj = ar.begin_object();
+  ar.tag("a");
+  ar.serialize_int(s.a);
+  ar.tag("b");
+  ar.serialize_int(s.b);
+  ar.tag("blob");
+  ar.serialize_blob(s.blob, sizeof(s.blob));
+}
+}
 
 struct Struct1
 {
-  vector<boost::variant<Struct, int32_t>> si;
-  vector<int16_t> vi;
+  std::vector<std::variant<whatever::Struct, int32_t>> si;
+  std::vector<int16_t> vi;
 
   BEGIN_SERIALIZE_OBJECT()
     FIELD(si)
     FIELD(vi)
   END_SERIALIZE()
-  /*template <bool W, template <bool> class Archive>
-  bool do_serialize(Archive<W> &ar)
-  {
-    ar.begin_object();
-    ar.tag("si");
-    ::do_serialize(ar, si);
-    ar.tag("vi");
-    ::do_serialize(ar, vi);
-    ar.end_object();
-  }*/
 };
 
 struct Blob
 {
   uint64_t a;
   uint32_t b;
+  uint8_t c;
+  uint8_t d;
+  uint16_t e;
 
-  bool operator==(const Blob& rhs) const
+  constexpr bool operator==(const Blob& r) const
   {
-    return a == rhs.a;
+    return std::tie(a, b, c, d, e) == std::tie(r.a, r.b, r.c, r.d, r.d);
   }
 };
+// If the type has padding then it isn't binary serializable:
+static_assert(sizeof(Blob) == 16);
 
-VARIANT_TAG(binary_archive, Struct, 0xe0);
-VARIANT_TAG(binary_archive, int, 0xe1);
-VARIANT_TAG(json_archive, Struct, "struct");
-VARIANT_TAG(json_archive, int, "int");
-VARIANT_TAG(debug_archive, Struct1, "struct1");
-VARIANT_TAG(debug_archive, Struct, "struct");
-VARIANT_TAG(debug_archive, int, "int");
+VARIANT_TAG(whatever::Struct, "struct", 0xe0);
+VARIANT_TAG(int, "int", 0xe1);
+JSON_VARIANT_TAG(Struct1, "struct1");
 
 BLOB_SERIALIZER(Blob);
 
-bool try_parse(const string &blob)
+void try_parse(std::string_view blob)
 {
   Struct1 s1;
   return serialization::parse_binary(blob, s1);
@@ -124,18 +114,16 @@ bool try_parse(const string &blob)
 TEST(Serialization, BinaryArchiveInts) {
   uint64_t x = 0xff00000000, x1;
 
-  ostringstream oss;
-  binary_archive<true> oar(oss);
-  oar.serialize_int(x);
-  ASSERT_TRUE(oss.good());
-  ASSERT_EQ(8, oss.str().size());
-  ASSERT_EQ(string("\0\0\0\0\xff\0\0\0", 8), oss.str());
+  serialization::binary_string_archiver oar;
+  ASSERT_NO_THROW(oar.serialize_int(x));
+  ASSERT_EQ(8, oar.str().size());
+  ASSERT_EQ("\0\0\0\0\xff\0\0\0"sv, oar.str());
 
-  istringstream iss(oss.str());
-  binary_archive<false> iar(iss);
-  iar.serialize_int(x1);
-  ASSERT_EQ(8, iss.tellg());
-  ASSERT_TRUE(iss.good());
+  auto data = oar.str();
+  serialization::binary_string_unarchiver iar{data};
+  ASSERT_EQ(8, iar.remaining_bytes());
+  ASSERT_NO_THROW(iar.serialize_int(x1));
+  ASSERT_EQ(0, iar.remaining_bytes());
 
   ASSERT_EQ(x, x1);
 }
@@ -143,28 +131,24 @@ TEST(Serialization, BinaryArchiveInts) {
 TEST(Serialization, BinaryArchiveVarInts) {
   uint64_t x = 0xff00000000, x1;
 
-  ostringstream oss;
-  binary_archive<true> oar(oss);
-  oar.serialize_varint(x);
-  ASSERT_TRUE(oss.good());
-  ASSERT_EQ(6, oss.str().size());
-  ASSERT_EQ(string("\x80\x80\x80\x80\xF0\x1F", 6), oss.str());
+  serialization::binary_string_archiver oar;
+  ASSERT_NO_THROW(oar.serialize_varint(x));
+  ASSERT_EQ(6, oar.str().size());
+  ASSERT_EQ("\x80\x80\x80\x80\xF0\x1F"sv, oar.str());
 
-  istringstream iss(oss.str());
-  binary_archive<false> iar(iss);
-  iar.serialize_varint(x1);
-  ASSERT_TRUE(iss.good());
+  auto data = oar.str();
+  serialization::binary_string_unarchiver iar{data};
+  ASSERT_EQ(6, iar.remaining_bytes());
+  ASSERT_NO_THROW(varint(iar, x1));
+  ASSERT_EQ(0, iar.remaining_bytes());
   ASSERT_EQ(x, x1);
 }
 
 TEST(Serialization, Test1) {
-  ostringstream str;
-  binary_archive<true> ar(str);
-
   Struct1 s1;
   s1.si.push_back(0);
   {
-    Struct s;
+    whatever::Struct s;
     s.a = 5;
     s.b = 65539;
     std::memcpy(s.blob, "12345678", 8);
@@ -174,118 +158,129 @@ TEST(Serialization, Test1) {
   s1.vi.push_back(10);
   s1.vi.push_back(22);
 
-  string blob;
-  ASSERT_TRUE(serialization::dump_binary(s1, blob));
-  ASSERT_TRUE(try_parse(blob));
+  std::string blob;
+  ASSERT_NO_THROW(blob = serialization::dump_binary(s1));
+  ASSERT_EQ(lokimq::to_hex(blob), "03e100000000e005000000030001003132333435363738e101000000020a001600");
+  ASSERT_NO_THROW(try_parse(blob));
 
-  ASSERT_EQ('\xE0', blob[6]);
   blob[6] = '\xE1';
-  ASSERT_FALSE(try_parse(blob));
+  ASSERT_THROW(try_parse(blob), std::runtime_error);
   blob[6] = '\xE2';
-  ASSERT_FALSE(try_parse(blob));
+  ASSERT_THROW(try_parse(blob), std::runtime_error);
 }
 
 TEST(Serialization, Overflow) {
   Blob x = { 0xff00000000 };
   Blob x1;
 
-  string blob;
-  ASSERT_TRUE(serialization::dump_binary(x, blob));
+  std::string blob;
+  ASSERT_NO_THROW(blob = serialization::dump_binary(x));
   ASSERT_EQ(sizeof(Blob), blob.size());
 
-  ASSERT_TRUE(serialization::parse_binary(blob, x1));
+  ASSERT_NO_THROW(serialization::parse_binary(blob, x1));
   ASSERT_EQ(x, x1);
 
-  vector<Blob> bigvector;
-  ASSERT_FALSE(serialization::parse_binary(blob, bigvector));
+  std::vector<Blob> bigvector;
+  ASSERT_THROW(serialization::parse_binary(blob, bigvector), std::runtime_error);
   ASSERT_EQ(0, bigvector.size());
 }
 
 TEST(Serialization, serializes_vector_uint64_as_varint)
 {
   std::vector<uint64_t> v;
-  string blob;
+  std::string blob;
 
-  ASSERT_TRUE(serialization::dump_binary(v, blob));
-  ASSERT_EQ(1, blob.size());
+  ASSERT_NO_THROW(blob = serialization::dump_binary(v));
+  ASSERT_EQ(lokimq::to_hex(blob), "00");
 
   // +1 byte
   v.push_back(0);
-  ASSERT_TRUE(serialization::dump_binary(v, blob));
-  ASSERT_EQ(2, blob.size());
+  ASSERT_NO_THROW(blob = serialization::dump_binary(v));
+  ASSERT_EQ(lokimq::to_hex(blob), "0100");
+  //                                 ^^
 
   // +1 byte
   v.push_back(1);
-  ASSERT_TRUE(serialization::dump_binary(v, blob));
-  ASSERT_EQ(3, blob.size());
+  ASSERT_NO_THROW(blob = serialization::dump_binary(v));
+  ASSERT_EQ(lokimq::to_hex(blob), "020001");
+  //                                   ^^
 
   // +2 bytes
   v.push_back(0x80);
-  ASSERT_TRUE(serialization::dump_binary(v, blob));
-  ASSERT_EQ(5, blob.size());
+  ASSERT_NO_THROW(blob = serialization::dump_binary(v));
+  ASSERT_EQ(lokimq::to_hex(blob), "0300018001");
+  //                                     ^^^^
 
   // +2 bytes
   v.push_back(0xFF);
-  ASSERT_TRUE(serialization::dump_binary(v, blob));
-  ASSERT_EQ(7, blob.size());
+  ASSERT_NO_THROW(blob = serialization::dump_binary(v));
+  ASSERT_EQ(lokimq::to_hex(blob), "0400018001ff01");
+  //                                         ^^^^
 
   // +2 bytes
   v.push_back(0x3FFF);
-  ASSERT_TRUE(serialization::dump_binary(v, blob));
-  ASSERT_EQ(9, blob.size());
+  ASSERT_NO_THROW(blob = serialization::dump_binary(v));
+  ASSERT_EQ(lokimq::to_hex(blob), "0500018001ff01ff7f");
+  //                                             ^^^^
 
   // +3 bytes
   v.push_back(0x40FF);
-  ASSERT_TRUE(serialization::dump_binary(v, blob));
-  ASSERT_EQ(12, blob.size());
+  ASSERT_NO_THROW(blob = serialization::dump_binary(v));
+  ASSERT_EQ(lokimq::to_hex(blob), "0600018001ff01ff7fff8101");
+  //                                                 ^^^^^^
 
   // +10 bytes
-  v.push_back(0xFFFFFFFFFFFFFFFF);
-  ASSERT_TRUE(serialization::dump_binary(v, blob));
-  ASSERT_EQ(22, blob.size());
+  v.push_back(0xFFFF'FFFF'FFFF'FFFF);
+  ASSERT_NO_THROW(blob = serialization::dump_binary(v));
+  ASSERT_EQ(lokimq::to_hex(blob), "0700018001ff01ff7fff8101ffffffffffffffffff01");
+  //                                                       ^^^^^^^^^^^^^^^^^^^^
+
+  v = {0x64, 0xcc, 0xbf04};
+  ASSERT_NO_THROW(blob = serialization::dump_binary(v));
+  ASSERT_EQ(lokimq::to_hex(blob), "0364cc0184fe02");
 }
 
 TEST(Serialization, serializes_vector_int64_as_fixed_int)
 {
   std::vector<int64_t> v;
-  string blob;
+  std::string blob;
 
-  ASSERT_TRUE(serialization::dump_binary(v, blob));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(v));
   ASSERT_EQ(1, blob.size());
 
   // +8 bytes
   v.push_back(0);
-  ASSERT_TRUE(serialization::dump_binary(v, blob));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(v));
   ASSERT_EQ(9, blob.size());
 
   // +8 bytes
   v.push_back(1);
-  ASSERT_TRUE(serialization::dump_binary(v, blob));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(v));
   ASSERT_EQ(17, blob.size());
 
   // +8 bytes
   v.push_back(0x80);
-  ASSERT_TRUE(serialization::dump_binary(v, blob));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(v));
   ASSERT_EQ(25, blob.size());
 
   // +8 bytes
   v.push_back(0xFF);
-  ASSERT_TRUE(serialization::dump_binary(v, blob));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(v));
   ASSERT_EQ(33, blob.size());
 
   // +8 bytes
   v.push_back(0x3FFF);
-  ASSERT_TRUE(serialization::dump_binary(v, blob));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(v));
   ASSERT_EQ(41, blob.size());
 
   // +8 bytes
   v.push_back(0x40FF);
-  ASSERT_TRUE(serialization::dump_binary(v, blob));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(v));
   ASSERT_EQ(49, blob.size());
 
   // +8 bytes
   v.push_back(0xFFFFFFFFFFFFFFFF);
-  ASSERT_TRUE(serialization::dump_binary(v, blob));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(v));
   ASSERT_EQ(57, blob.size());
 }
 
@@ -303,19 +298,19 @@ namespace
   }
 }
 
-TEST(Serialization, serializes_transacion_signatures_correctly)
+TEST(Serialization, serializes_transaction_signatures_correctly)
 {
   using namespace cryptonote;
 
   transaction tx;
   transaction tx1;
-  string blob;
+  std::string blob;
 
   // Empty tx
   tx.set_null();
-  ASSERT_TRUE(serialization::dump_binary(tx, blob));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(tx));
   ASSERT_EQ(5, blob.size()); // 5 bytes + 0 bytes extra + 0 bytes signatures
-  ASSERT_TRUE(serialization::parse_binary(blob, tx1));
+  ASSERT_NO_THROW(serialization::parse_binary(blob, tx1));
   ASSERT_EQ(tx, tx1);
   ASSERT_EQ(linearize_vector2(tx.signatures), linearize_vector2(tx1.signatures));
 
@@ -324,86 +319,86 @@ TEST(Serialization, serializes_transacion_signatures_correctly)
   txin_gen1.height = 0;
   tx.set_null();
   tx.vin.push_back(txin_gen1);
-  ASSERT_TRUE(serialization::dump_binary(tx, blob));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(tx));
   ASSERT_EQ(7, blob.size()); // 5 bytes + 2 bytes vin[0] + 0 bytes extra + 0 bytes signatures
-  ASSERT_TRUE(serialization::parse_binary(blob, tx1));
+  ASSERT_NO_THROW(serialization::parse_binary(blob, tx1));
   ASSERT_EQ(tx, tx1);
   ASSERT_EQ(linearize_vector2(tx.signatures), linearize_vector2(tx1.signatures));
 
   // Miner tx with empty signatures 2nd vector
   tx.signatures.resize(1);
   tx.invalidate_hashes();
-  ASSERT_TRUE(serialization::dump_binary(tx, blob));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(tx));
   ASSERT_EQ(7, blob.size()); // 5 bytes + 2 bytes vin[0] + 0 bytes extra + 0 bytes signatures
-  ASSERT_TRUE(serialization::parse_binary(blob, tx1));
+  ASSERT_NO_THROW(serialization::parse_binary(blob, tx1));
   ASSERT_EQ(tx, tx1);
   ASSERT_EQ(linearize_vector2(tx.signatures), linearize_vector2(tx1.signatures));
 
   // Miner tx with one signature
   tx.signatures[0].resize(1);
-  ASSERT_FALSE(serialization::dump_binary(tx, blob));
+  ASSERT_THROW(blob = serialization::dump_binary(tx), std::invalid_argument);
 
   // Miner tx with 2 empty vectors
   tx.signatures.resize(2);
   tx.signatures[0].resize(0);
   tx.signatures[1].resize(0);
   tx.invalidate_hashes();
-  ASSERT_FALSE(serialization::dump_binary(tx, blob));
+  ASSERT_THROW(blob = serialization::dump_binary(tx), std::invalid_argument);
 
   // Miner tx with 2 signatures
   tx.signatures[0].resize(1);
   tx.signatures[1].resize(1);
   tx.invalidate_hashes();
-  ASSERT_FALSE(serialization::dump_binary(tx, blob));
+  ASSERT_THROW(blob = serialization::dump_binary(tx), std::invalid_argument);
 
   // Two txin_gen, no signatures
   tx.vin.push_back(txin_gen1);
   tx.signatures.resize(0);
   tx.invalidate_hashes();
-  ASSERT_TRUE(serialization::dump_binary(tx, blob));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(tx));
   ASSERT_EQ(9, blob.size()); // 5 bytes + 2 * 2 bytes vins + 0 bytes extra + 0 bytes signatures
-  ASSERT_TRUE(serialization::parse_binary(blob, tx1));
+  ASSERT_NO_THROW(serialization::parse_binary(blob, tx1));
   ASSERT_EQ(tx, tx1);
   ASSERT_EQ(linearize_vector2(tx.signatures), linearize_vector2(tx1.signatures));
 
   // Two txin_gen, signatures vector contains only one empty element
   tx.signatures.resize(1);
   tx.invalidate_hashes();
-  ASSERT_FALSE(serialization::dump_binary(tx, blob));
+  ASSERT_THROW(blob = serialization::dump_binary(tx), std::invalid_argument);
 
   // Two txin_gen, signatures vector contains two empty elements
   tx.signatures.resize(2);
   tx.invalidate_hashes();
-  ASSERT_TRUE(serialization::dump_binary(tx, blob));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(tx));
   ASSERT_EQ(9, blob.size()); // 5 bytes + 2 * 2 bytes vins + 0 bytes extra + 0 bytes signatures
-  ASSERT_TRUE(serialization::parse_binary(blob, tx1));
+  ASSERT_NO_THROW(serialization::parse_binary(blob, tx1));
   ASSERT_EQ(tx, tx1);
   ASSERT_EQ(linearize_vector2(tx.signatures), linearize_vector2(tx1.signatures));
 
   // Two txin_gen, signatures vector contains three empty elements
   tx.signatures.resize(3);
   tx.invalidate_hashes();
-  ASSERT_FALSE(serialization::dump_binary(tx, blob));
+  ASSERT_THROW(blob = serialization::dump_binary(tx), std::invalid_argument);
 
   // Two txin_gen, signatures vector contains two non empty elements
   tx.signatures.resize(2);
   tx.signatures[0].resize(1);
   tx.signatures[1].resize(1);
   tx.invalidate_hashes();
-  ASSERT_FALSE(serialization::dump_binary(tx, blob));
+  ASSERT_THROW(blob = serialization::dump_binary(tx), std::invalid_argument);
 
   // A few bytes instead of signature
   tx.vin.clear();
   tx.vin.push_back(txin_gen1);
   tx.signatures.clear();
   tx.invalidate_hashes();
-  ASSERT_TRUE(serialization::dump_binary(tx, blob));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(tx));
   blob.append(std::string(sizeof(crypto::signature) / 2, 'x'));
-  ASSERT_FALSE(serialization::parse_binary(blob, tx1));
+  ASSERT_THROW(serialization::parse_binary(blob, tx1), std::runtime_error);
 
   // blob contains one signature
   blob.append(std::string(sizeof(crypto::signature) / 2, 'y'));
-  ASSERT_FALSE(serialization::parse_binary(blob, tx1));
+  ASSERT_THROW(serialization::parse_binary(blob, tx1), std::runtime_error);
 
   // Not enough signature vectors for all inputs
   txin_to_key txin_to_key1;
@@ -417,7 +412,7 @@ TEST(Serialization, serializes_transacion_signatures_correctly)
   tx.signatures.resize(1);
   tx.signatures[0].resize(2);
   tx.invalidate_hashes();
-  ASSERT_FALSE(serialization::dump_binary(tx, blob));
+  ASSERT_THROW(blob = serialization::dump_binary(tx), std::invalid_argument);
 
   // Too much signatures for two inputs
   tx.signatures.resize(3);
@@ -425,48 +420,57 @@ TEST(Serialization, serializes_transacion_signatures_correctly)
   tx.signatures[1].resize(2);
   tx.signatures[2].resize(2);
   tx.invalidate_hashes();
-  ASSERT_FALSE(serialization::dump_binary(tx, blob));
+  ASSERT_THROW(blob = serialization::dump_binary(tx), std::invalid_argument);
 
   // First signatures vector contains too little elements
   tx.signatures.resize(2);
   tx.signatures[0].resize(1);
   tx.signatures[1].resize(2);
   tx.invalidate_hashes();
-  ASSERT_FALSE(serialization::dump_binary(tx, blob));
+  ASSERT_THROW(blob = serialization::dump_binary(tx), std::invalid_argument);
 
   // First signatures vector contains too much elements
   tx.signatures.resize(2);
   tx.signatures[0].resize(3);
   tx.signatures[1].resize(2);
   tx.invalidate_hashes();
-  ASSERT_FALSE(serialization::dump_binary(tx, blob));
+  ASSERT_THROW(blob = serialization::dump_binary(tx), std::invalid_argument);
 
   // There are signatures for each input
   tx.signatures.resize(2);
   tx.signatures[0].resize(2);
   tx.signatures[1].resize(2);
+  for (char i : {0, 1})
+    for (char j : {0, 1})
+      tx.signatures[i][j].c.data[2*i + j] = ((i+1) << 4) + 2*i + j + 1;
   tx.invalidate_hashes();
-  ASSERT_TRUE(serialization::dump_binary(tx, blob));
-  ASSERT_TRUE(serialization::parse_binary(blob, tx1));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(tx));
+  ASSERT_EQ(lokimq::to_hex(blob),
+      "0100020201020cfd1a42424242424242424242424242424242424242424242424242424242424242420201020cfd1a42424242424242424242424242424242424242424242424242424242424242420000"
+      "11000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+      "00120000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+      "00002300000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+      "00000024000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000");
+  ASSERT_NO_THROW(serialization::parse_binary(blob, tx1));
   ASSERT_EQ(tx, tx1);
   ASSERT_EQ(linearize_vector2(tx.signatures), linearize_vector2(tx1.signatures));
 
   // Blob doesn't contain enough data
   blob.resize(blob.size() - sizeof(crypto::signature) / 2);
-  ASSERT_FALSE(serialization::parse_binary(blob, tx1));
+  ASSERT_THROW(serialization::parse_binary(blob, tx1), std::runtime_error);
 
   // Blob contains too much data
   blob.resize(blob.size() + sizeof(crypto::signature));
-  ASSERT_FALSE(serialization::parse_binary(blob, tx1));
+  ASSERT_THROW(serialization::parse_binary(blob, tx1), std::runtime_error);
 
   // Blob contains one excess signature
   blob.resize(blob.size() + sizeof(crypto::signature) / 2);
-  ASSERT_FALSE(serialization::parse_binary(blob, tx1));
+  ASSERT_THROW(serialization::parse_binary(blob, tx1), std::runtime_error);
 }
 
 TEST(Serialization, serializes_ringct_types)
 {
-  string blob;
+  std::string blob;
   rct::key key0, key1;
   rct::keyV keyv0, keyv1;
   rct::keyM keym0, keym1;
@@ -481,15 +485,15 @@ TEST(Serialization, serializes_ringct_types)
   cryptonote::transaction tx0, tx1;
 
   key0 = rct::skGen();
-  ASSERT_TRUE(serialization::dump_binary(key0, blob));
-  ASSERT_TRUE(serialization::parse_binary(blob, key1));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(key0));
+  ASSERT_NO_THROW(serialization::parse_binary(blob, key1));
   ASSERT_TRUE(key0 == key1);
 
   keyv0 = rct::skvGen(30);
   for (size_t n = 0; n < keyv0.size(); ++n)
     keyv0[n] = rct::skGen();
-  ASSERT_TRUE(serialization::dump_binary(keyv0, blob));
-  ASSERT_TRUE(serialization::parse_binary(blob, keyv1));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(keyv0));
+  ASSERT_NO_THROW(serialization::parse_binary(blob, keyv1));
   ASSERT_TRUE(keyv0.size() == keyv1.size());
   for (size_t n = 0; n < keyv0.size(); ++n)
   {
@@ -500,8 +504,8 @@ TEST(Serialization, serializes_ringct_types)
   for (size_t n = 0; n < keym0.size(); ++n)
     for (size_t i = 0; i < keym0[n].size(); ++i)
       keym0[n][i] = rct::skGen();
-  ASSERT_TRUE(serialization::dump_binary(keym0, blob));
-  ASSERT_TRUE(serialization::parse_binary(blob, keym1));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(keym0));
+  ASSERT_NO_THROW(serialization::parse_binary(blob, keym1));
   ASSERT_TRUE(keym0.size() == keym1.size());
   for (size_t n = 0; n < keym0.size(); ++n)
   {
@@ -513,15 +517,15 @@ TEST(Serialization, serializes_ringct_types)
   }
 
   rct::skpkGen(ctkey0.dest, ctkey0.mask);
-  ASSERT_TRUE(serialization::dump_binary(ctkey0, blob));
-  ASSERT_TRUE(serialization::parse_binary(blob, ctkey1));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(ctkey0));
+  ASSERT_NO_THROW(serialization::parse_binary(blob, ctkey1));
   ASSERT_TRUE(!memcmp(&ctkey0, &ctkey1, sizeof(ctkey0)));
 
   ctkeyv0 = std::vector<rct::ctkey>(14);
   for (size_t n = 0; n < ctkeyv0.size(); ++n)
     rct::skpkGen(ctkeyv0[n].dest, ctkeyv0[n].mask);
-  ASSERT_TRUE(serialization::dump_binary(ctkeyv0, blob));
-  ASSERT_TRUE(serialization::parse_binary(blob, ctkeyv1));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(ctkeyv0));
+  ASSERT_NO_THROW(serialization::parse_binary(blob, ctkeyv1));
   ASSERT_TRUE(ctkeyv0.size() == ctkeyv1.size());
   for (size_t n = 0; n < ctkeyv0.size(); ++n)
   {
@@ -535,8 +539,8 @@ TEST(Serialization, serializes_ringct_types)
     for (size_t i = 0; i < ctkeym0[n].size(); ++i)
       rct::skpkGen(ctkeym0[n][i].dest, ctkeym0[n][i].mask);
   }
-  ASSERT_TRUE(serialization::dump_binary(ctkeym0, blob));
-  ASSERT_TRUE(serialization::parse_binary(blob, ctkeym1));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(ctkeym0));
+  ASSERT_NO_THROW(serialization::parse_binary(blob, ctkeym1));
   ASSERT_TRUE(ctkeym0.size() == ctkeym1.size());
   for (size_t n = 0; n < ctkeym0.size(); ++n)
   {
@@ -549,8 +553,8 @@ TEST(Serialization, serializes_ringct_types)
 
   ecdh0.mask = rct::skGen();
   ecdh0.amount = rct::skGen();
-  ASSERT_TRUE(serialization::dump_binary(ecdh0, blob));
-  ASSERT_TRUE(serialization::parse_binary(blob, ecdh1));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(ecdh0));
+  ASSERT_NO_THROW(serialization::parse_binary(blob, ecdh1));
   ASSERT_TRUE(!memcmp(&ecdh0.mask, &ecdh1.mask, sizeof(ecdh0.mask)));
   ASSERT_TRUE(!memcmp(&ecdh0.amount, &ecdh1.amount, sizeof(ecdh0.amount)));
 
@@ -560,23 +564,23 @@ TEST(Serialization, serializes_ringct_types)
     boro0.s1[n] = rct::skGen();
   }
   boro0.ee = rct::skGen();
-  ASSERT_TRUE(serialization::dump_binary(boro0, blob));
-  ASSERT_TRUE(serialization::parse_binary(blob, boro1));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(boro0));
+  ASSERT_NO_THROW(serialization::parse_binary(blob, boro1));
   ASSERT_TRUE(!memcmp(&boro0, &boro1, sizeof(boro0)));
 
   // create a full rct signature to use its innards
-  vector<uint64_t> inamounts;
+  std::vector<uint64_t> inamounts;
   rct::ctkeyV sc, pc;
   rct::ctkey sctmp, pctmp;
   inamounts.push_back(6000);
-  tie(sctmp, pctmp) = rct::ctskpkGen(inamounts.back());
+  std::tie(sctmp, pctmp) = rct::ctskpkGen(inamounts.back());
   sc.push_back(sctmp);
   pc.push_back(pctmp);
   inamounts.push_back(7000);
-  tie(sctmp, pctmp) = rct::ctskpkGen(inamounts.back());
+  std::tie(sctmp, pctmp) = rct::ctskpkGen(inamounts.back());
   sc.push_back(sctmp);
   pc.push_back(pctmp);
-  vector<uint64_t> amounts;
+  std::vector<uint64_t> amounts;
   rct::keyV amount_keys;
   //add output 500
   amounts.push_back(500);
@@ -595,8 +599,8 @@ TEST(Serialization, serializes_ringct_types)
   s0 = rct::genRctSimple(rct::zero(), sc, pc, destinations, inamounts, amounts, amount_keys, NULL, NULL, 0, 3, rct_config, hw::get_device("default"));
 
   mg0 = s0.p.MGs[0];
-  ASSERT_TRUE(serialization::dump_binary(mg0, blob));
-  ASSERT_TRUE(serialization::parse_binary(blob, mg1));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(mg0));
+  ASSERT_NO_THROW(serialization::parse_binary(blob, mg1));
   ASSERT_TRUE(mg0.ss.size() == mg1.ss.size());
   for (size_t n = 0; n < mg0.ss.size(); ++n)
   {
@@ -609,8 +613,8 @@ TEST(Serialization, serializes_ringct_types)
 
   ASSERT_FALSE(s0.p.bulletproofs.empty());
   bp0 = s0.p.bulletproofs.front();
-  ASSERT_TRUE(serialization::dump_binary(bp0, blob));
-  ASSERT_TRUE(serialization::parse_binary(blob, bp1));
+  ASSERT_NO_THROW(blob = serialization::dump_binary(bp0));
+  ASSERT_NO_THROW(serialization::parse_binary(blob, bp1));
   bp1.V = bp0.V; // this is not saved, as it is reconstructed from other tx data
   ASSERT_EQ(bp0, bp1);
 }
@@ -626,7 +630,7 @@ TEST(Serialization, portability_wallet)
   const cryptonote::network_type nettype = cryptonote::TESTNET;
   tools::wallet2 w(nettype);
   const boost::filesystem::path wallet_file = unit_test::data_dir / "wallet_testnet";
-  string password = "test";
+  std::string password = "test";
   bool r = false;
   try
   {
@@ -743,10 +747,16 @@ TEST(Serialization, portability_wallet)
   ASSERT_TRUE(w.m_address_book.size() == 1);
   {
     auto address_book_row = w.m_address_book.begin();
+<<<<<<< HEAD
     ASSERT_TRUE(epee::string_tools::pod_to_hex(address_book_row->m_address.m_spend_public_key) == "938fc84cbacb271fdbc9bfc34e9d887f4bdb89f20a9d4e2c05916d6b9f6a7cb8");
     ASSERT_TRUE(epee::string_tools::pod_to_hex(address_book_row->m_address.m_view_public_key) == "9eec0bbb1728bce79209e1ae995cbae8e3f6cf78f7262b5db049594e4907bb33");
     ASSERT_TRUE(epee::string_tools::pod_to_hex(address_book_row->m_payment_id) == "e0470453783dd65dc16bb740f82902b9a26a48216e4c89278586637011c858a3");
     ASSERT_TRUE(address_book_row->m_description == "A test address");
+=======
+    ASSERT_TRUE(epee::string_tools::pod_to_hex(address_book_row->m_address.m_spend_public_key) == "9bc53a6ff7b0831c9470f71b6b972dbe5ad1e8606f72682868b1dda64e119fb3");
+    ASSERT_TRUE(epee::string_tools::pod_to_hex(address_book_row->m_address.m_view_public_key) == "49fece1ef97dc0c0f7a5e2106e75e96edd910f7e86b56e1e308cd0cf734df191");
+    ASSERT_TRUE(address_book_row->m_description == "testnet wallet 9y52S6");
+>>>>>>> a26e5b3
   }
 }
 
@@ -757,7 +767,7 @@ TEST(Serialization, portability_outputs)
   tools::wallet2 w(cryptonote::TESTNET, restricted);
 
   const boost::filesystem::path wallet_file = unit_test::data_dir / "wallet_testnet";
-  const string password = "test";
+  const std::string password = "test";
   w.load(wallet_file.string(), password);
 
   // read file
@@ -769,7 +779,7 @@ TEST(Serialization, portability_outputs)
   const size_t magiclen = strlen(OUTPUT_EXPORT_FILE_MAGIC);
   ASSERT_FALSE(data.size() < magiclen || memcmp(data.data(), OUTPUT_EXPORT_FILE_MAGIC, magiclen));
   // decrypt (copied from wallet2::decrypt)
-  auto decrypt = [] (const std::string &ciphertext, const crypto::secret_key &skey, bool authenticated) -> string
+  auto decrypt = [] (const std::string &ciphertext, const crypto::secret_key &skey, bool authenticated) -> std::string
   {
     const size_t prefix_size = sizeof(chacha_iv) + (authenticated ? sizeof(crypto::signature) : 0);
     if(ciphertext.size() < prefix_size)
@@ -905,7 +915,7 @@ TEST(Serialization, portability_unsigned_tx)
 
   const boost::filesystem::path filename    = unit_test::data_dir / "unsigned_sispop_tx";
   const boost::filesystem::path wallet_file = unit_test::data_dir / "wallet_testnet";
-  const string password = "test";
+  const std::string password = "test";
   w.load(wallet_file.string(), password);
 
   std::string s;
@@ -1104,7 +1114,7 @@ TEST(Serialization, portability_signed_tx)
 
   const boost::filesystem::path filename    = unit_test::data_dir / "signed_sispop_tx";
   const boost::filesystem::path wallet_file = unit_test::data_dir / "wallet_testnet";
-  const string password = "test";
+  const std::string password = "test";
   w.load(wallet_file.string(), password);
 
   const cryptonote::network_type nettype = cryptonote::TESTNET;

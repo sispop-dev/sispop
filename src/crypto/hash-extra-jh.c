@@ -31,7 +31,6 @@
 #include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h>
 
 #include "jh.h"
 #include "hash-ops.h"

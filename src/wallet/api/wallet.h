@@ -35,9 +35,9 @@
 #include "wallet/wallet2.h"
 
 #include <string>
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/thread.hpp>
-#include <boost/thread/condition_variable.hpp>
+#include <mutex>
+#include <condition_variable>
+#include <thread>
 
 
 namespace Monero {
@@ -60,7 +60,7 @@ public:
                             const std::string &language) const override;
     bool open(const std::string &path, const std::string &password);
     bool recover(const std::string &path,const std::string &password,
-                            const std::string &seed);
+                            const std::string &seed, const std::string &seed_offset = {});
     bool recoverFromKeysWithPassword(const std::string &path,
                             const std::string &password,
                             const std::string &language,
@@ -151,8 +151,13 @@ public:
     bool hasMultisigPartialKeyImages() const override;
     PendingTransaction*  restoreMultisigTransaction(const std::string& signData) override;
 
+    PendingTransaction * createTransactionMultDest(const std::vector<std::string> &dst_addr, const std::string &payment_id,
+                                        optional<std::vector<uint64_t>> amount,
+                                        PendingTransaction::Priority priority = PendingTransaction::Priority_Low,
+                                        uint32_t subaddr_account = 0,
+                                        std::set<uint32_t> subaddr_indices = {}) override;
     PendingTransaction * createTransaction(const std::string &dst_addr, const std::string &payment_id,
-                                        optional<uint64_t> amount, uint32_t mixin_count,
+                                        optional<uint64_t> amount,
                                         uint32_t priority = 0,
                                         uint32_t subaddr_account = 0,
                                         std::set<uint32_t> subaddr_indices = {}) override;
@@ -163,11 +168,15 @@ public:
     bool importKeyImages(const std::string &filename) override;
 
     void disposeTransaction(PendingTransaction * t) override;
+    // TODO(loki): Implement
+    // uint64_t estimateTransactionFee(const std::vector<std::pair<std::string, uint64_t>> &destinations, PendingTransaction::Priority priority) const override;
     TransactionHistory * history() override;
     AddressBook * addressBook() override;
     Subaddress * subaddress() override;
     SubaddressAccount * subaddressAccount() override;
     void setListener(WalletListener * l) override;
+    bool setCacheAttribute(const std::string &key, const std::string &val) override;
+    std::string getCacheAttribute(const std::string &key) const override;
     bool setUserNote(const std::string &txid, const std::string &note) override;
     std::string getUserNote(const std::string &txid) const override;
     std::string getTxKey(const std::string &txid) const override;
@@ -201,6 +210,7 @@ public:
     bool unlockKeysFile() override;
     bool isKeysFileLocked() override;
     uint64_t coldKeyImageSync(uint64_t &spent, uint64_t &unspent) override;
+    void deviceShowAddress(uint32_t accountIndex, uint32_t addressIndex, const std::string &paymentId) override;
 
 private:
     void clearStatus() const;
@@ -225,7 +235,7 @@ private:
     friend class SubaddressAccountImpl;
 
     std::unique_ptr<tools::wallet2> m_wallet;
-    mutable boost::mutex m_statusMutex;
+    mutable std::mutex m_statusMutex;
     mutable int m_status;
     mutable std::string m_errorString;
     std::string m_password;
@@ -241,13 +251,13 @@ private:
     std::atomic<int>  m_refreshIntervalMillis;
     std::atomic<bool> m_refreshShouldRescan;
     // synchronizing  refresh loop;
-    boost::mutex        m_refreshMutex;
+    std::mutex        m_refreshMutex;
 
     // synchronizing  sync and async refresh
-    boost::mutex        m_refreshMutex2;
-    boost::condition_variable m_refreshCV;
-    boost::thread       m_refreshThread;
-    boost::thread       m_longPollThread;
+    std::mutex        m_refreshMutex2;
+    std::condition_variable m_refreshCV;
+    std::thread       m_refreshThread;
+    std::thread       m_longPollThread;
 
     // flag indicating wallet is recovering from seed
     // so it shouldn't be considered as new and pull blocks (slow-refresh)
@@ -258,7 +268,7 @@ private:
     std::atomic<bool>   m_rebuildWalletCache;
     // cache connection status to avoid unnecessary RPC calls
     mutable std::atomic<bool>   m_is_connected;
-    boost::optional<epee::net_utils::http::login> m_daemon_login{};
+    std::optional<epee::net_utils::http::login> m_daemon_login{};
 };
 
 

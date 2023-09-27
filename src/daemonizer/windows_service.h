@@ -42,21 +42,12 @@ namespace windows
 
   bool ensure_admin(std::string const &arguments);
 
-//  bool install_service(char const *service_name, std::string const &arguments);
+  bool install_service(char const *service_name, std::string const &arguments);
 
-  bool install_service(
-      std::string const & service_name
-    , std::string const & arguments
-    );
+  bool uninstall_service(char const *service_name);
 
-  bool uninstall_service(
-      std::string const & service_name
-    );
-  bool start_service(
-      std::string const & service_name
-    );
-  bool stop_service(
-      std::string const & service_name
-    );
+  bool start_service(char const *service_name);
+
+  bool stop_service(char const *service_name);
 }
 #endif

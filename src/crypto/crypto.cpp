@@ -28,15 +28,15 @@
 // 
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
+#include <mutex>
 #include <unistd.h>
 #include <cassert>
-#include <cstddef>
 #include <cstdint>
 #include <cstdlib>
 #include <cstring>
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/lock_guard.hpp>
-#include <boost/shared_ptr.hpp>
+#include <cstdio>
+#include <memory>
+#include <stdexcept>
 
 #include "common/varint.h"
 #include "warnings.h"
@@ -88,11 +88,22 @@ namespace crypto {
     return &reinterpret_cast<const unsigned char &>(scalar);
   }
 
+  static auto get_random_lock()
+  {
+    static std::mutex random_mutex;
+    return std::lock_guard{random_mutex};
+  }
+
   void generate_random_bytes_thread_safe(size_t N, uint8_t *bytes)
   {
-    static boost::mutex random_lock;
-    boost::lock_guard<boost::mutex> lock(random_lock);
+    auto lock = get_random_lock();
     generate_random_bytes_not_thread_safe(N, bytes);
+  }
+
+  void add_extra_entropy_thread_safe(const void *ptr, size_t bytes)
+  {
+    auto lock = get_random_lock();
+    add_extra_entropy_not_thread_safe(ptr, bytes);
   }
 
   static inline bool less32(const unsigned char *k0, const unsigned char *k1)
@@ -188,12 +199,11 @@ namespace crypto {
   void derivation_to_scalar(const key_derivation &derivation, size_t output_index, ec_scalar &res) {
     struct {
       key_derivation derivation;
-      char output_index[(sizeof(size_t) * 8 + 6) / 7];
+      char output_index[tools::VARINT_MAX_LENGTH<size_t>];
     } buf;
     char *end = buf.output_index;
     buf.derivation = derivation;
     tools::write_varint(end, output_index);
-    assert(end <= buf.output_index + sizeof buf.output_index);
     hash_to_scalar(&buf, end - reinterpret_cast<char *>(&buf), res);
   }
 
@@ -275,8 +285,6 @@ namespace crypto {
     buf.key = pub;
   try_again:
     random_scalar(k);
-    if (((const uint32_t*)(&k))[7] == 0) // we don't want tiny numbers here
-      goto try_again;
     ge_scalarmult_base(&tmp3, &k);
     ge_p3_tobytes(&buf.comm, &tmp3);
     hash_to_scalar(&buf, sizeof(s_comm), sig.c);
@@ -311,7 +319,7 @@ namespace crypto {
     return sc_isnonzero(&c) == 0;
   }
 
-  void generate_tx_proof(const hash &prefix_hash, const public_key &R, const public_key &A, const boost::optional<public_key> &B, const public_key &D, const secret_key &r, signature &sig) {
+  void generate_tx_proof(const hash &prefix_hash, const public_key &R, const public_key &A, const std::optional<public_key> &B, const public_key &D, const secret_key &r, signature &sig) {
     // sanity check
     ge_p3 R_p3;
     ge_p3 A_p3;
@@ -383,7 +391,7 @@ namespace crypto {
     sc_mulsub(&sig.r, &sig.c, &unwrap(r), &k);
   }
 
-  bool check_tx_proof(const hash &prefix_hash, const public_key &R, const public_key &A, const boost::optional<public_key> &B, const public_key &D, const signature &sig) {
+  bool check_tx_proof(const hash &prefix_hash, const public_key &R, const public_key &A, const std::optional<public_key> &B, const public_key &D, const signature &sig) {
     // sanity check
     ge_p3 R_p3;
     ge_p3 A_p3;
@@ -473,7 +481,7 @@ namespace crypto {
     hash h;
     ge_p2 point;
     ge_p1p1 point2;
-    cn_fast_hash(std::addressof(key), sizeof(public_key), h);
+    cn_fast_hash(&key, sizeof(public_key), h);
     ge_fromfe_frombytes_vartime(&point, reinterpret_cast<const unsigned char *>(&h));
     ge_mul8(&point2, &point);
     ge_p1p1_to_p3(&res, &point2);
@@ -511,7 +519,7 @@ POP_WARNINGS
     ge_p3 image_unp;
     ge_dsmp image_pre;
     ec_scalar sum, k, h;
-    boost::shared_ptr<rs_comm> buf(reinterpret_cast<rs_comm *>(malloc(rs_comm_size(pubs_count))), free);
+    std::shared_ptr<rs_comm> buf(reinterpret_cast<rs_comm *>(malloc(rs_comm_size(pubs_count))), free);
     if (!buf)
       local_abort("malloc failure");
     assert(sec_index < pubs_count);
@@ -573,7 +581,7 @@ POP_WARNINGS
     ge_p3 image_unp;
     ge_dsmp image_pre;
     ec_scalar sum, h;
-    boost::shared_ptr<rs_comm> buf(reinterpret_cast<rs_comm *>(malloc(rs_comm_size(pubs_count))), free);
+    std::shared_ptr<rs_comm> buf(reinterpret_cast<rs_comm *>(malloc(rs_comm_size(pubs_count))), free);
     if (!buf)
       return false;
 #if !defined(NDEBUG)

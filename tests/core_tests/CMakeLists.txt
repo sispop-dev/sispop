@@ -57,7 +57,6 @@ target_link_libraries(core_tests
     device
     wallet
     Boost::program_options
-    Boost::regex
     miniupnpc
     extra)
 enable_stack_trace(core_tests)

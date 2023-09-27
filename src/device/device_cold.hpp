@@ -31,22 +31,23 @@
 #define MONERO_DEVICE_COLD_H
 
 #include "wallet/wallet2.h"
-#include <boost/optional/optional.hpp>
-#include <boost/function.hpp>
+#include <optional>
+#include <functional>
 
 
 namespace hw {
 
-  typedef struct wallet_shim {
-    boost::function<crypto::public_key (const tools::wallet2::transfer_details &td)> get_tx_pub_key_from_received_outs;
-  } wallet_shim;
+  struct wallet_shim {
+    std::function<crypto::public_key (const tools::wallet2::transfer_details &td)> get_tx_pub_key_from_received_outs;
+  };
 
   class tx_aux_data {
   public:
     std::vector<std::string> tx_device_aux;  // device generated aux data
     std::vector<cryptonote::address_parse_info> tx_recipients;  // as entered by user
-    boost::optional<int> bp_version;  // BP version to use
-    boost::optional<unsigned> client_version;  // Signing client version to use (testing)
+    std::optional<int> bp_version;  // BP version to use
+    std::optional<unsigned> client_version;  // Signing client version to use (testing)
+    std::optional<uint8_t> hard_fork;  // hard fork being used for the transaction
   };
 
   class device_cold {

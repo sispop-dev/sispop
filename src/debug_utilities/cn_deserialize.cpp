@@ -34,13 +34,14 @@
 #include "cryptonote_basic/tx_extra.h"
 #include "cryptonote_core/blockchain.h"
 #include "common/command_line.h"
+#include "sispop_economy.h"
 #include "version.h"
+#include <lokimq/hex.h>
 
 #undef SISPOP_DEFAULT_LOG_CATEGORY
 #define SISPOP_DEFAULT_LOG_CATEGORY "debugtools.deserialize"
 
 namespace po = boost::program_options;
-using namespace epee;
 
 using namespace cryptonote;
 
@@ -53,20 +54,69 @@ static std::string extra_nonce_to_string(const cryptonote::tx_extra_nonce &extra
   return epee::string_tools::buff_to_hex_nodelimer(extra_nonce.nonce);
 }
 
+struct extra_printer {
+  void operator()(const tx_extra_padding& x) { std::cout << "padding: " << x.size << " bytes"; }
+  void operator()(const tx_extra_pub_key& x) { std::cout << "pub key: " << x.pub_key; }
+  void operator()(const tx_extra_nonce& x) { std::cout << "nonce: " << extra_nonce_to_string(x); }
+  void operator()(const tx_extra_merge_mining_tag& x) { std::cout << "merge mining tag: depth " << x.depth << ", merkle root " << x.merkle_root; }
+  void operator()(const tx_extra_additional_pub_keys& x) {
+    std::cout << "additional tx pubkeys: ";
+    bool first = true;
+    for (auto& pk : x.data) {
+      if (first) first = false;
+      else std::cout << ", ";
+      std::cout << pk;
+    }
+  }
+  void operator()(const tx_extra_mysterious_minergate& x) { std::cout << "minergate custom: " << lokimq::to_hex(x.data); }
+  void operator()(const tx_extra_service_node_winner& x) { std::cout << "SN reward winner: " << x.m_service_node_key; }
+  void operator()(const tx_extra_service_node_register& x) { std::cout << "SN registration data"; } // TODO: could parse this further
+  void operator()(const tx_extra_service_node_pubkey& x) { std::cout << "SN pubkey: " << x.m_service_node_key; }
+  void operator()(const tx_extra_service_node_contributor& x) { std::cout << "SN contribution"; } // Can't actually print the address without knowing the network type
+  void operator()(const tx_extra_service_node_deregister_old& x) { std::cout << "SN deregistration (pre-HF12)"; }
+  void operator()(const tx_extra_tx_secret_key& x) { std::cout << "TX secret key: " << lokimq::to_hex(tools::view_guts(x.key)); }
+  void operator()(const tx_extra_tx_key_image_proofs& x) { std::cout << "TX key image proofs (" << x.proofs.size() << ")"; }
+  void operator()(const tx_extra_tx_key_image_unlock& x) { std::cout << "TX key image unlock: " << x.key_image; }
+  void operator()(const tx_extra_burn& x) { std::cout << "Transaction burned fee/payment: " << print_money(x.amount); }
+  void operator()(const tx_extra_loki_name_system& x) {
+    std::cout << "LNS " << (x.is_buying() ? "registration" : x.is_updating() ? "update" : "(unknown)");
+    switch (x.type)
+    {
+      case lns::mapping_type::lokinet_1year: std::cout << " - Lokinet (1y)"; break;
+      case lns::mapping_type::lokinet_2years: std::cout << " - Lokinet (2y)"; break;
+      case lns::mapping_type::lokinet_5years: std::cout << " - Lokinet (5y)"; break;
+      case lns::mapping_type::lokinet_10years: std::cout << " - Lokinet (10y)"; break;
+      case lns::mapping_type::session: std::cout << " - Session address"; break;
+      case lns::mapping_type::wallet: std::cout << " - Wallet address"; break;
+      case lns::mapping_type::update_record_internal:
+      case lns::mapping_type::_count:
+          break;
+    }
+  }
+  void operator()(const tx_extra_service_node_state_change& x) {
+    std::cout << "SN state change: ";
+    switch (x.state)
+    {
+      case service_nodes::new_state::decommission: std::cout << "decommission"; break;
+      case service_nodes::new_state::recommission: std::cout << "recommission"; break;
+      case service_nodes::new_state::deregister: std::cout << "deregister"; break;
+      case service_nodes::new_state::ip_change_penalty: std::cout << "ip change penalty"; break;
+      case service_nodes::new_state::_count: std::cout << "(unknown)"; break;
+    }
+    std::cout << " for block height " << x.block_height << ", SN index " << x.service_node_index;
+  }
+  template <typename T> void operator()(const T&) { std::cout << "unknown"; }
+};
+
+
 static void print_extra_fields(const std::vector<cryptonote::tx_extra_field> &fields)
 {
-  std::cout << "tx_extra has " << fields.size() << " field(s)" << std::endl;
+  std::cout << "tx_extra has " << fields.size() << " field(s)\n";
   for (size_t n = 0; n < fields.size(); ++n)
   {
-    std::cout << "field " << n << ": ";
-    if (typeid(cryptonote::tx_extra_padding) == fields[n].type()) std::cout << "extra padding: " << boost::get<cryptonote::tx_extra_padding>(fields[n]).size << " bytes";
-    else if (typeid(cryptonote::tx_extra_pub_key) == fields[n].type()) std::cout << "extra pub key: " << boost::get<cryptonote::tx_extra_pub_key>(fields[n]).pub_key;
-    else if (typeid(cryptonote::tx_extra_nonce) == fields[n].type()) std::cout << "extra nonce: " << extra_nonce_to_string(boost::get<cryptonote::tx_extra_nonce>(fields[n]));
-    else if (typeid(cryptonote::tx_extra_merge_mining_tag) == fields[n].type()) std::cout << "extra merge mining tag: depth " << boost::get<cryptonote::tx_extra_merge_mining_tag>(fields[n]).depth << ", merkle root " << boost::get<cryptonote::tx_extra_merge_mining_tag>(fields[n]).merkle_root;
-    else if (typeid(cryptonote::tx_extra_additional_pub_keys) == fields[n].type()) std::cout << "additional tx pubkeys: " << boost::join(boost::get<cryptonote::tx_extra_additional_pub_keys>(fields[n]).data | boost::adaptors::transformed([](const crypto::public_key &key){ return epee::string_tools::pod_to_hex(key); }), ", " );
-    else if (typeid(cryptonote::tx_extra_mysterious_minergate) == fields[n].type()) std::cout << "extra minergate custom: " << epee::string_tools::buff_to_hex_nodelimer(boost::get<cryptonote::tx_extra_mysterious_minergate>(fields[n]).data);
-    else std::cout << "unknown";
-    std::cout << std::endl;
+    std::cout << "- " << n << ": ";
+    std::visit(extra_printer{}, fields[n]);
+    std::cout << "\n";
   }
 }
 
@@ -104,7 +154,7 @@ int main(int argc, char* argv[])
 
   if (command_line::get_arg(vm, command_line::arg_help))
   {
-    std::cout << "Sispop '" << SISPOP_RELEASE_NAME << "' (v" << SISPOP_VERSION_FULL << ")" << ENDL << ENDL;
+    std::cout << "Sispop '" << SISPOP_RELEASE_NAME << "' (v" << SISPOP_VERSION_FULL << ")\n\n";
     std::cout << desc_options << std::endl;
     return 1;
   }

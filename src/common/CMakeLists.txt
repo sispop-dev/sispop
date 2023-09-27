@@ -30,28 +30,35 @@
 add_library(common
   aligned.c
   base58.cpp
+  combinator.cpp
   command_line.cpp
   dns_utils.cpp
   download.cpp
   error.cpp
   expect.cpp
-  sispop.cpp
-  util.cpp
+  file.cpp
   i18n.cpp
-  ${PROJECT_BINARY_DIR}/translations/translation_files.cpp
-  rules.cpp
+  sispop.cpp
   notify.cpp
   password.cpp
   perf_timer.cpp
   pruning.cpp
   random.cpp
+  rules.cpp
   scoped_message_writer.cpp
+  sha256sum.cpp
   spawn.cpp
+  string_util.cpp
   threadpool.cpp
-  updates.cpp
-  aligned.c
   timings.cc
-  combinator.cpp)
+  updates.cpp
+  util.cpp
+  ${PROJECT_BINARY_DIR}/translations/translation_files.cpp
+  )
+
+set_source_files_properties(${PROJECT_BINARY_DIR}/translations/translation_files.cpp PROPERTIES GENERATED 1)
+add_dependencies(common generate_translation_data)
+
 
 set_source_files_properties(${PROJECT_BINARY_DIR}/translations/translation_files.cpp PROPERTIES GENERATED 1)
 add_dependencies(common generate_translation_data)
@@ -67,17 +74,14 @@ if (BACKCOMPAT)
   target_sources(common PRIVATE compat/glibc_compat.cpp)
 endif()
 
-
 target_link_libraries(common
   PUBLIC
     cncrypto
     sispopmq::sispopmq
   PRIVATE
     libunbound
-    Boost::regex
     OpenSSL::SSL
     OpenSSL::Crypto
-    epee_readline
     extra)
 
 option(STACK_TRACE "Install a hook that dumps stack on exception" OFF)

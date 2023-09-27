@@ -58,14 +58,14 @@ public:
 
   CHAIN_HTTP_TO_MAP2(cryptonote::core_rpc_server::connection_context); //forward http requests to uri map
   BEGIN_URI_MAP2()
-    MAP_URI_AUTO_JON2("/send_raw_transaction", on_send_raw_tx_2, cryptonote::COMMAND_RPC_SEND_RAW_TX)
-    MAP_URI_AUTO_JON2("/sendrawtransaction", on_send_raw_tx_2, cryptonote::COMMAND_RPC_SEND_RAW_TX)
+    MAP_URI_AUTO_JON2("/send_raw_transaction", on_send_raw_tx_2, cryptonote::rpc::SEND_RAW_TX)
+    MAP_URI_AUTO_JON2("/sendrawtransaction", on_send_raw_tx_2, cryptonote::rpc::SEND_RAW_TX)
     else {  // Default to parent for non-overriden callbacks
       return cryptonote::core_rpc_server::handle_http_request_map(query_info, response_info, m_conn_context);
     }
   END_URI_MAP2()
 
-  bool on_send_raw_tx_2(const cryptonote::COMMAND_RPC_SEND_RAW_TX::request& req, cryptonote::COMMAND_RPC_SEND_RAW_TX::response& res, const cryptonote::core_rpc_server::connection_context *ctx);
+  bool on_send_raw_tx_2(const cryptonote::rpc::SEND_RAW_TX::request& req, cryptonote::rpc::SEND_RAW_TX::response& res, const cryptonote::core_rpc_server::connection_context *ctx);
 
 protected:
   cryptonote::network_type m_network_type;
@@ -76,7 +76,7 @@ public:
   typedef cryptonote::t_cryptonote_protocol_handler<cryptonote::core> t_protocol_raw;
   typedef nodetool::node_server<t_protocol_raw> t_node_server;
 
-  static constexpr const std::chrono::seconds rpc_timeout = std::chrono::seconds(60);
+  static constexpr const std::chrono::seconds rpc_timeout = std::chrono::seconds(120);
 
   cryptonote::core * m_core;
   t_protocol_raw m_protocol;
@@ -137,7 +137,7 @@ public:
   void stop_rpc();
   void init_and_run();
   void stop_and_deinit();
-  void try_init_and_run(boost::optional<unsigned> initial_port=boost::none);
+  void try_init_and_run(std::optional<unsigned> initial_port=std::nullopt);
 
   void mine_blocks(size_t num_blocks, const std::string &miner_address);
   void start_mining(const std::string &miner_address, uint64_t threads_count=1, bool do_background_mining=false, bool ignore_battery=true);

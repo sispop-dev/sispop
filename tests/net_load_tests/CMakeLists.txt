@@ -33,11 +33,9 @@ target_link_libraries(net_load_tests_clt
     p2p
     cryptonote_core
     epee
-    ${GTEST_LIBRARIES}
-    Boost::chrono
+    gtest
     Boost::date_time
     Boost::thread
-    Boost::regex
     extra)
 
 add_executable(net_load_tests_srv
@@ -47,10 +45,8 @@ target_link_libraries(net_load_tests_srv
     p2p
     cryptonote_core
     epee
-    ${GTEST_LIBRARIES}
-    Boost::chrono
+    gtest
     Boost::date_time
-    Boost::regex
     extra)
 
 set_property(TARGET net_load_tests_clt net_load_tests_srv

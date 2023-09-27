@@ -104,7 +104,7 @@ namespace tools
       std::string to_string() const
       {
         std::ostringstream ss;
-        ss << m_loc << ':' << typeid(*this).name() << ": " << Base::what();
+        ss << m_loc << ':' << tools::type_name(typeid(*this)) << ": " << Base::what();
         return ss.str();
       }
 
@@ -839,8 +839,8 @@ namespace tools
     //----------------------------------------------------------------------------------------------------
     struct get_output_blacklist : public wallet_rpc_error
     {
-      explicit get_output_blacklist(std::string&& loc, const std::string& request)
-        : wallet_rpc_error(std::move(loc), "Failed to get output blacklist", request)
+      explicit get_output_blacklist(std::string &&loc, const std::string &request)
+      : wallet_rpc_error(std::move(loc), "Failed to get output blacklist", request)
       {
       }
     };

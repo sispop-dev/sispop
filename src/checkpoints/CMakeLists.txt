@@ -34,6 +34,7 @@ add_library(checkpoints
 target_link_libraries(checkpoints
   PRIVATE
     common
+    cryptonote_basic
     Boost::date_time
     Boost::program_options
     Boost::serialization

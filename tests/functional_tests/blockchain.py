@@ -28,7 +28,6 @@
 # STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import print_function
 import time
 
 """Test daemon blockchain RPC calls
@@ -53,7 +52,8 @@ class BlockchainTest():
     def reset(self):
         print('Resetting blockchain')
         daemon = Daemon()
-        daemon.pop_blocks(1000)
+        res = daemon.get_height()
+        daemon.pop_blocks(res.height - 1)
         daemon.flush_txpool()
 
     def _test_generateblocks(self, blocks):
@@ -74,9 +74,15 @@ class BlockchainTest():
 
         # we should not see a block at height
         ok = False
-        try: daemon.getblock(height)
+        try: daemon.getblock(height = height)
         except: ok = True
         assert ok
+
+        res = daemon.get_fee_estimate()
+        assert res.fee == 234562
+        assert res.quantization_mask == 10000
+        res = daemon.get_fee_estimate(10)
+        assert res.fee <= 234562
 
         # generate blocks
         res_generateblocks = daemon.generateblocks('42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', blocks)
@@ -92,7 +98,7 @@ class BlockchainTest():
         # get the blocks, check they have the right height
         res_getblock = []
         for n in range(blocks):
-            res_getblock.append(daemon.getblock(height + n))
+            res_getblock.append(daemon.getblock(height = height + n))
             block_header = res_getblock[n].block_header
             assert abs(block_header.timestamp - time.time()) < 10 # within 10 seconds
             assert block_header.height == height + n
@@ -111,7 +117,7 @@ class BlockchainTest():
 
         # we should not see a block after that
         ok = False
-        try: daemon.getblock(height + blocks)
+        try: daemon.getblock(height = height + blocks)
         except: ok = True
         assert ok
 
@@ -157,7 +163,7 @@ class BlockchainTest():
 
         # we should not see the popped block anymore
         ok = False
-        try: daemon.getblock(height + blocks - 1)
+        try: daemon.getblock(height = height + blocks - 1)
         except: ok = True
         assert ok
 
@@ -228,6 +234,12 @@ class BlockchainTest():
             assert res.histogram[i].total_instances in [height + nblocks - 2, 1]
             assert res.histogram[i].unlocked_instances == 0
             assert res.histogram[i].recent_instances == 0
+
+        res = daemon.get_fee_estimate()
+        assert res.fee == 234560
+        assert res.quantization_mask == 10000
+        res = daemon.get_fee_estimate(10)
+        assert res.fee <= 234560
 
     def _test_alt_chains(self):
         print('Testing alt chains')
@@ -317,6 +329,9 @@ class BlockchainTest():
             assert chain.main_chain_parent_block == root_block_hash
         for txid in [alt_blocks[0], alt_blocks[2], alt_blocks[4]]:
           assert len([chain for chain in res.chains if chain.block_hash == txid]) == 1
+
+        print('Saving blockchain explicitely')
+        daemon.save_bc()
 
 
 if __name__ == '__main__':

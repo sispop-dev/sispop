@@ -1,20 +1,14 @@
 #include <bitset>
 #include "sispop_name_system.h"
-
-#include "checkpoints/checkpoints.h"
 #include "common/sispop.h"
-#include "common/util.h"
+#include "common/string_util.h"
 #include "crypto/hash.h"
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
-#include "cryptonote_core/cryptonote_tx_utils.h"
 #include "cryptonote_basic/tx_extra.h"
 #include "cryptonote_core/blockchain.h"
 #include "sispop_economy.h"
-#include "string_coding.h"
-
-#include <sispopmq/hex.h>
 
 #include <sispopmq/hex.h>
 #include <sispopmq/base32z.h>
@@ -24,7 +18,11 @@
 
 extern "C"
 {
-#include <sodium.h>
+#include <sodium/crypto_generichash.h>
+#include <sodium/crypto_generichash_blake2b.h>
+#include <sodium/crypto_pwhash.h>
+#include <sodium/crypto_secretbox.h>
+#include <sodium/crypto_sign.h>
 }
 
 #undef SISPOP_DEFAULT_LOG_CATEGORY
@@ -181,11 +179,8 @@ bool bind(sql_compiled_statement& s, int index, const T& val) { return SQLITE_OK
 bool bind(sql_compiled_statement& s, int index, std::nullptr_t) { return SQLITE_OK == sqlite3_bind_null(s.statement, index); }
 
 // text, from a referenced string (which must be kept alive)
-<<<<<<< HEAD:src/cryptonote_core/sispop_name_system.cpp
-bool bind(sql_compiled_statement& s, int index, sispopmq::string_view text)
-=======
+
 bool bind(sql_compiled_statement& s, int index, std::string_view text)
->>>>>>> 83dd656e7... C++17:src/cryptonote_core/loki_name_system.cpp
 {
   return SQLITE_OK == sqlite3_bind_text(s.statement, index, text.data(), text.size(), nullptr /*dtor*/);
 }
@@ -226,11 +221,7 @@ bool bind_blob(sql_compiled_statement& s, int index, const void* data, size_t le
 }
 
 // from a string_view
-<<<<<<< HEAD:src/cryptonote_core/sispop_name_system.cpp
-bool bind_blob(sql_compiled_statement& s, int index, sispopmq::string_view blob)
-=======
 bool bind_blob(sql_compiled_statement& s, int index, std::string_view blob)
->>>>>>> 83dd656e7... C++17:src/cryptonote_core/loki_name_system.cpp
 {
   return SQLITE_OK == sqlite3_bind_blob(s.statement, index, blob.data(), blob.size(), nullptr /*dtor*/);
 }
@@ -262,11 +253,7 @@ bool bind_blob(sql_compiled_statement& s, I index, T&&... args)
 // bind_all(s, 123, "text", blob_view{data, size});
 //
 struct blob_view {
-<<<<<<< HEAD:src/cryptonote_core/sispop_name_system.cpp
-  sispopmq::string_view data;
-=======
   std::string_view data;
->>>>>>> 83dd656e7... C++17:src/cryptonote_core/loki_name_system.cpp
   /// Constructor that simply forwards anything to the `data` member constructor
   template <typename... T> explicit blob_view(T&&... args) : data{std::forward<T>(args)...} {}
 };
@@ -318,13 +305,8 @@ template <typename T, std::enable_if_t<std::is_floating_point<T>::value, int> = 
 T get(sql_compiled_statement& s, int index) { return static_cast<T>(sqlite3_column_double(s.statement, index)); }
 
 // text, via a string_view pointing at the text data
-<<<<<<< HEAD:src/cryptonote_core/sispop_name_system.cpp
-template <typename T, std::enable_if_t<std::is_same<T, sispopmq::string_view>::value, int> = 0>
-sispopmq::string_view get(sql_compiled_statement& s, int index)
-=======
 template <typename T, std::enable_if_t<std::is_same<T, std::string_view>::value, int> = 0>
 std::string_view get(sql_compiled_statement& s, int index)
->>>>>>> 83dd656e7... C++17:src/cryptonote_core/loki_name_system.cpp
 {
   return {reinterpret_cast<const char*>(sqlite3_column_text(s.statement, index)),
           static_cast<size_t>(sqlite3_column_bytes(s.statement, index))};
@@ -353,11 +335,7 @@ template <typename T, typename I>
 void get(sql_compiled_statement& s, I index, T& val) { val = get<T>(s, index); }
 
 // blob, via a string_view
-<<<<<<< HEAD:src/cryptonote_core/sispop_name_system.cpp
-sispopmq::string_view get_blob(sql_compiled_statement& s, int index)
-=======
 std::string_view get_blob(sql_compiled_statement& s, int index)
->>>>>>> 83dd656e7... C++17:src/cryptonote_core/loki_name_system.cpp
 {
   return {reinterpret_cast<const char*>(sqlite3_column_blob(s.statement, index)),
           static_cast<size_t>(sqlite3_column_bytes(s.statement, index))};
@@ -365,11 +343,7 @@ std::string_view get_blob(sql_compiled_statement& s, int index)
 
 // blob, via a string_view
 template <typename I, std::enable_if_t<is_int_enum<I>::value, int> = 0>
-<<<<<<< HEAD:src/cryptonote_core/sispop_name_system.cpp
-sispopmq::string_view get_blob(sql_compiled_statement& s, I index)
-=======
 std::string_view get_blob(sql_compiled_statement& s, I index)
->>>>>>> 83dd656e7... C++17:src/cryptonote_core/loki_name_system.cpp
 {
   return get_blob(s, static_cast<int>(index));
 }
@@ -405,11 +379,7 @@ mapping_record sql_get_mapping_from_statement(sql_compiled_statement& statement)
 
   // Copy encrypted_value
   {
-<<<<<<< HEAD:src/cryptonote_core/sispop_name_system.cpp
-    auto value = get<sispopmq::string_view>(statement, mapping_record_column::encrypted_value);
-=======
     auto value = get<std::string_view>(statement, mapping_record_column::encrypted_value);
->>>>>>> 83dd656e7... C++17:src/cryptonote_core/loki_name_system.cpp
     if (value.size() > result.encrypted_value.buffer.size())
     {
       MERROR("Unexpected encrypted value blob with size=" << value.size() << ", in LNS db larger than the available size=" << result.encrypted_value.buffer.size());
@@ -421,11 +391,7 @@ mapping_record sql_get_mapping_from_statement(sql_compiled_statement& statement)
 
   // Copy name hash
   {
-<<<<<<< HEAD:src/cryptonote_core/sispop_name_system.cpp
-    auto value = get<sispopmq::string_view>(statement, mapping_record_column::name_hash);
-=======
     auto value = get<std::string_view>(statement, mapping_record_column::name_hash);
->>>>>>> 83dd656e7... C++17:src/cryptonote_core/loki_name_system.cpp
     result.name_hash.append(value.data(), value.size());
   }
 
@@ -558,11 +524,7 @@ bool mapping_record::active(cryptonote::network_type nettype, uint64_t blockchai
   return last_active_height >= (blockchain_height - 1);
 }
 
-<<<<<<< HEAD:src/cryptonote_core/sispop_name_system.cpp
-bool sql_compiled_statement::compile(sispopmq::string_view query, bool optimise_for_multiple_usage)
-=======
 bool sql_compiled_statement::compile(std::string_view query, bool optimise_for_multiple_usage)
->>>>>>> 83dd656e7... C++17:src/cryptonote_core/loki_name_system.cpp
 {
   sqlite3_stmt* st;
 #if SQLITE_VERSION_NUMBER >= 3020000
@@ -850,46 +812,26 @@ bool validate_lns_name(mapping_type type, std::string name, std::string *reason)
     if (check_condition(name == "localhost.sispop", reason, "LNS type=", type, ", specifies mapping from name->value using protocol reserved name=", name))
       return false;
 
-<<<<<<< HEAD:src/cryptonote_core/sispop_name_system.cpp
-    // Must start with alphanumeric
-    if (check_condition(!char_is_alphanum(name.front()), reason, "LNS type=", type, ", specifies mapping from name->value where the name does not start with an alphanumeric character, name=", name))
-      return false;
-
-    char const SHORTEST_DOMAIN[] = "a.sispop";
-    if (check_condition((name.size() < static_cast<int>(sispop::char_count(SHORTEST_DOMAIN))), reason, "LNS type=", type, ", specifies mapping from name->value where the name is shorter than the shortest possible name=", SHORTEST_DOMAIN, ", given name=", name))
-      return false;
-
-    // Must end with .sispop
-    char const SUFFIX[]     = ".sispop";
-    char const *name_suffix = name.data() + (name.size() - sispop::char_count(SUFFIX));
-    if (check_condition((memcmp(name_suffix, SUFFIX, sispop::char_count(SUFFIX)) != 0), reason, "LNS type=", type, ", specifies mapping from name->value where the name does not end with the domain .sispop, name=", name))
-      return false;
-
-    // Characted preceeding suffix must be alphanumeric
-    char const *char_preceeding_suffix = name_suffix - 1;
-    if (check_condition(!char_is_alphanum(char_preceeding_suffix[0]), reason, "LNS type=", type ,", specifies mapping from name->value where the character preceeding the <char>.sispop is not alphanumeric, char=", char_preceeding_suffix[0], ", name=", name))
-=======
-    auto constexpr SHORTEST_DOMAIN = "a.loki"sv;
+    auto constexpr SHORTEST_DOMAIN = "a.sispop"sv;
     if (check_condition(name.size() < SHORTEST_DOMAIN.size(), reason, "LNS type=", type, ", specifies mapping from name->value where the name is shorter than the shortest possible name=", SHORTEST_DOMAIN, ", given name=", name))
       return false;
 
-    // Must end with .loki
-    auto constexpr SUFFIX = ".loki"sv;
-    if (check_condition(name_view.substr(name_view.size() - SUFFIX.size()) == SUFFIX, reason, "LNS type=", type, ", specifies mapping from name->value where the name does not end with the domain .loki, name=", name))
+    // Must end with .sispop
+    auto constexpr SUFFIX = ".sispop"sv;
+    if (check_condition(!tools::ends_with(name_view, SUFFIX), reason, "LNS type=", type, ", specifies mapping from name->value where the name does not end with the domain .sispop, name=", name))
       return false;
 
     name_view.remove_suffix(SUFFIX.size());
 
     // Must start with alphanumeric
     if (check_condition(!char_is_alphanum(name_view.front()), reason, "LNS type=", type, ", specifies mapping from name->value where the name does not start with an alphanumeric character, name=", name))
->>>>>>> 83dd656e7... C++17:src/cryptonote_core/loki_name_system.cpp
       return false;
 
     name_view.remove_prefix(1);
 
     if (!name_view.empty()) {
       // Characted preceding suffix must be alphanumeric
-      if (check_condition(!char_is_alphanum(name_view.back()), reason, "LNS type=", type ,", specifies mapping from name->value where the character preceding the .loki is not alphanumeric, char=", name_view.back(), ", name=", name))
+      if (check_condition(!char_is_alphanum(name_view.back()), reason, "LNS type=", type ,", specifies mapping from name->value where the character preceding the .sispop is not alphanumeric, char=", name_view.back(), ", name=", name))
         return false;
       name_view.remove_suffix(1);
     }
@@ -1002,15 +944,11 @@ bool validate_mapping_value(cryptonote::network_type nettype, mapping_type type,
   }
   else if (is_sispopnet_type(type))
   {
-<<<<<<< HEAD:src/cryptonote_core/sispop_name_system.cpp
-    if (check_condition(value.size() != 52, reason, "The sispopnet value=", value, ", should be a 52 char base32z string, length=", value.size()))
-=======
     // We need a 52 char base32z string that decodes to a 32-byte value, which really means we need
     // 51 base32z chars (=255 bits) followed by a 1-bit value ('y'=0, or 'o'=0b10000); anything else
-    // in the last spot isn't a valid lokinet address.
+    // in the last spot isn't a valid sispopnet address.
     if (check_condition(value.size() != 52 || !sispopmq::is_base32z(value) || value.back() != 'y' || value.back() != 'o',
-                reason, "The lokinet value=", value, " (length=", value.size(), "), is not a valid base32z-encoded pubkey"))
->>>>>>> 83dd656e7... C++17:src/cryptonote_core/loki_name_system.cpp
+                reason, "The sispopnet value=", value, " (length=", value.size(), "), is not a valid base32z-encoded pubkey"))
       return false;
 
     crypto::ed25519_public_key pkey;
@@ -1195,7 +1133,7 @@ bool name_system_db::validate_lns_tx(uint8_t hf_version, uint64_t blockchain_hei
     if (check_condition(tx.type != cryptonote::txtype::sispop_name_system, reason, tx, ", uses wrong tx type, expected=", cryptonote::txtype::sispop_name_system))
       return false;
 
-    if (check_condition(!cryptonote::get_sispop_name_system_from_tx_extra(tx.extra, *lns_extra), reason, tx, ", didn't have sispop name service in the tx_extra"))
+    if (check_condition(!cryptonote::get_field_from_tx_extra(tx.extra, *lns_extra), reason, tx, ", didn't have sispop name service in the tx_extra"))
       return false;
   }
 
@@ -1645,8 +1583,7 @@ AND NOT EXISTS   (SELECT * FROM "mappings" WHERE "owner"."id" = "mappings"."back
 
 name_system_db::~name_system_db()
 {
-  if (!db)
-    return;
+  if (!db) return;
 
   {
     scoped_db_transaction db_transaction(*this);
@@ -1783,25 +1720,6 @@ static bool add_lns_entry(lns::name_system_db &lns_db, uint64_t height, cryptono
         auto column_type = columns[i];
         switch (column_type)
         {
-<<<<<<< HEAD:src/cryptonote_core/sispop_name_system.cpp
-          case mapping_record_column::type:            bind(statement, i+1, static_cast<uint16_t>(entry.type)); break;
-          case mapping_record_column::name_hash:       bind(statement, i+1, sispopmq::string_view{name_hash}); break;
-          case mapping_record_column::encrypted_value: bind(statement, i+1, blob_view{entry.encrypted_value}); break;
-          case mapping_record_column::txid:            bind(statement, i+1, blob_view{tx_hash.data, sizeof(tx_hash)}); break;
-          case mapping_record_column::prev_txid:       bind(statement, i+1, blob_view{entry.prev_txid.data, sizeof(entry.prev_txid)}); break;
-          case mapping_record_column::owner_id:        bind(statement, i+1, owner_id); break;
-          case mapping_record_column::backup_owner_id: bind(statement, i+1, backup_owner_id); break;
-          case mapping_record_column::update_height:   bind(statement, i+1, height); break;
-=======
-          case mapping_record_column::type:            lns::bind(statement, i+1, static_cast<uint16_t>(entry.type)); break;
-          case mapping_record_column::name_hash:       lns::bind(statement, i+1, name_hash); break;
-          case mapping_record_column::encrypted_value: lns::bind(statement, i+1, blob_view{entry.encrypted_value}); break;
-          case mapping_record_column::txid:            lns::bind(statement, i+1, blob_view{tx_hash.data, sizeof(tx_hash)}); break;
-          case mapping_record_column::prev_txid:       lns::bind(statement, i+1, blob_view{entry.prev_txid.data, sizeof(entry.prev_txid)}); break;
-          case mapping_record_column::owner_id:        lns::bind(statement, i+1, owner_id); break;
-          case mapping_record_column::backup_owner_id: lns::bind(statement, i+1, backup_owner_id); break;
-          case mapping_record_column::update_height:   lns::bind(statement, i+1, height); break;
->>>>>>> 83dd656e7... C++17:src/cryptonote_core/loki_name_system.cpp
           default: assert(false); return false;
         }
       }
@@ -1867,7 +1785,7 @@ static bool get_txid_lns_entry(cryptonote::Blockchain const &blockchain, crypto:
   if (!blockchain.get_transactions({txid}, txs, missed_txs) || txs.empty())
     return false;
 
-  return cryptonote::get_sispop_name_system_from_tx_extra(txs[0].extra, extra);
+  return cryptonote::get_field_from_tx_extra(txs[0].extra, extra);
 }
 
 struct lns_update_history

@@ -27,12 +27,14 @@
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 add_library(net
+  dandelionpp.cpp
   error.cpp
   i2p_address.cpp
   parse.cpp
   socks.cpp
   socks_connect.cpp
   tor_address.cpp
+  epee_network_address_hack.cpp
   )
 target_link_libraries(net PRIVATE
   common

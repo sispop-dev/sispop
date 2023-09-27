@@ -35,7 +35,7 @@
 #endif
 #endif
 
-#include <time.h>
+#include <ctime>
 #include <atomic>
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/string.hpp>

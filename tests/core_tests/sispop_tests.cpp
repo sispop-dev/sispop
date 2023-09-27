@@ -90,7 +90,7 @@ bool sispop_checkpointing_alt_chain_handle_alt_blocks_at_tip::generate(std::vect
   // block that confirms the alt block.
   uint64_t curr_height   = gen.height();
   crypto::hash curr_hash = get_block_hash(gen.top().block);
-  sispop_register_callback(events, "check_alt_block_count", [&events, curr_height, curr_hash](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_alt_block_count", [curr_height, curr_hash](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_alt_block_count");
 
@@ -109,7 +109,7 @@ bool sispop_checkpointing_alt_chain_handle_alt_blocks_at_tip::generate(std::vect
   gen.create_and_add_next_block();
   fork.create_and_add_next_block();
   crypto::hash expected_top_hash = cryptonote::get_block_hash(fork.top().block);
-  sispop_register_callback(events, "check_chain_reorged", [&events, expected_top_hash](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_chain_reorged", [expected_top_hash](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_chain_reorged");
     CHECK_EQ(c.get_blockchain_storage().get_alternative_blocks_count(), 0);
@@ -156,7 +156,7 @@ bool sispop_checkpointing_alt_chain_more_service_node_checkpoints_less_pow_overt
   uint64_t const fork_top_height   = cryptonote::get_block_height(fork_with_more_checkpoints.top().block);
   crypto::hash const fork_top_hash = cryptonote::get_block_hash(fork_with_more_checkpoints.top().block);
 
-  sispop_register_callback(events, "check_switched_to_alt_chain", [&events, fork_top_hash, fork_top_height](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_switched_to_alt_chain", [fork_top_hash, fork_top_height](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_switched_to_alt_chain");
     uint64_t top_height;
@@ -232,7 +232,7 @@ bool sispop_checkpointing_alt_chain_receive_checkpoint_votes_should_reorg_back::
   // Upon adding the last block, we should now switch to our forked chain
   fork.create_and_add_next_block({});
   crypto::hash const fork_top_hash = cryptonote::get_block_hash(fork.top().block);
-  sispop_register_callback(events, "check_switched_to_alt_chain", [&events, fork_top_hash](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_switched_to_alt_chain", [fork_top_hash](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_switched_to_alt_chain");
     uint64_t top_height;
@@ -332,7 +332,7 @@ bool sispop_checkpointing_alt_chain_with_increasing_service_node_checkpoints::ge
   fork.add_service_node_checkpoint(fork.height(), service_nodes::CHECKPOINT_MIN_VOTES);
 
   crypto::hash const gen_top_hash = cryptonote::get_block_hash(gen.top().block);
-  sispop_register_callback(events, "check_still_on_main_chain", [&events, gen_top_hash](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_still_on_main_chain", [gen_top_hash](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_still_on_main_chain");
     uint64_t top_height;
@@ -353,7 +353,7 @@ bool sispop_checkpointing_alt_chain_with_increasing_service_node_checkpoints::ge
   fork.create_and_add_next_block({}, &fork_second_checkpoint);
 
   crypto::hash const fork_top_hash = cryptonote::get_block_hash(fork.top().block);
-  sispop_register_callback(events, "check_switched_to_alt_chain", [&events, fork_top_hash](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_switched_to_alt_chain", [fork_top_hash](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_switched_to_alt_chain");
     uint64_t top_height;
@@ -424,7 +424,7 @@ bool sispop_checkpointing_service_node_checkpoint_from_votes::generate(std::vect
   for (size_t i = 0; i < service_nodes::CHECKPOINT_MIN_VOTES - 1; i++)
     gen.events_.push_back(sispop_blockchain_addable<service_nodes::quorum_vote_t>(checkpoint_votes[i]));
 
-  sispop_register_callback(events, "check_service_node_checkpoint_rejected_insufficient_votes", [&events, checkpointed_height](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_service_node_checkpoint_rejected_insufficient_votes", [checkpointed_height](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_service_node_checkpoint_rejected_insufficient_votes");
     cryptonote::Blockchain const &blockchain = c.get_blockchain_storage();
@@ -435,7 +435,7 @@ bool sispop_checkpointing_service_node_checkpoint_from_votes::generate(std::vect
 
   // NOTE: Add last vote and check checkpoint has been generated
   gen.events_.push_back(checkpoint_votes.back());
-  sispop_register_callback(events, "check_service_node_checkpoint_accepted", [&events, checkpointed_height](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_service_node_checkpoint_accepted", [checkpointed_height](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_service_node_checkpoint_accepted");
     cryptonote::Blockchain const &blockchain = c.get_blockchain_storage();
@@ -524,7 +524,7 @@ bool sispop_core_block_reward_unpenalized::generate(std::vector<test_event_entry
   uint64_t unpenalized_block_reward     = cryptonote::block_reward_unpenalized_formula_v8(gen.height());
   uint64_t expected_service_node_reward = cryptonote::service_node_reward_formula(unpenalized_block_reward, newest_hf);
 
-  sispop_register_callback(events, "check_block_rewards", [&events, unpenalized_block_reward, expected_service_node_reward](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_block_rewards", [unpenalized_block_reward, expected_service_node_reward](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_block_rewards");
     uint64_t top_height;
@@ -668,7 +668,7 @@ bool sispop_core_governance_batched_reward::generate(std::vector<test_event_entr
     }
   }
 
-  sispop_register_callback(events, "check_batched_governance_amount_matches", [&events, hf10_height, expected_total_governance_paid](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_batched_governance_amount_matches", [hf10_height, expected_total_governance_paid](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_batched_governance_amount_matches");
 
@@ -808,7 +808,7 @@ bool sispop_core_test_deregister_preferred::generate(std::vector<test_event_entr
     map_hash2tx_t mtx;
     {
       std::vector<cryptonote::block> chain;
-      CHECK_TEST_CONDITION(find_block_chain(events, chain, mtx, get_block_hash(boost::get<cryptonote::block>(events[0]))));
+      CHECK_TEST_CONDITION(find_block_chain(events, chain, mtx, get_block_hash(std::get<cryptonote::block>(events[0]))));
     }
 
     const auto deregister_count =
@@ -1323,6 +1323,7 @@ bool sispop_name_system_get_mappings_by_owners::generate(std::vector<test_event_
     gen.create_and_add_next_block({tx1});
   }
   uint64_t session_height1 = gen.height();
+  gen.add_n_blocks(10);
 
   std::string session_name2 = "MyName2";
   crypto::hash session_tx_hash2;
@@ -1332,6 +1333,7 @@ bool sispop_name_system_get_mappings_by_owners::generate(std::vector<test_event_
     gen.create_and_add_next_block({tx1});
   }
   uint64_t session_height2 = gen.height();
+  gen.add_n_blocks(10);
 
   std::string session_name3 = "MyName3";
   crypto::hash session_tx_hash3;
@@ -1341,6 +1343,7 @@ bool sispop_name_system_get_mappings_by_owners::generate(std::vector<test_event_
     gen.create_and_add_next_block({tx1});
   }
   uint64_t session_height3 = gen.height();
+  gen.add_n_blocks(10);
 
   sispop_register_callback(events, "check_lns_entries", [=](cryptonote::core &c, size_t ev_index)
   {
@@ -1390,7 +1393,7 @@ bool sispop_name_system_get_mappings::generate(std::vector<test_event_entry> &ev
   }
   uint64_t session_height = gen.height();
 
-  sispop_register_callback(events, "check_lns_entries", [&events, bob_key, session_height, session_name1, session_tx_hash](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_lns_entries", [bob_key, session_height, session_name1, session_tx_hash](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_lns_entries");
     lns::name_system_db &lns_db = c.get_blockchain_storage().name_system_db();
@@ -2464,7 +2467,8 @@ bool sispop_name_system_update_mapping_replay::generate(std::vector<test_event_e
   {
     cryptonote::transaction tx1 = gen.create_and_add_sispop_name_system_tx_update(miner, lns::mapping_type::session, name, &bob_key.session_value);
     gen.create_and_add_next_block({tx1});
-    assert(cryptonote::get_sispop_name_system_from_tx_extra(tx1.extra, lns_entry));
+    [[maybe_unused]] bool found_tx_extra = cryptonote::get_field_from_tx_extra(tx1.extra, lns_entry);
+    assert(found_tx_extra);
   }
 
   // Replay the (1)st update mapping, should fail because the update is to the same session value
@@ -2605,7 +2609,7 @@ bool sispop_service_nodes_alt_quorums::generate(std::vector<test_event_entry>& e
   uint64_t height_with_fork = gen.height();
 
   service_nodes::quorum_manager fork_quorums = fork.top_quorum();
-  sispop_register_callback(events, "check_alt_quorums_exist", [&events, fork_quorums, height_with_fork](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_alt_quorums_exist", [fork_quorums, height_with_fork](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_alt_quorums_exist");
 
@@ -2657,7 +2661,7 @@ bool sispop_service_nodes_checkpoint_quorum_size::generate(std::vector<test_even
     gen.add_blocks_until_next_checkpointable_height();
 
   uint64_t check_height_1 = gen.height();
-  sispop_register_callback(events, "check_checkpoint_quorum_should_be_empty", [&events, check_height_1](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_checkpoint_quorum_should_be_empty", [check_height_1](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_checkpoint_quorum_should_be_empty");
     std::shared_ptr<const service_nodes::quorum> quorum = c.get_quorum(service_nodes::quorum_type::checkpointing, check_height_1);
@@ -2678,7 +2682,7 @@ bool sispop_service_nodes_checkpoint_quorum_size::generate(std::vector<test_even
   assert(tries != MAX_TRIES);
 
   uint64_t check_height_2 = gen.height();
-  sispop_register_callback(events, "check_checkpoint_quorum_should_be_populated", [&events, check_height_2](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_checkpoint_quorum_should_be_populated", [check_height_2](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_checkpoint_quorum_should_be_populated");
     std::shared_ptr<const service_nodes::quorum> quorum = c.get_quorum(service_nodes::quorum_type::checkpointing, check_height_2);
@@ -2811,8 +2815,8 @@ bool sispop_service_nodes_test_rollback::generate(std::vector<test_event_entry>&
     {
       /// obtain public key of node A
       const auto event_a = events.at(deregister_index);
-      CHECK_TEST_CONDITION(event_a.type() == typeid(sispop_blockchain_addable<sispop_transaction>));
-      const auto dereg_tx = boost::get<sispop_blockchain_addable<sispop_transaction>>(event_a);
+      CHECK_TEST_CONDITION(std::holds_alternative<sispop_blockchain_addable<sispop_transaction>>(event_a));
+      const auto dereg_tx = std::get<sispop_blockchain_addable<sispop_transaction>>(event_a);
       CHECK_TEST_CONDITION(dereg_tx.data.tx.type == cryptonote::txtype::state_change);
 
       cryptonote::tx_extra_service_node_state_change deregistration;
@@ -2833,8 +2837,8 @@ bool sispop_service_nodes_test_rollback::generate(std::vector<test_event_entry>&
       /// obtain public key of node B
       constexpr size_t reg_evnt_idx = 73;
       const auto event_b = events.at(reg_evnt_idx);
-      CHECK_TEST_CONDITION(event_b.type() == typeid(sispop_blockchain_addable<sispop_transaction>));
-      const auto reg_tx = boost::get<sispop_blockchain_addable<sispop_transaction>>(event_b);
+      CHECK_TEST_CONDITION(std::holds_alternative<sispop_blockchain_addable<sispop_transaction>>(event_b));
+      const auto reg_tx = std::get<sispop_blockchain_addable<sispop_transaction>>(event_b);
 
       crypto::public_key pk_b;
       if (!cryptonote::get_service_node_pubkey_from_tx_extra(reg_tx.data.tx.extra, pk_b)) {
@@ -2881,7 +2885,7 @@ bool sispop_service_nodes_test_swarms_basic::generate(std::vector<test_event_ent
   assert(gen.hf_version_ == cryptonote::network_version_9_service_nodes);
 
   gen.add_blocks_until_version(cryptonote::network_version_10_bulletproofs);
-  sispop_register_callback(events, "test_initial_swarms", [&events](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "test_initial_swarms", [](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_swarms_basic::test_initial_swarms");
     const auto sn_list = c.get_service_node_list_state({}); /// Check that there is one active swarm and the swarm queue is not empty
@@ -2903,7 +2907,7 @@ bool sispop_service_nodes_test_swarms_basic::generate(std::vector<test_event_ent
     gen.create_and_add_next_block({tx});
   }
 
-  sispop_register_callback(events, "test_with_one_more_sn", [&events](cryptonote::core &c, size_t ev_index) /// test that another swarm has been created
+  sispop_register_callback(events, "test_with_one_more_sn", [](cryptonote::core &c, size_t ev_index) /// test that another swarm has been created
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_with_one_more_sn");
     const auto sn_list = c.get_service_node_list_state({});
@@ -2923,7 +2927,7 @@ bool sispop_service_nodes_test_swarms_basic::generate(std::vector<test_event_ent
     gen.create_and_add_next_block({tx});
   }
 
-  sispop_register_callback(events, "test_with_more_sn", [&events](cryptonote::core &c, size_t ev_index) /// test that another swarm has been created
+  sispop_register_callback(events, "test_with_more_sn", [](cryptonote::core &c, size_t ev_index) /// test that another swarm has been created
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_with_more_sn");
     const auto sn_list = c.get_service_node_list_state({});
@@ -2948,7 +2952,7 @@ bool sispop_service_nodes_test_swarms_basic::generate(std::vector<test_event_ent
   }
 
   gen.create_and_add_next_block(dereg_txs);
-  sispop_register_callback(events, "test_after_first_deregisters", [&events](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "test_after_first_deregisters", [](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_after_first_deregisters");
     const auto sn_list = c.get_service_node_list_state({});
@@ -2971,7 +2975,7 @@ bool sispop_service_nodes_test_swarms_basic::generate(std::vector<test_event_ent
   }
   gen.create_and_add_next_block(dereg_txs);
 
-  sispop_register_callback(events, "test_after_final_deregisters", [&events](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "test_after_final_deregisters", [](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_after_first_deregisters");
     const auto sn_list = c.get_service_node_list_state({});
@@ -3008,7 +3012,7 @@ bool sispop_service_nodes_insufficient_contribution::generate(std::vector<test_e
   cryptonote::transaction stake = gen.create_and_add_staking_tx(sn_keys.pub, gen.first_miner_, MK_COINS(1));
   gen.create_and_add_next_block({stake});
 
-  sispop_register_callback(events, "test_insufficient_stake_does_not_get_accepted", [&events, sn_keys](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "test_insufficient_stake_does_not_get_accepted", [sn_keys](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_insufficient_stake_does_not_get_accepted");
     const auto sn_list = c.get_service_node_list_state({sn_keys.pub});

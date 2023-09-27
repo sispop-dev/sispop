@@ -32,12 +32,12 @@
 #include <boost/format.hpp>
 #include <boost/circular_buffer.hpp>
 #include <boost/endian/conversion.hpp>
-#include <memory>  // std::unique_ptr
-#include <cstring>  // memcpy
+#include <memory>
+#include <cstring>
 
 #include "string_tools.h"
 #include "file_io_utils.h"
-#include "common/util.h"
+#include "common/file.h"
 #include "common/pruning.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "crypto/crypto.h"
@@ -174,7 +174,15 @@ int BlockchainLMDB::compare_string(const MDB_val *a, const MDB_val *b)
 {
   const char *va = (const char*) a->mv_data;
   const char *vb = (const char*) b->mv_data;
-  return strcmp(va, vb);
+  const size_t sz = std::min(a->mv_size, b->mv_size);
+  int ret = strncmp(va, vb, sz);
+  if (ret)
+    return ret;
+  if (a->mv_size < b->mv_size)
+    return -1;
+  if (a->mv_size > b->mv_size)
+    return 1;
+  return 0;
 }
 
 }
@@ -588,7 +596,7 @@ void BlockchainLMDB::check_open() const
 void BlockchainLMDB::do_resize(uint64_t increase_size)
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
-  CRITICAL_REGION_LOCAL(m_synchronization_lock);
+  std::lock_guard lock{*this};
   const uint64_t add_size = 1LL << 30;
 
   // check disk capacity
@@ -677,7 +685,7 @@ bool BlockchainLMDB::need_resize(uint64_t threshold_size) const
   MDEBUG("Space remaining: " << mei.me_mapsize - size_used);
   MDEBUG("Size threshold:  " << threshold_size);
   float resize_percent = RESIZE_PERCENT;
-  MDEBUG(boost::format("Percent used: %.04f  Percent threshold: %.04f") % ((double)size_used/mei.me_mapsize) % resize_percent);
+  MDEBUG(boost::format("Percent used: %.04f  Percent threshold: %.04f") % (100.*size_used/mei.me_mapsize) % (100.*resize_percent));
 
   if (threshold_size > 0)
   {
@@ -793,7 +801,7 @@ uint64_t BlockchainLMDB::get_estimated_batch_size(uint64_t batch_num_blocks, uin
       ++num_blocks_used;
     }
     if (my_rtxn) block_rtxn_stop();
-    avg_block_size = total_block_size / num_blocks_used;
+    avg_block_size = total_block_size / (num_blocks_used ? num_blocks_used : 1);
     MDEBUG("average block size across recent " << num_blocks_used << " blocks: " << avg_block_size);
   }
 estim:
@@ -968,12 +976,13 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
   unsigned int unprunable_size = tx.unprunable_size;
   if (unprunable_size == 0)
   {
-    std::stringstream ss;
-    binary_archive<true> ba(ss);
-    bool r = const_cast<cryptonote::transaction&>(tx).serialize_base(ba);
-    if (!r)
-      throw0(DB_ERROR("Failed to serialize pruned tx"));
-    unprunable_size = ss.str().size();
+    serialization::binary_string_archiver ba;
+    try {
+      const_cast<cryptonote::transaction&>(tx).serialize_base(ba);
+    } catch (const std::exception& e) {
+      throw0(DB_ERROR("Failed to serialize pruned tx: "s + e.what()));
+    }
+    unprunable_size = ba.str().size();
   }
 
   if (unprunable_size > blob.size())
@@ -1103,7 +1112,7 @@ uint64_t BlockchainLMDB::add_output(const crypto::hash& tx_hash,
   CURSOR(output_txs)
   CURSOR(output_amounts)
 
-  if (tx_output.target.type() != typeid(txout_to_key))
+  if (!std::holds_alternative<txout_to_key>(tx_output.target))
     throw0(DB_ERROR("Wrong output type: expected txout_to_key"));
   if (tx_output.amount == 0 && !commitment)
     throw0(DB_ERROR("RCT output without commitment"));
@@ -1132,7 +1141,7 @@ uint64_t BlockchainLMDB::add_output(const crypto::hash& tx_hash,
   else
     ok.amount_index = 0;
   ok.output_id = m_num_outputs;
-  ok.data.pubkey = boost::get < txout_to_key > (tx_output.target).key;
+  ok.data.pubkey = std::get<txout_to_key>(tx_output.target).key;
   ok.data.unlock_time = unlock_time;
   ok.data.height = m_height;
   if (tx_output.amount == 0)
@@ -1190,7 +1199,7 @@ void BlockchainLMDB::remove_tx_outputs(const uint64_t tx_id, const transaction& 
       throw0(DB_ERROR("tx has outputs, but no output indices found"));
   }
 
-  bool is_pseudo_rct = tx.version >= cryptonote::txversion::v2_ringct && tx.vin.size() == 1 && tx.vin[0].type() == typeid(txin_gen);
+  bool is_pseudo_rct = tx.version >= cryptonote::txversion::v2_ringct && tx.vin.size() == 1 && std::holds_alternative<txin_gen>(tx.vin[0]);
   for (size_t i = tx.vout.size(); i-- > 0;)
   {
     uint64_t amount = is_pseudo_rct ? 0 : tx.vout[i].amount;
@@ -1392,7 +1401,7 @@ void BlockchainLMDB::open(const std::string& filename, cryptonote::network_type 
     throw DB_ERROR("Database could not be opened");
   }
 
-  boost::optional<bool> is_hdd_result = tools::is_hdd(filename.c_str());
+  std::optional<bool> is_hdd_result = tools::is_hdd(filename.c_str());
   if (is_hdd_result)
   {
     if (is_hdd_result.value())
@@ -1735,19 +1744,22 @@ std::string BlockchainLMDB::get_db_name() const
   return std::string("lmdb");
 }
 
-// TODO: this?
-bool BlockchainLMDB::lock()
+void BlockchainLMDB::lock()
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
-  check_open();
-  return false;
+  m_synchronization_lock.lock();
 }
 
-// TODO: this?
+bool BlockchainLMDB::try_lock()
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  return m_synchronization_lock.try_lock();
+}
+
 void BlockchainLMDB::unlock()
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
-  check_open();
+  m_synchronization_lock.unlock();
 }
 
 #define TXN_PREFIX(flags) \
@@ -2016,7 +2028,7 @@ static bool is_v1_tx(MDB_cursor *c_txs_pruned, MDB_val *tx_id)
     throw0(DB_ERROR(lmdb_error("Failed to find transaction pruned data: ", ret).c_str()));
   if (v.mv_size == 0)
     throw0(DB_ERROR("Invalid transaction pruned data"));
-  return cryptonote::is_v1_tx(cryptonote::blobdata_ref{(const char*)v.mv_data, v.mv_size});
+  return cryptonote::is_v1_tx(std::string_view{(const char*)v.mv_data, v.mv_size});
 }
 
 enum { prune_mode_prune, prune_mode_update, prune_mode_check };
@@ -2027,14 +2039,14 @@ bool BlockchainLMDB::prune_worker(int mode, uint32_t pruning_seed)
   const uint32_t log_stripes = tools::get_pruning_log_stripes(pruning_seed);
   if (log_stripes && log_stripes != CRYPTONOTE_PRUNING_LOG_STRIPES)
     throw0(DB_ERROR("Pruning seed not in range"));
-  pruning_seed = tools::get_pruning_stripe(pruning_seed);;
+  pruning_seed = tools::get_pruning_stripe(pruning_seed);
   if (pruning_seed > (1ul << CRYPTONOTE_PRUNING_LOG_STRIPES))
     throw0(DB_ERROR("Pruning seed not in range"));
   check_open();
 
   TIME_MEASURE_START(t);
 
-  size_t n_total_records = 0, n_prunable_records = 0, n_pruned_records = 0;
+  size_t n_total_records = 0, n_prunable_records = 0, n_pruned_records = 0, commit_counter = 0;
   uint64_t n_bytes = 0;
 
   mdb_txn_safe txn;
@@ -2137,6 +2149,7 @@ bool BlockchainLMDB::prune_worker(int mode, uint32_t pruning_seed)
           {
             MDEBUG("Pruning at height " << block_height << "/" << blockchain_height);
             ++n_pruned_records;
+            ++commit_counter;
             n_bytes += k.mv_size + v.mv_size;
             result = mdb_cursor_del(c_txs_prunable, 0);
             if (result)
@@ -2146,6 +2159,25 @@ bool BlockchainLMDB::prune_worker(int mode, uint32_t pruning_seed)
         result = mdb_cursor_del(c_txs_prunable_tip, 0);
         if (result)
           throw0(DB_ERROR(lmdb_error("Failed to delete transaction tip data: ", result).c_str()));
+
+        if (mode != prune_mode_check && commit_counter >= 4096)
+        {
+          MDEBUG("Committing txn at checkpoint...");
+          txn.commit();
+          result = mdb_txn_begin(m_env, NULL, 0, txn);
+          if (result)
+            throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
+          result = mdb_cursor_open(txn, m_txs_pruned, &c_txs_pruned);
+          if (result)
+            throw0(DB_ERROR(lmdb_error("Failed to open a cursor for txs_pruned: ", result).c_str()));
+          result = mdb_cursor_open(txn, m_txs_prunable, &c_txs_prunable);
+          if (result)
+            throw0(DB_ERROR(lmdb_error("Failed to open a cursor for txs_prunable: ", result).c_str()));
+          result = mdb_cursor_open(txn, m_txs_prunable_tip, &c_txs_prunable_tip);
+          if (result)
+            throw0(DB_ERROR(lmdb_error("Failed to open a cursor for txs_prunable_tip: ", result).c_str()));
+          commit_counter = 0;
+        }
       }
     }
   }
@@ -2215,6 +2247,7 @@ bool BlockchainLMDB::prune_worker(int mode, uint32_t pruning_seed)
             result = mdb_cursor_del(c_txs_prunable, 0);
             if (result)
               throw0(DB_ERROR(lmdb_error("Failed to delete transaction prunable data: ", result).c_str()));
+            ++commit_counter;
           }
         }
       }
@@ -2230,6 +2263,34 @@ bool BlockchainLMDB::prune_worker(int mode, uint32_t pruning_seed)
             MERROR("Prunable data not found for unpruned height " << block_height << "/" << blockchain_height <<
                 ", seed " << epee::string_tools::to_string_hex(pruning_seed));
         }
+      }
+
+      if (mode != prune_mode_check && commit_counter >= 4096)
+      {
+        MDEBUG("Committing txn at checkpoint...");
+        txn.commit();
+        result = mdb_txn_begin(m_env, NULL, 0, txn);
+        if (result)
+          throw0(DB_ERROR(lmdb_error("Failed to create a transaction for the db: ", result).c_str()));
+        result = mdb_cursor_open(txn, m_txs_pruned, &c_txs_pruned);
+        if (result)
+          throw0(DB_ERROR(lmdb_error("Failed to open a cursor for txs_pruned: ", result).c_str()));
+        result = mdb_cursor_open(txn, m_txs_prunable, &c_txs_prunable);
+        if (result)
+          throw0(DB_ERROR(lmdb_error("Failed to open a cursor for txs_prunable: ", result).c_str()));
+        result = mdb_cursor_open(txn, m_txs_prunable_tip, &c_txs_prunable_tip);
+        if (result)
+          throw0(DB_ERROR(lmdb_error("Failed to open a cursor for txs_prunable_tip: ", result).c_str()));
+        result = mdb_cursor_open(txn, m_tx_indices, &c_tx_indices);
+        if (result)
+          throw0(DB_ERROR(lmdb_error("Failed to open a cursor for tx_indices: ", result).c_str()));
+        MDB_val val;
+        val.mv_size = sizeof(ti);
+        val.mv_data = (void *)&ti;
+        result = mdb_cursor_get(c_tx_indices, (MDB_val*)&zerokval, &val, MDB_GET_BOTH);
+        if (result)
+          throw0(DB_ERROR(lmdb_error("Failed to restore cursor for tx_indices: ", result).c_str()));
+        commit_counter = 0;
       }
     }
     mdb_cursor_close(c_tx_indices);
@@ -3093,6 +3154,46 @@ bool BlockchainLMDB::get_pruned_tx_blob(const crypto::hash& h, cryptonote::blobd
   return true;
 }
 
+bool BlockchainLMDB::get_pruned_tx_blobs_from(const crypto::hash& h, size_t count, std::vector<cryptonote::blobdata> &bd) const
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  check_open();
+
+  if (!count)
+    return true;
+
+  TXN_PREFIX_RDONLY();
+  RCURSOR(tx_indices);
+  RCURSOR(txs_pruned);
+
+  bd.reserve(bd.size() + count);
+
+  MDB_val_set(v, h);
+  MDB_val result;
+  int res = mdb_cursor_get(m_cur_tx_indices, (MDB_val *)&zerokval, &v, MDB_GET_BOTH);
+  if (res == MDB_NOTFOUND)
+    return false;
+  if (res)
+    throw0(DB_ERROR(lmdb_error("DB error attempting to fetch tx from hash", res).c_str()));
+
+  const txindex *tip = (const txindex *)v.mv_data;
+  const uint64_t id = tip->data.tx_id;
+  MDB_val_set(val_tx_id, id);
+  MDB_cursor_op op = MDB_SET;
+  while (count--)
+  {
+    res = mdb_cursor_get(m_cur_txs_pruned, &val_tx_id, &result, op);
+    op = MDB_NEXT;
+    if (res == MDB_NOTFOUND)
+      return false;
+    if (res)
+      throw0(DB_ERROR(lmdb_error("DB error attempting to fetch tx blob", res).c_str()));
+    bd.emplace_back(reinterpret_cast<char*>(result.mv_data), result.mv_size);
+  }
+
+  return true;
+}
+
 bool BlockchainLMDB::get_prunable_tx_blob(const crypto::hash& h, cryptonote::blobdata &bd) const
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
@@ -3250,7 +3351,7 @@ output_data_t BlockchainLMDB::get_output_key(const uint64_t& amount, const uint6
   else
   {
     const pre_rct_outkey *okp = (const pre_rct_outkey *)v.mv_data;
-    memcpy(&ret, &okp->data, sizeof(pre_rct_output_data_t));;
+    memcpy(&ret, &okp->data, sizeof(pre_rct_output_data_t));
     if (include_commitmemt)
       ret.commitment = rct::zeroCommit(amount);
   }
@@ -4013,8 +4114,8 @@ std::vector<checkpoint_t> BlockchainLMDB::get_checkpoints_range(uint64_t start, 
   if (!get_top_checkpoint(top_checkpoint)) return result;
   if (!get_block_checkpoint_internal(0, bottom_checkpoint, MDB_FIRST)) return result;
 
-  start = sispop::clamp_u64(start, bottom_checkpoint.height, top_checkpoint.height);
-  end   = sispop::clamp_u64(end, bottom_checkpoint.height, top_checkpoint.height);
+  start = std::clamp(start, bottom_checkpoint.height, top_checkpoint.height);
+  end   = std::clamp(end, bottom_checkpoint.height, top_checkpoint.height);
   if (start > end)
   {
     if (start < bottom_checkpoint.height) return result;
@@ -4362,7 +4463,7 @@ bool BlockchainLMDB::get_output_distribution(uint64_t amount, uint64_t from_heig
   return true;
 }
 
-bool BlockchainLMDB::get_output_blacklist(std::vector<uint64_t> &blacklist) const
+void BlockchainLMDB::get_output_blacklist(std::vector<uint64_t> &blacklist) const
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
   check_open();
@@ -4400,8 +4501,6 @@ bool BlockchainLMDB::get_output_blacklist(std::vector<uint64_t> &blacklist) cons
         blacklist.push_back(outputs[i]);
     }
   }
-
-  return true;
 }
 
 void BlockchainLMDB::add_output_blacklist(std::vector<uint64_t> const &blacklist)
@@ -5409,12 +5508,13 @@ void BlockchainLMDB::migrate_1_2()
       transaction tx;
       if (!parse_and_validate_tx_from_blob(bd, tx))
         throw0(DB_ERROR("Failed to parse tx from blob retrieved from the db"));
-      std::stringstream ss;
-      binary_archive<true> ba(ss);
-      bool r = tx.serialize_base(ba);
-      if (!r)
-        throw0(DB_ERROR("Failed to serialize pruned tx"));
-      std::string pruned = ss.str();
+      serialization::binary_string_archiver ba;
+      try {
+        tx.serialize_base(ba);
+      } catch (const std::exception& e) {
+        throw0(DB_ERROR("Failed to serialize pruned tx: "s + e.what()));
+      }
+      std::string pruned = ba.str();
 
       if (pruned.size() > bd.size())
         throw0(DB_ERROR("Pruned tx is larger than raw tx"));

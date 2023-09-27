@@ -56,30 +56,30 @@ namespace trezor{
   std::shared_ptr<messages::debug::DebugLinkState> DebugLink::state(){
     return call<messages::debug::DebugLinkState>(
         messages::debug::DebugLinkGetState(),
-        boost::make_optional(messages::MessageType_DebugLinkGetState));
+        std::make_optional(messages::MessageType_DebugLinkGetState));
   }
 
   void DebugLink::input_word(const std::string & word){
     messages::debug::DebugLinkDecision decision;
     decision.set_input(word);
-    call(decision, boost::none, true);
+    call(decision, std::nullopt, true);
   }
 
   void DebugLink::input_button(bool button){
     messages::debug::DebugLinkDecision decision;
     decision.set_yes_no(button);
-    call(decision, boost::none, true);
+    call(decision, std::nullopt, true);
   }
 
-  void DebugLink::input_swipe(bool swipe){
+  void DebugLink::input_swipe(messages::debug::DebugLinkDecision_DebugSwipeDirection direction){
     messages::debug::DebugLinkDecision decision;
-    decision.set_up_down(swipe);
-    call(decision, boost::none, true);
+    decision.set_swipe(direction);
+    call(decision, std::nullopt, true);
   }
 
   void DebugLink::stop(){
     messages::debug::DebugLinkStop msg;
-    call(msg, boost::none, true);
+    call(msg, std::nullopt, true);
   }
 
 

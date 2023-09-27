@@ -35,7 +35,6 @@
 namespace po = boost::program_options;
 
 using namespace cryptonote;
-using namespace epee;
 
 namespace
 {
@@ -166,7 +165,7 @@ bool BlocksdatFile::store_blockchain_raw(Blockchain* _blockchain_storage, tx_mem
   }
   // print message for last block, which may not have been printed yet due to progress_interval
   std::cout << refresh_string;
-  std::cout << "block " << m_cur_height-1 << "/" << block_stop << ENDL;
+  std::cout << "block " << m_cur_height-1 << "/" << block_stop << "\n";
 
   MINFO("Number of blocks exported: " << num_blocks_written);
 

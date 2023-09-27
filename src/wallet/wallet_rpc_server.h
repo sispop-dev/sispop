@@ -36,7 +36,7 @@
 #include <string>
 #include "common/util.h"
 #include "net/http_server_impl_base.h"
-#include "math_helper.h"
+#include "common/periodic_task.h"
 #include "wallet_rpc_server_commands_defs.h"
 #include "wallet2.h"
 
@@ -55,16 +55,16 @@ namespace tools
 
     static const char* tr(const char* str);
 
-    wallet_rpc_server();
-    ~wallet_rpc_server();
+    wallet_rpc_server(boost::program_options::variables_map vm);
 
-    bool init(const boost::program_options::variables_map *vm);
-    bool run();
+    bool init();
+    bool run(bool /*interactive - ignored (rpc wallet is always non-interactive) */);
     void stop();
-    void set_wallet(wallet2 *cr);
+    void set_wallet(std::unique_ptr<wallet2> cr);
     std::atomic<bool> m_long_poll_disabled;
 
   private:
+    bool run_server_threads();
 
     CHAIN_HTTP_TO_MAP2(connection_context); //forward http requests to uri map
 
@@ -130,6 +130,7 @@ namespace tools
         MAP_JON_RPC_WE("parse_uri",          on_parse_uri,          wallet_rpc::COMMAND_RPC_PARSE_URI)
         MAP_JON_RPC_WE("get_address_book",   on_get_address_book,   wallet_rpc::COMMAND_RPC_GET_ADDRESS_BOOK_ENTRY)
         MAP_JON_RPC_WE("add_address_book",   on_add_address_book,   wallet_rpc::COMMAND_RPC_ADD_ADDRESS_BOOK_ENTRY)
+        MAP_JON_RPC_WE("edit_address_book",  on_edit_address_book,  wallet_rpc::COMMAND_RPC_EDIT_ADDRESS_BOOK_ENTRY)
         MAP_JON_RPC_WE("delete_address_book",on_delete_address_book,wallet_rpc::COMMAND_RPC_DELETE_ADDRESS_BOOK_ENTRY)
         MAP_JON_RPC_WE("refresh",            on_refresh,            wallet_rpc::COMMAND_RPC_REFRESH)
         MAP_JON_RPC_WE("auto_refresh",       on_auto_refresh,       wallet_rpc::COMMAND_RPC_AUTO_REFRESH)
@@ -229,6 +230,7 @@ namespace tools
       bool on_parse_uri(const wallet_rpc::COMMAND_RPC_PARSE_URI::request& req, wallet_rpc::COMMAND_RPC_PARSE_URI::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
       bool on_get_address_book(const wallet_rpc::COMMAND_RPC_GET_ADDRESS_BOOK_ENTRY::request& req, wallet_rpc::COMMAND_RPC_GET_ADDRESS_BOOK_ENTRY::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
       bool on_add_address_book(const wallet_rpc::COMMAND_RPC_ADD_ADDRESS_BOOK_ENTRY::request& req, wallet_rpc::COMMAND_RPC_ADD_ADDRESS_BOOK_ENTRY::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
+      bool on_edit_address_book(const wallet_rpc::COMMAND_RPC_EDIT_ADDRESS_BOOK_ENTRY::request& req, wallet_rpc::COMMAND_RPC_EDIT_ADDRESS_BOOK_ENTRY::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
       bool on_delete_address_book(const wallet_rpc::COMMAND_RPC_DELETE_ADDRESS_BOOK_ENTRY::request& req, wallet_rpc::COMMAND_RPC_DELETE_ADDRESS_BOOK_ENTRY::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
       bool on_refresh(const wallet_rpc::COMMAND_RPC_REFRESH::request& req, wallet_rpc::COMMAND_RPC_REFRESH::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
       bool on_auto_refresh(const wallet_rpc::COMMAND_RPC_AUTO_REFRESH::request& req, wallet_rpc::COMMAND_RPC_AUTO_REFRESH::response& res, epee::json_rpc::error& er, const connection_context *ctx = NULL);
@@ -281,18 +283,15 @@ namespace tools
 
       bool validate_transfer(const std::list<transfer_destination>& destinations, const std::string& payment_id, std::vector<cryptonote::tx_destination_entry>& dsts, std::vector<uint8_t>& extra, bool at_least_one_destination, epee::json_rpc::error& er);
 
-      void check_background_mining();
-
-      void require_open();
-      wallet2 *m_wallet;
+      std::unique_ptr<wallet2> m_wallet;
       std::string m_wallet_dir;
       tools::private_file rpc_login_file;
       std::atomic<bool> m_stop;
       bool m_restricted;
-      const boost::program_options::variables_map *m_vm;
-      uint32_t m_auto_refresh_period;
-      boost::posix_time::ptime m_last_auto_refresh_time;
-      boost::thread m_long_poll_thread;
+      boost::program_options::variables_map m_vm;
+      std::chrono::milliseconds m_auto_refresh_period;
+      std::chrono::steady_clock::time_point m_last_auto_refresh_time;
+      std::thread m_long_poll_thread;
       std::atomic<bool> m_long_poll_new_changes;
   };
 }

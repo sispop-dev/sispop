@@ -29,15 +29,8 @@
 #pragma once
 
 #include "misc_log_ex.h"
+#include "readline_suspend.h"
 #include <iostream>
-
-#ifdef HAVE_READLINE
-  #include "readline_buffer.h"
-  #define PAUSE_READLINE() \
-    rdln::suspend_readline pause_readline; 
-#else
-  #define PAUSE_READLINE()
-#endif
 
 #include "common/sispop_integration_test_hooks.h"
 

@@ -30,7 +30,7 @@
 #ifndef _HTTP_SERVER_H_
 #define _HTTP_SERVER_H_
 
-#include <boost/optional/optional.hpp>
+#include <optional>
 #include <string>
 #include "net_utils_base.h"
 #include "to_nonconst_iterator.h"
@@ -55,8 +55,8 @@ namespace net_utils
 		{
 			std::string m_folder;
 			std::vector<std::string> m_access_control_origins;
-			boost::optional<login> m_user;
-			critical_section m_lock;
+			std::optional<login> m_user;
+            std::mutex m_config_mutex;
 		};
 
 		/************************************************************************/
@@ -113,17 +113,17 @@ namespace net_utils
 
 			bool handle_buff_in(std::string& buf);
 
-			bool analize_cached_request_header_and_invoke_state(size_t pos);
+			bool analyze_cached_request_header_and_invoke_state(size_t pos);
 
 			bool handle_invoke_query_line();
 			bool parse_cached_header(http_header_info& body_info, const std::string& m_cache_to_process, size_t pos);
 			std::string::size_type match_end_of_header(const std::string& buf);
-			bool get_len_from_content_lenght(const std::string& str, size_t& len);
+			bool get_len_from_content_length(const std::string& str, size_t& len);
 			bool handle_retriving_query_body();
 			bool handle_query_measure();
 			bool set_ready_state();
 			bool slash_to_back_slash(std::string& str);
-			std::string get_file_mime_tipe(const std::string& path);
+			std::string get_file_mime_type(const std::string& path);
 			std::string get_response_header(const http_response_info& response);
 
 			//major function 
@@ -192,7 +192,7 @@ namespace net_utils
 				}
 
 				//fill with default values
-				response.m_mime_tipe = "text/plain";
+				response.m_mime_type = "text/plain";
 				response.m_response_code = 200;
 				response.m_response_comment = "OK";
 				response.m_body.clear();
@@ -202,7 +202,7 @@ namespace net_utils
 
 			virtual bool thread_init()
 			{
-				return m_config.m_phandler->init_server_thread();;
+				return m_config.m_phandler->init_server_thread();
 			}
 	
 			virtual bool thread_deinit()

@@ -65,36 +65,30 @@ namespace protocol{
   };
 
   template<typename T>
-  bool cn_deserialize(const void * buff, size_t len, T & dst){
-    std::stringstream ss;
-    ss.write(static_cast<const char *>(buff), len);  //ss << tx_blob;
-    binary_archive<false> ba(ss);
-    bool r = ::serialization::serialize(ba, dst);
-    return r;
-  }
-
-  template<typename T>
-  bool cn_deserialize(const std::string & str, T & dst){
-    return cn_deserialize(str.data(), str.size(), dst);
+  bool cn_deserialize(const std::string_view buff, T& dst) {
+    try {
+      serialization::parse_binary(buff, dst);
+      return true;
+    } catch (...) {
+      return false;
+    }
   }
 
   template<typename T>
   std::string cn_serialize(T & obj){
-    std::ostringstream oss;
-    binary_archive<true> oar(oss);
-    bool success = ::serialization::serialize(oar, obj);
-    if (!success){
+    try {
+      return serialization::dump_binary(obj);
+    } catch (...) {
       throw exc::EncodingException("Could not CN serialize given object");
     }
-    return oss.str();
   }
 
 // Crypto / encryption
 namespace crypto {
 namespace chacha {
   // Constants as defined in RFC 7539.
-  const unsigned IV_SIZE = 12;
-  const unsigned TAG_SIZE = 16;  // crypto_aead_chacha20poly1305_IETF_ABYTES;
+  constexpr unsigned IV_SIZE = 12;
+  constexpr unsigned TAG_SIZE = 16;  // crypto_aead_chacha20poly1305_IETF_ABYTES;
 
   /**
    * Chacha20Poly1305 decryption with tag verification. RFC 7539.
@@ -118,7 +112,8 @@ namespace ki {
    */
   bool key_image_data(wallet_shim * wallet,
                       const std::vector<tools::wallet2::transfer_details> & transfers,
-                      std::vector<MoneroTransferDetails> & res);
+                      std::vector<MoneroTransferDetails> & res,
+                      bool need_all_additionals=false);
 
   /**
    * Computes a hash over MoneroTransferDetails. Commitment used in the KI sync.
@@ -130,7 +125,8 @@ namespace ki {
    */
   void generate_commitment(std::vector<MoneroTransferDetails> & mtds,
                            const std::vector<tools::wallet2::transfer_details> & transfers,
-                           std::shared_ptr<messages::monero::MoneroKeyImageExportInitRequest> & req);
+                           std::shared_ptr<messages::monero::MoneroKeyImageExportInitRequest> & req,
+                           bool need_subaddr_indices=false);
 
   /**
    * Processes Live refresh step response, parses KI, checks the signature
@@ -158,15 +154,15 @@ namespace tx {
 
   void translate_address(MoneroAccountPublicAddress * dst, const cryptonote::account_public_address * src);
   void translate_dst_entry(MoneroTransactionDestinationEntry * dst, const cryptonote::tx_destination_entry * src);
-  void translate_src_entry(MoneroTransactionSourceEntry * dst, const cryptonote::tx_source_entry * src);
   void translate_klrki(MoneroMultisigKLRki * dst, const rct::multisig_kLRki * src);
   void translate_rct_key(MoneroRctKey * dst, const rct::ctkey * src);
-  std::string hash_addr(const MoneroAccountPublicAddress * addr, boost::optional<uint64_t> amount = boost::none, boost::optional<bool> is_subaddr = boost::none);
-  std::string hash_addr(const std::string & spend_key, const std::string & view_key, boost::optional<uint64_t> amount = boost::none, boost::optional<bool> is_subaddr = boost::none);
-  std::string hash_addr(const ::crypto::public_key * spend_key, const ::crypto::public_key * view_key, boost::optional<uint64_t> amount = boost::none, boost::optional<bool> is_subaddr = boost::none);
+  std::string hash_addr(const MoneroAccountPublicAddress * addr, std::optional<uint64_t> amount = std::nullopt, std::optional<bool> is_subaddr = std::nullopt);
+  std::string hash_addr(const std::string & spend_key, const std::string & view_key, std::optional<uint64_t> amount = std::nullopt, std::optional<bool> is_subaddr = std::nullopt);
+  std::string hash_addr(const ::crypto::public_key * spend_key, const ::crypto::public_key * view_key, std::optional<uint64_t> amount = std::nullopt, std::optional<bool> is_subaddr = std::nullopt);
   ::crypto::secret_key compute_enc_key(const ::crypto::secret_key & private_view_key, const std::string & aux, const std::string & salt);
+  std::string compute_sealing_key(const std::string & master_key, size_t idx, bool is_iv=false);
 
-  typedef boost::variant<rct::rangeSig, rct::Bulletproof> rsig_v;
+  using rsig_v = std::variant<rct::rangeSig, rct::Bulletproof>;
 
   /**
    * Transaction signer state holder.
@@ -198,6 +194,7 @@ namespace tx {
     std::vector<std::string> pseudo_outs_hmac;
     std::vector<std::string> couts;
     std::vector<std::string> couts_dec;
+    std::vector<std::string> signatures;
     std::vector<rct::key> rsig_gamma;
     std::string tx_prefix_hash;
     std::string enc_salt1;
@@ -221,9 +218,25 @@ namespace tx {
     unsigned m_client_version;
     bool m_multisig;
 
-    const tx_construction_data & cur_tx(){
+    const tx_construction_data & cur_src_tx() const {
       CHECK_AND_ASSERT_THROW_MES(m_tx_idx < m_unsigned_tx->txes.size(), "Invalid transaction index");
       return m_unsigned_tx->txes[m_tx_idx];
+    }
+
+    const tx_construction_data & cur_tx() const {
+      return m_ct.tx_data;
+    }
+
+    const tools::wallet2::transfer_details & get_transfer(size_t idx) const {
+      CHECK_AND_ASSERT_THROW_MES(idx < m_unsigned_tx->transfers.second.size() + m_unsigned_tx->transfers.first && idx >= m_unsigned_tx->transfers.first, "Invalid transfer index");
+      return m_unsigned_tx->transfers.second[idx - m_unsigned_tx->transfers.first];
+    }
+
+    const tools::wallet2::transfer_details & get_source_transfer(size_t idx) const {
+      const auto & sel_transfers = cur_tx().selected_transfers;
+      CHECK_AND_ASSERT_THROW_MES(idx < m_ct.source_permutation.size(), "Invalid source index - permutation");
+      CHECK_AND_ASSERT_THROW_MES(m_ct.source_permutation[idx] < sel_transfers.size(), "Invalid source index");
+      return get_transfer(sel_transfers.at(m_ct.source_permutation[idx]));
     }
 
     void extract_payment_id();
@@ -231,6 +244,7 @@ namespace tx {
     bool should_compute_bp_now() const;
     void compute_bproof(messages::monero::MoneroTransactionRsigData & rsig_data);
     void process_bproof(rct::Bulletproof & bproof);
+    void set_tx_input(MoneroTransactionSourceEntry * dst, size_t idx, bool need_ring_keys=false, bool need_ring_indices=false);
 
   public:
     Signer(wallet_shim * wallet2, const unsigned_tx_set * unsigned_tx, size_t tx_idx = 0, hw::tx_aux_data * aux_data = nullptr);

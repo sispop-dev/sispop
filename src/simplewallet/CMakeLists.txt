@@ -34,15 +34,12 @@ target_link_libraries(simplewallet
   PRIVATE
     wallet
     daemonizer
-    rpc_base
+    rpc_commands
     cryptonote_core
     mnemonics
-    epee_readline
     qrcodegen
-    Boost::chrono
     Boost::program_options
     Boost::filesystem
-    Boost::regex
     icu
     Boost::thread
     extra)

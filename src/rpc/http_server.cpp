@@ -1,8 +1,8 @@
 #include "http_server.h"
 #include "rpc/rpc_args.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "daemon.rpc"
+#undef SISPOP_DEFAULT_LOG_CATEGORY
+#define SISPOP_DEFAULT_LOG_CATEGORY "daemon.rpc"
 
 namespace cryptonote { namespace rpc {
 
@@ -39,7 +39,7 @@ namespace cryptonote { namespace rpc {
     };
 
   //
-  // Loki
+  // Sispop
   //
   const command_line::arg_descriptor<int> http_server::arg_rpc_long_poll_connections = {
       "rpc-long-poll-connections"
@@ -74,7 +74,7 @@ namespace cryptonote { namespace rpc {
     if (!rpc_config)
       return false;
 
-    boost::optional<epee::net_utils::http::login> http_login{};
+    std::optional<epee::net_utils::http::login> http_login{};
 
     if (rpc_config->login)
       http_login.emplace(std::move(rpc_config->login->username), std::move(rpc_config->login->password).password());

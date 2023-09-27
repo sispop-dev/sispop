@@ -134,7 +134,7 @@ namespace epee
   }
 
   template<typename T>
-  constexpr bool is_byte_spannable = std::has_unique_object_representations<T>::value;
+  constexpr bool is_byte_spannable = std::has_unique_object_representations_v<T>;
 
   //! \return Cast data from `src` as `span<const std::uint8_t>`.
   template<typename T>

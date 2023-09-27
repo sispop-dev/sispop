@@ -36,6 +36,7 @@
 #ifndef INCLUDED_throttle_detail_hpp
 #define INCLUDED_throttle_detail_hpp
 
+#include <cmath>
 #include <boost/circular_buffer.hpp>
 #include "network_throttle.hpp"
 

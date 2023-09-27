@@ -38,9 +38,6 @@
 #include "string_tools.h"
 #include "blockchain_db/blockchain_db.h"
 #include "blockchain_db/lmdb/db_lmdb.h"
-#ifdef BERKELEY_DB
-#include "blockchain_db/berkeleydb/db_bdb.h"
-#endif
 #include "cryptonote_basic/cryptonote_format_utils.h"
 
 using namespace cryptonote;
@@ -162,7 +159,7 @@ protected:
     {
       block bl;
       blobdata bd = h2b(i);
-      parse_and_validate_block_from_blob(bd, bl);
+      CHECK_AND_ASSERT_THROW_MES(parse_and_validate_block_from_blob(bd, bl), "Invalid block");
       m_blocks.push_back(std::make_pair(bl, bd));
     }
     for (auto& i : t_transactions)
@@ -172,7 +169,7 @@ protected:
       {
         transaction tx;
         blobdata bd = h2b(j);
-        parse_and_validate_tx_from_blob(bd, tx);
+        CHECK_AND_ASSERT_THROW_MES(parse_and_validate_tx_from_blob(bd, tx), "Invalid transaction");
         txs.push_back(std::make_pair(tx, bd));
       }
       m_txs.push_back(txs);
@@ -233,11 +230,7 @@ protected:
 
 using testing::Types;
 
-typedef Types<BlockchainLMDB
-#ifdef BERKELEY_DB
-  , BlockchainBDB
-#endif
-> implementations;
+typedef Types<BlockchainLMDB> implementations;
 
 TYPED_TEST_CASE(BlockchainDBTest, implementations);
 

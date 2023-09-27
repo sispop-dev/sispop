@@ -28,22 +28,28 @@
 
 #include "misc_log_ex.h"
 #include "string_tools.h"
+#include <functional>
 #include <atomic>
 #include <condition_variable>
 #include <functional>
 #include <mutex>
 #include <thread>
 #include <iostream>
+#include <any>
+#include <unordered_map>
 #ifdef __OpenBSD__
 #include <stdio.h>
 #endif
-#include <boost/thread.hpp>
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/split.hpp>
 
 #ifdef HAVE_READLINE
   #include "readline_buffer.h"
 #endif
+#include "readline_suspend.h"
+
+#undef MONERO_DEFAULT_LOG_CATEGORY
+#define MONERO_DEFAULT_LOG_CATEGORY "console_handler"
 
 namespace epee
 {
@@ -58,7 +64,7 @@ namespace epee
 #ifdef HAVE_READLINE
       m_readline_buffer.start();
 #endif
-      m_reader_thread = boost::thread(std::bind(&async_stdin_reader::reader_thread_func, this));
+      m_reader_thread = std::thread([this] { reader_thread_func(); });
     }
 
     ~async_stdin_reader()
@@ -83,11 +89,8 @@ namespace epee
       if (state_eos == m_read_status)
         return false;
 
-      boost::unique_lock<boost::mutex> lock(m_response_mutex);
-      while (state_init == m_read_status)
-      {
-        m_response_cv.wait(lock);
-      }
+      std::unique_lock<std::mutex> lock(m_response_mutex);
+      m_response_cv.wait(lock, [this] { return m_read_status != state_init; });
 
       bool res = false;
       if (state_success == m_read_status)
@@ -96,7 +99,7 @@ namespace epee
         res = true;
       }
 
-      if (!eos())
+      if (!eos() && m_read_status != state_cancelled)
         m_read_status = state_init;
 
       return res;
@@ -122,10 +125,18 @@ namespace epee
       }
     }
 
+    void cancel()
+    {
+      std::unique_lock<std::mutex> lock(m_response_mutex);
+      m_read_status = state_cancelled;
+      m_has_read_request = false;
+      m_response_cv.notify_one();
+    }
+
   private:
     bool start_read()
     {
-      boost::unique_lock<boost::mutex> lock(m_request_mutex);
+      std::unique_lock<std::mutex> lock(m_request_mutex);
       if (!m_run.load(std::memory_order_relaxed) || m_has_read_request)
         return false;
 
@@ -136,11 +147,8 @@ namespace epee
 
     bool wait_read()
     {
-      boost::unique_lock<boost::mutex> lock(m_request_mutex);
-      while (m_run.load(std::memory_order_relaxed) && !m_has_read_request)
-      {
-        m_request_cv.wait(lock);
-      }
+      std::unique_lock<std::mutex> lock(m_request_mutex);
+      m_request_cv.wait(lock, [this] { return m_has_read_request || !m_run; });
 
       if (m_has_read_request)
       {
@@ -162,6 +170,9 @@ namespace epee
 
       while (m_run.load(std::memory_order_relaxed))
       {
+        if (m_read_status == state_cancelled)
+          return false;
+
         fd_set read_set;
         FD_ZERO(&read_set);
         FD_SET(stdin_fileno, &read_set);
@@ -179,6 +190,9 @@ namespace epee
 #else
       while (m_run.load(std::memory_order_relaxed))
       {
+        if (m_read_status == state_cancelled)
+          return false;
+
         int retval = ::WaitForSingleObject(::GetStdHandle(STD_INPUT_HANDLE), 100);
         switch (retval)
         {
@@ -219,7 +233,8 @@ reread:
             case rdln::full:    break;
             }
 #else
-            std::getline(std::cin, line);
+            if (m_read_status != state_cancelled)
+              std::getline(std::cin, line);
 #endif
             read_ok = !std::cin.eof() && !std::cin.fail();
           }
@@ -238,7 +253,7 @@ eof:
         }
         else
         {
-          boost::unique_lock<boost::mutex> lock(m_response_mutex);
+          std::unique_lock<std::mutex> lock(m_response_mutex);
           if (m_run.load(std::memory_order_relaxed))
           {
             m_line = std::move(line);
@@ -263,7 +278,7 @@ eof:
     };
 
   private:
-    boost::thread m_reader_thread;
+    std::thread m_reader_thread;
     std::atomic<bool> m_run;
 #ifdef HAVE_READLINE
     rdln::readline_buffer m_readline_buffer;
@@ -273,19 +288,11 @@ eof:
     bool m_has_read_request;
     t_state m_read_status;
 
-    boost::mutex m_request_mutex;
-    boost::mutex m_response_mutex;
-    boost::condition_variable m_request_cv;
-    boost::condition_variable m_response_cv;
+    std::mutex m_request_mutex;
+    std::mutex m_response_mutex;
+    std::condition_variable m_request_cv;
+    std::condition_variable m_response_cv;
   };
-
-
-  template<class t_server>
-  bool empty_commands_handler(t_server* psrv, const std::string& command)
-  {
-    return true;
-  }
-
 
   class async_console_handler
   {
@@ -295,21 +302,27 @@ eof:
     }
 
     template<class t_server, class chain_handler>
-    bool run(t_server* psrv, chain_handler ch_handler, std::function<std::string(void)> prompt, const std::string& usage = "")
+    bool run(t_server* psrv, chain_handler ch_handler, std::function<std::string()> prompt, const std::string& usage = "")
     {
       return run(prompt, usage, [&](const std::string& cmd) { return ch_handler(psrv, cmd); }, [&] { psrv->send_stop_signal(); });
     }
 
     template<class chain_handler>
-    bool run(chain_handler ch_handler, std::function<std::string(void)> prompt, const std::string& usage = "", std::function<void(void)> exit_handler = NULL)
+    bool run(chain_handler ch_handler, std::function<std::string()> prompt, const std::string& usage = "", std::function<void()> exit_handler = NULL)
     {
-      return run(prompt, usage, [&](const std::string& cmd) { return ch_handler(cmd); }, exit_handler);
+      return run(prompt, usage, [&](const std::optional<std::string>& cmd) { return ch_handler(cmd); }, exit_handler);
     }
 
     void stop()
     {
       m_running = false;
       m_stdin_reader.stop();
+    }
+
+    void cancel()
+    {
+      m_cancel = true;
+      m_stdin_reader.cancel();
     }
 
     void print_prompt()
@@ -336,7 +349,7 @@ eof:
 
   private:
     template<typename t_cmd_handler>
-    bool run(std::function<std::string(void)> prompt, const std::string& usage, const t_cmd_handler& cmd_handler, std::function<void(void)> exit_handler)
+    bool run(std::function<std::string()> prompt, const std::string& usage, const t_cmd_handler& cmd_handler, std::function<void()> exit_handler)
     {
       bool continue_handle = true;
       m_prompt = prompt;
@@ -360,18 +373,23 @@ eof:
             std::cout << std::endl;
             break;
           }
+
+          if (m_cancel)
+          {
+            MDEBUG("Input cancelled");
+            cmd_handler(std::nullopt);
+            m_cancel = false;
+            continue;
+          }
           if (!get_line_ret)
           {
             MERROR("Failed to read line.");
           }
+
           string_tools::trim(command);
 
           LOG_PRINT_L2("Read command: " << command);
           if (command.empty())
-          {
-            continue;
-          }
-          else if(cmd_handler(command))
           {
             continue;
           }
@@ -381,11 +399,7 @@ eof:
           }
           else
           {
-#ifdef HAVE_READLINE
-            rdln::suspend_readline pause_readline;
-#endif
-            std::cout << "unknown command: " << command << std::endl;
-            std::cout << usage;
+            cmd_handler(command);
           }
         }
         catch (const std::exception &ex)
@@ -401,141 +415,144 @@ eof:
   private:
     async_stdin_reader m_stdin_reader;
     std::atomic<bool> m_running = {true};
-    std::function<std::string(void)> m_prompt;
+    std::atomic<bool> m_cancel = {false};
+    std::function<std::string()> m_prompt;
   };
-
-
-  template<class t_server, class t_handler>
-  bool start_default_console(t_server* ptsrv, t_handler handlr, std::function<std::string(void)> prompt, const std::string& usage = "")
-  {
-    std::shared_ptr<async_console_handler> console_handler = std::make_shared<async_console_handler>();
-    boost::thread([=](){console_handler->run<t_server, t_handler>(ptsrv, handlr, prompt, usage);}).detach();
-    return true;
-  }
-
-  template<class t_server, class t_handler>
-  bool start_default_console(t_server* ptsrv, t_handler handlr, const std::string& prompt, const std::string& usage = "")
-  {
-    return start_default_console(ptsrv, handlr, [prompt](){ return prompt; }, usage);
-  }
-
-  template<class t_server>
-  bool start_default_console(t_server* ptsrv, const std::string& prompt, const std::string& usage = "")
-  {
-    return start_default_console(ptsrv, empty_commands_handler<t_server>, prompt, usage);
-  }
-
-  template<class t_server, class t_handler>
-    bool no_srv_param_adapter(t_server* ptsrv, const std::string& cmd, t_handler handlr)
-    {
-      return handlr(cmd);
-    }
-
-  template<class t_server, class t_handler>
-  bool run_default_console_handler_no_srv_param(t_server* ptsrv, t_handler handlr, std::function<std::string(void)> prompt, const std::string& usage = "")
-  {
-    async_console_handler console_handler;
-    using namespace boost::placeholders;
-    return console_handler.run(ptsrv, boost::bind<bool>(no_srv_param_adapter<t_server, t_handler>, _1, _2, handlr), prompt, usage);
-  }
-
-  template<class t_server, class t_handler>
-  bool run_default_console_handler_no_srv_param(t_server* ptsrv, t_handler handlr, const std::string& prompt, const std::string& usage = "")
-  {
-    return run_default_console_handler_no_srv_param(ptsrv, handlr, [prompt](){return prompt;},usage);
-  }
-
-  template<class t_server, class t_handler>
-  bool start_default_console_handler_no_srv_param(t_server* ptsrv, t_handler handlr, std::function<std::string(void)> prompt, const std::string& usage = "")
-  {
-    boost::thread( boost::bind(run_default_console_handler_no_srv_param<t_server, t_handler>, ptsrv, handlr, prompt, usage) );
-    return true;
-  }
-
-  template<class t_server, class t_handler>
-  bool start_default_console_handler_no_srv_param(t_server* ptsrv, t_handler handlr, const std::string& prompt, const std::string& usage = "")
-  {
-    return start_default_console_handler_no_srv_param(ptsrv, handlr, [prompt](){return prompt;}, usage);
-  }
-
-  /*template<class a>
-  bool f(int i, a l)
-  {
-    return true;
-  }*/
-  /*
-  template<class chain_handler>
-  bool default_console_handler2(chain_handler ch_handler, const std::string usage)
-  */
-
-
-  /*template<class t_handler>
-  bool start_default_console2(t_handler handlr, const std::string& usage = "")
-  {
-    //std::string usage_local = usage;
-    boost::thread( boost::bind(default_console_handler2<t_handler>, handlr, usage) );
-    //boost::function<bool ()> p__ = boost::bind(f<t_handler>, 1, handlr);
-    //boost::function<bool ()> p__ = boost::bind(default_console_handler2<t_handler>, handlr, usage);
-    //boost::thread tr(p__);
-    return true;
-  }*/
 
   class command_handler {
   public:
-    typedef boost::function<bool (const std::vector<std::string> &)> callback;
-    typedef std::map<std::string, std::pair<callback, std::pair<std::string, std::string>>> lookup;
+    using callback = std::function<bool(const std::vector<std::string> &)>;
+    using empty_callback = std::function<bool()>;
+    using lookup = std::unordered_map<std::string, std::pair<callback, std::pair<std::string, std::string>>>;
 
-    std::string get_usage()
+    /// Go through registered commands in sorted order, call the function with three string
+    /// arguments: command name, usage, and description.
+    template <typename Function>
+    void for_each(Function f)
     {
-      std::stringstream ss;
-
-      for(auto& x:m_command_handlers)
-      {
-        ss << x.second.second.first << ENDL;
-      }
-      return ss.str();
+      for (const auto& x : m_command_handlers)
+        f(x.first, x.second.second.first, x.second.second.second);
     }
 
+    /// Returns {usage, description} for a given command.
     std::pair<std::string, std::string> get_documentation(const std::vector<std::string>& cmd)
     {
       if(cmd.empty())
-        return std::make_pair("", "");
+        return {"", ""};
       auto it = m_command_handlers.find(cmd.front());
       if(it == m_command_handlers.end())
-        return std::make_pair("", "");
+        return {"", ""};
       return it->second.second;
     }
 
-    void set_handler(const std::string& cmd, const callback& hndlr, const std::string& usage = "", const std::string& description = "")
+    using pre_handler_callback = std::function<std::any(const std::string& cmd)>;
+    using post_handler_callback = std::function<void(const std::string& cmd, bool& handler_result, std::any pre_handler_result)>;
+
+    /// Sets a pre-handler than runs immediately before any handler set up with `set_handler`.
+    /// Called with the command name.  If the handler returns a value it will be stored in a
+    /// `std::any` and then passed into the `post_handler`.  Pre- and post-handlers are only invoked
+    /// on valid commands.
+    template <typename Callback>
+    void pre_handler(Callback handler)
+    {
+      using Return = decltype(handler(""s));
+      if constexpr (std::is_void_v<Return>)
+        m_pre_handler = [f=std::move(handler)](const std::string& cmd) { f(cmd); return std::any{}; };
+      else if constexpr (std::is_same_v<Return, std::any>)
+        m_pre_handler = handler;
+      else
+        m_pre_handler = [f=std::move(handler)](const std::string& cmd) -> std::any { return f(cmd); };
+    }
+
+    /// Sets a post-handler that runs immediately after a handler set up with `set_handler`.  Takes
+    /// three arguments:
+    /// - the command name
+    /// - a `bool&` containing the result returned by the handler (which can be modified by the post
+    ///   handler to affect the callback return, if desired)
+    /// - an `std::any` containing the result of the pre-handler.  (If not pre-handler was set up or
+    ///   the pre-handler has a void return, the std::any will be empty).
+    ///
+    /// The post handler is not invoked at all if the command handler throws an exception.
+    void post_handler(post_handler_callback handler)
+    {
+      m_post_handler = std::move(handler);
+    }
+
+    void set_handler(const std::string& cmd, callback hndlr, std::string usage = "", std::string description = "")
     {
       lookup::mapped_type & vt = m_command_handlers[cmd];
-      vt.first = hndlr;
-      vt.second.first = description.empty() ? cmd : usage;
-      vt.second.second = description.empty() ? usage : description;
+      vt.first = std::move(hndlr);
+      if (description.empty())
+        vt.second = {cmd, std::move(usage)};
+      else
+        vt.second = {std::move(usage), std::move(description)};
 #ifdef HAVE_READLINE
       rdln::readline_buffer::add_completion(cmd);
 #endif
     }
 
-    bool process_command_vec(const std::vector<std::string>& cmd)
+    /// Throws invalid_command on bad command with what() set to the command name, otherwise
+    /// returns the result of the command (true generally means success, false means failure).
+    struct invalid_command : std::invalid_argument { using std::invalid_argument::invalid_argument; };
+    bool process_command(const std::vector<std::string>& cmd)
     {
       if(!cmd.size())
-        return false;
+        throw invalid_command{"(empty)"};
       auto it = m_command_handlers.find(cmd.front());
-      if(it == m_command_handlers.end())
-        return false;
-      std::vector<std::string> cmd_local(cmd.begin()+1, cmd.end());
-      return it->second.first(cmd_local);
+      if (it == m_command_handlers.end())
+        throw invalid_command{cmd.front()};
+
+      std::any pre_result;
+      if (m_pre_handler)
+        pre_result = m_pre_handler(cmd.front());
+
+      bool result = it->second.first(std::vector<std::string>{cmd.begin()+1, cmd.end()});
+
+      if (m_post_handler)
+        m_post_handler(cmd.front(), result, std::move(pre_result));
+
+      return result;
     }
 
-    bool process_command_str(const std::string& cmd)
+    bool process_command_and_log(const std::vector<std::string> &cmd)
     {
-      std::vector<std::string> cmd_v;
-      boost::split(cmd_v,cmd,boost::is_any_of(" "), boost::token_compress_on);
-      return process_command_vec(cmd_v);
+      try
+      {
+        return process_command(cmd);
+      }
+      catch (const invalid_command &e)
+      {
+        rdln::suspend_readline pause_readline;
+        std::cout << "Unknown command: " << e.what() << ". Try 'help' for available commands\n";
+      }
+      catch (const std::exception &e)
+      {
+        rdln::suspend_readline pause_readline;
+        std::cout << "Command errored: " << cmd.front() << ", " << e.what();
+      }
+
+      return false;
     }
+
+    bool process_command_and_log(const std::optional<std::string>& cmd)
+    {
+      if (!cmd)
+        return m_cancel_handler();
+      std::vector<std::string> cmd_v;
+      boost::split(cmd_v,*cmd,boost::is_any_of(" "), boost::token_compress_on);
+      return process_command_and_log(cmd_v);
+    }
+
+    void set_cancel_handler(const empty_callback& hndlr)
+    {
+      m_cancel_handler = hndlr;
+    }
+
   private:
+    pre_handler_callback m_pre_handler;
+    post_handler_callback m_post_handler;
     lookup m_command_handlers;
+    empty_callback m_cancel_handler;
   };
 
   /************************************************************************/
@@ -545,16 +562,27 @@ eof:
   {
     typedef command_handler::callback console_command_handler;
     typedef command_handler::lookup command_handlers_map;
-    std::unique_ptr<boost::thread> m_console_thread;
+    std::thread m_console_thread;
     async_console_handler m_console_handler;
   public:
-    bool start_handling(std::function<std::string(void)> prompt, const std::string& usage_string = "", std::function<void(void)> exit_handler = NULL)
+    ~console_handlers_binder() {
+      try
+      {
+        stop_handling();
+        if (m_console_thread.joinable())
+          m_console_thread.join();
+      }
+      catch (const std::exception &e)
+      { /*ignore*/
+      }
+    }
+
+    bool start_handling(std::function<std::string()> prompt, const std::string& usage_string = "", std::function<void()> exit_handler = NULL)
     {
-      m_console_thread.reset(new boost::thread(boost::bind(&console_handlers_binder::run_handling, this, prompt, usage_string, exit_handler)));
-      m_console_thread->detach();
+      m_console_thread = std::thread{std::bind(&console_handlers_binder::run_handling, this, prompt, usage_string, exit_handler)};
       return true;
     }
-    bool start_handling(const std::string &prompt, const std::string& usage_string = "", std::function<void(void)> exit_handler = NULL)
+    bool start_handling(const std::string &prompt, const std::string& usage_string = "", std::function<void()> exit_handler = NULL)
     {
       return start_handling([prompt](){ return prompt; }, usage_string, exit_handler);
     }
@@ -564,42 +592,19 @@ eof:
       m_console_handler.stop();
     }
 
-    bool run_handling(std::function<std::string(void)> prompt, const std::string& usage_string, std::function<void(void)> exit_handler = NULL)
+    bool run_handling(std::function<std::string()> prompt, const std::string& usage_string, std::function<void()> exit_handler = NULL)
     {
-      return m_console_handler.run(boost::bind(&console_handlers_binder::process_command_str, this, boost::placeholders::_1), prompt, usage_string, exit_handler);
+      return m_console_handler.run([this](const auto& arg) { return process_command_and_log(arg); }, prompt, usage_string, exit_handler);
     }
 
     void print_prompt()
     {
       m_console_handler.print_prompt();
     }
+
+    void cancel_input()
+    {
+      m_console_handler.cancel();
+    }
   };
-
-  ///* work around because of broken boost bind */
-  //template<class t_server>
-  //class srv_console_handlers_binder: public command_handler
-  //{
-  //  async_console_handler m_console_handler;
-  //public:
-  //  bool start_handling(t_server* psrv, const std::string& prompt, const std::string& usage_string = "")
-  //  {
-  //    boost::thread(boost::bind(&srv_console_handlers_binder<t_server>::run_handling, this, psrv, prompt, usage_string)).detach();
-  //    return true;
-  //  }
-
-  //  bool run_handling(t_server* psrv, const std::string& prompt, const std::string& usage_string)
-  //  {
-  //    return m_console_handler.run(psrv, boost::bind(&srv_console_handlers_binder<t_server>::process_command_str, this, _1, _2), prompt, usage_string);
-  //  }
-
-  //  void stop_handling()
-  //  {
-  //    m_console_handler.stop();
-  //  }
-  //private:
-  //  bool process_command_str(t_server* /*psrv*/, const std::string& cmd)
-  //  {
-  //    return console_handlers_binder::process_command_str(cmd);
-  //  }
-  //};
 }

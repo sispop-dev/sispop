@@ -34,7 +34,6 @@
 #include <unordered_map>
 
 #include "include_base_utils.h"
-using namespace epee;
 #include "wallet/wallet2.h"
 using namespace cryptonote;
 
@@ -160,30 +159,30 @@ bool transactions_flow_test(std::string& working_folder,
 
   w2.init(daemon_addr_b);
 
-  MGINFO_GREEN("Using wallets: " << ENDL
-    << "Source:  " << w1.get_account().get_public_address_str(MAINNET) << ENDL << "Path: " << working_folder + "/" + path_source_wallet << ENDL
-    << "Target:  " << w2.get_account().get_public_address_str(MAINNET) << ENDL << "Path: " << working_folder + "/" + path_target_wallet);
+  MGINFO_GREEN("Using wallets:\n"
+    << "Source:  " << w1.get_account().get_public_address_str(MAINNET) << "\nPath: " << working_folder + "/" + path_source_wallet << "\n"
+    << "Target:  " << w2.get_account().get_public_address_str(MAINNET) << "\nPath: " << working_folder + "/" + path_target_wallet);
 
   //lets do some money
   epee::net_utils::http::http_simple_client http_client;
-  COMMAND_RPC_STOP_MINING::request daemon1_req{};
-  COMMAND_RPC_STOP_MINING::response daemon1_rsp{};
-  bool r = http_client.set_server(daemon_addr_a, boost::none) && net_utils::invoke_http_json("/stop_mine", daemon1_req, daemon1_rsp, http_client, std::chrono::seconds(10));
+  rpc::STOP_MINING::request daemon1_req{};
+  rpc::STOP_MINING::response daemon1_rsp{};
+  bool r = http_client.set_server(daemon_addr_a, std::nullopt) && epee::net_utils::invoke_http_json("/stop_mine", daemon1_req, daemon1_rsp, http_client, std::chrono::seconds(10));
   CHECK_AND_ASSERT_MES(r, false, "failed to stop mining");
 
-  COMMAND_RPC_START_MINING::request daemon_req{};
-  COMMAND_RPC_START_MINING::response daemon_rsp{};
+  rpc::START_MINING::request daemon_req{};
+  rpc::START_MINING::response daemon_rsp{};
   daemon_req.miner_address = w1.get_account().get_public_address_str(MAINNET);
   daemon_req.threads_count = 9;
-  r = net_utils::invoke_http_json("/start_mining", daemon_req, daemon_rsp, http_client, std::chrono::seconds(10));
+  r = epee::net_utils::invoke_http_json("/start_mining", daemon_req, daemon_rsp, http_client, std::chrono::seconds(10));
   CHECK_AND_ASSERT_MES(r, false, "failed to start mining getrandom_outs");
-  CHECK_AND_ASSERT_MES(daemon_rsp.status == CORE_RPC_STATUS_OK, false, "failed to start mining");
+  CHECK_AND_ASSERT_MES(daemon_rsp.status == rpc::STATUS_OK, false, "failed to start mining");
 
   //wait for money, until balance will have enough money
   w1.refresh(true, blocks_fetched, received_money, ok);
-  while(w1.unlocked_balance(0) < amount_to_transfer)
+  while(w1.unlocked_balance(0, true) < amount_to_transfer)
   {
-    misc_utils::sleep_no_w(1000);
+    epee::misc_utils::sleep_no_w(1000);
     w1.refresh(true, blocks_fetched, received_money, ok);
   }
 
@@ -194,7 +193,7 @@ bool transactions_flow_test(std::string& working_folder,
   {
     tools::wallet2::transfer_container incoming_transfers;
     w1.get_transfers(incoming_transfers);
-    if(incoming_transfers.size() > FIRST_N_TRANSFERS && get_money_in_first_transfers(incoming_transfers, FIRST_N_TRANSFERS) < w1.unlocked_balance(0) )
+    if(incoming_transfers.size() > FIRST_N_TRANSFERS && get_money_in_first_transfers(incoming_transfers, FIRST_N_TRANSFERS) < w1.unlocked_balance(0, true) )
     {
       //lets go!
       size_t count = 0;
@@ -210,7 +209,7 @@ bool transactions_flow_test(std::string& working_folder,
       break;
     }else
     {
-      misc_utils::sleep_no_w(1000);
+      epee::misc_utils::sleep_no_w(1000);
       w1.refresh(true, blocks_fetched, received_money, ok);
     }
   }
@@ -229,9 +228,9 @@ bool transactions_flow_test(std::string& working_folder,
   for(i = 0; i != transactions_count; i++)
   {
     uint64_t amount_to_tx = (amount_to_transfer - transfered_money) > transfer_size ? transfer_size: (amount_to_transfer - transfered_money);
-    while(w1.unlocked_balance(0) < amount_to_tx + TEST_FEE)
+    while(w1.unlocked_balance(0, true) < amount_to_tx + TEST_FEE)
     {
-      misc_utils::sleep_no_w(1000);
+      epee::misc_utils::sleep_no_w(1000);
       LOG_PRINT_L0("not enough money, waiting for cashback or mining");
       w1.refresh(true, blocks_fetched, received_money, ok);
     }
@@ -256,7 +255,7 @@ bool transactions_flow_test(std::string& working_folder,
         return false;
       }
     }
-    lst_sent_ki = boost::get<txin_to_key>(tx.vin[0]).k_image;
+    lst_sent_ki = std::get<txin_to_key>(tx.vin[0]).k_image;
 
     transfered_money += amount_to_tx;
 
@@ -265,20 +264,20 @@ bool transactions_flow_test(std::string& working_folder,
     ent.amount_transfered = amount_to_tx;
     ent.tx = tx;
     //if(i % transactions_per_second)
-    //  misc_utils::sleep_no_w(1000);
+    //  epee::misc_utils::sleep_no_w(1000);
   }
 
 
   LOG_PRINT_L0( "waiting some new blocks...");
-  misc_utils::sleep_no_w(DIFFICULTY_TARGET_V2*20*1000);//wait two blocks before sync on another wallet on another daemon
+  epee::misc_utils::sleep_no_w(DIFFICULTY_TARGET_V2*20*1000);//wait two blocks before sync on another wallet on another daemon
   LOG_PRINT_L0( "refreshing...");
   bool recvd_money = false;
   while(w2.refresh(true, blocks_fetched, recvd_money, ok) && ( (blocks_fetched && recvd_money) || !blocks_fetched  ) )
   {
-    misc_utils::sleep_no_w(DIFFICULTY_TARGET_V2*1000);//wait two blocks before sync on another wallet on another daemon
+    epee::misc_utils::sleep_no_w(DIFFICULTY_TARGET_V2*1000);//wait two blocks before sync on another wallet on another daemon
   }
 
-  uint64_t money_2 = w2.balance(0);
+  uint64_t money_2 = w2.balance(0, true);
   if(money_2 == transfered_money)
   {
     MGINFO_GREEN("-----------------------FINISHING TRANSACTIONS FLOW TEST OK-----------------------");

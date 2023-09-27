@@ -25,10 +25,10 @@
 // 
 
 
-#include <boost/regex.hpp>
 #include <boost/lexical_cast.hpp>
+#include <regex>
+#include <cassert>
 #include "http_protocol_handler.h"
-#include "reg_exp_definer.h"
 #include "string_tools.h"
 #include "file_io_utils.h"
 #include "net_parse_helpers.h"
@@ -56,13 +56,12 @@ namespace net_utils
 			std::string m_body;
 		};
 
+		inline const std::regex rexp_boundary{R"(boundary=([^;\s,]*))", std::regex::icase};
+
 		inline
 			bool match_boundary(const std::string& content_type, std::string& boundary)
 		{
-			STATIC_REGEXP_EXPR_1(rexp_match_boundary, "boundary=(.*?)(($)|([;\\s,]))", boost::regex::icase | boost::regex::normal);
-			//											        1
-			boost::smatch result;	
-			if(boost::regex_search(content_type, result, rexp_match_boundary, boost::match_default) && result[0].matched)
+			if(std::smatch result; std::regex_search(content_type, result, rexp_boundary))
 			{
 				boundary = result[1];
 				return true;
@@ -71,39 +70,29 @@ namespace net_utils
 			return false;
 		}
 
+		inline const std::regex rexp_content_header{R"(\n?(?:(Content-Disposition)|(Content-Type)|([\w-]+)) ?: ?(.*?)\r?\n[^\t ])", std::regex::icase};
+
 		inline 
 			bool parse_header(std::string::const_iterator it_begin, std::string::const_iterator it_end, multipart_entry& entry)
 		{
-			STATIC_REGEXP_EXPR_1(rexp_mach_field, 
-				"\n?((Content-Disposition)|(Content-Type)"
-				//  12                     3 
-				"|([\\w-]+?)) ?: ?((.*?)(\r?\n))[^\t ]",	
-				//4               56    7 
-				boost::regex::icase | boost::regex::normal);
-
-			boost::smatch		result;
 			std::string::const_iterator it_current_bound = it_begin;
 			std::string::const_iterator it_end_bound = it_end;
 
 			//lookup all fields and fill well-known fields
-			while( boost::regex_search( it_current_bound, it_end_bound, result, rexp_mach_field, boost::match_default) && result[0].matched) 
+			for (std::smatch result;
+					std::regex_search(it_current_bound, it_end_bound, result, rexp_content_header);
+					it_current_bound = result.suffix().first)
 			{
-				const size_t field_val = 6;
-				const size_t field_etc_name = 4;
+				std::string value = result[4];
 
-				int i = 2; //start position = 2
-				if(result[i++].matched)//"Content-Disposition"
-					entry.m_content_disposition = result[field_val];
-				else if(result[i++].matched)//"Content-Type"
-					entry.m_content_type = result[field_val];
-				else if(result[i++].matched)//e.t.c (HAVE TO BE MATCHED!)
-					entry.m_etc_header_fields.push_back(std::pair<std::string, std::string>(result[field_etc_name], result[field_val]));
-				else
-				{
-					LOG_ERROR("simple_http_connection_handler::parse_header() not matched last entry in:"<<std::string(it_current_bound, it_end));
+				if(result[1].matched)//"Content-Disposition"
+					entry.m_content_disposition = result[4];
+				else if(result[2].matched)//"Content-Type"
+					entry.m_content_type = result[4];
+				else {
+					assert(result[3].matched); //e.t.c (HAVE TO BE MATCHED!)
+					entry.m_etc_header_fields.emplace_back(result[3], result[4]);
 				}
-
-				it_current_bound = result[(int)result.size()-1].first;
 			}
 			return  true;
 		}
@@ -276,7 +265,7 @@ namespace net_utils
 					break;
 				}
 
-				if(std::string::npos != m_cache.find('\n', 0))
+				if(m_cache.find('\n') != std::string::npos)
 					handle_invoke_query_line();
 				else
 				{
@@ -303,7 +292,7 @@ namespace net_utils
 						}	
 						break;
 					}
-					if (!analize_cached_request_header_and_invoke_state(pos))
+					if (!analyze_cached_request_header_and_invoke_state(pos))
 						return false;
 					break;
 				}
@@ -325,24 +314,26 @@ namespace net_utils
 
 		return true;
 	}
+
+	inline const std::regex rexp_http_request{R"(^((OPTIONS)|(GET)|(HEAD)|(POST)|(PUT)|DELETE|TRACE) (\S+) HTTP/(\d+)\.(\d+)\r?\n)", std::regex::icase};
+
 	//--------------------------------------------------------------------------------------------
-	inline bool analize_http_method(const boost::smatch& result, http::http_method& method, int& http_ver_major, int& http_ver_minor)
+	inline bool analyze_http_method(const std::smatch& result, http::http_method& method, int& http_ver_major, int& http_ver_minor)
 	{
-		CHECK_AND_ASSERT_MES(result[0].matched, false, "simple_http_connection_handler::analize_http_method() assert failed...");
-		if (!boost::conversion::try_lexical_convert<int>(result[11], http_ver_major))
+		if (!boost::conversion::try_lexical_convert<int>(result[8], http_ver_major))
 			return false;
-		if (!boost::conversion::try_lexical_convert<int>(result[12], http_ver_minor))
+		if (!boost::conversion::try_lexical_convert<int>(result[9], http_ver_minor))
 			return false;
 
-		if(result[3].matched)
+		if(result[2].matched)
 			method = http::http_method_options;
-		else if(result[4].matched)
+		else if(result[3].matched)
 			method = http::http_method_get;
-		else if(result[5].matched)
+		else if(result[4].matched)
 			method = http::http_method_head;
-		else if(result[6].matched)
+		else if(result[5].matched)
 			method = http::http_method_post;
-		else if(result[7].matched)
+		else if(result[6].matched)
 			method = http::http_method_put;
 		else 
 			method = http::http_method_etc;
@@ -354,29 +345,26 @@ namespace net_utils
   template<class t_connection_context>
 	bool simple_http_connection_handler<t_connection_context>::handle_invoke_query_line()
 	{ 
-		STATIC_REGEXP_EXPR_1(rexp_match_command_line, "^(((OPTIONS)|(GET)|(HEAD)|(POST)|(PUT)|(DELETE)|(TRACE)) (\\S+) HTTP/(\\d+)\\.(\\d+))\r?\n", boost::regex::icase | boost::regex::normal);
-		//											    123         4     5      6      7     8        9        10          11     12    
-		//size_t match_len = 0;
-		boost::smatch result;	
-		if(boost::regex_search(m_cache, result, rexp_match_command_line, boost::match_default) && result[0].matched)
+		std::smatch result;
+		if(std::regex_search(m_cache, result, rexp_http_request))
 		{
-			if (!analize_http_method(result, m_query_info.m_http_method, m_query_info.m_http_ver_hi, m_query_info.m_http_ver_hi))
+			if (!analyze_http_method(result, m_query_info.m_http_method, m_query_info.m_http_ver_hi, m_query_info.m_http_ver_hi))
 			{
 				m_state = http_state_error;
 				MERROR("Failed to analyze method");
 				return false;
 			}
-			m_query_info.m_URI = result[10];
+			m_query_info.m_URI = result[7];
 			if (!parse_uri(m_query_info.m_URI, m_query_info.m_uri_content))
 			{
 				m_state = http_state_error;
 				MERROR("Failed to parse URI: m_query_info.m_URI");
 				return false;
 			}
-			m_query_info.m_http_method_str = result[2];
+			m_query_info.m_http_method_str = result[1];
 			m_query_info.m_full_request_str = result[0];
 
-			m_cache.erase(m_cache.begin(),  to_nonsonst_iterator(m_cache, result[0].second));
+            m_cache = result.suffix();
 
 			m_state = http_state_retriving_header;
 
@@ -406,7 +394,7 @@ namespace net_utils
 	}
 	//--------------------------------------------------------------------------------------------
   template<class t_connection_context>
-	bool simple_http_connection_handler<t_connection_context>::analize_cached_request_header_and_invoke_state(size_t pos)
+	bool simple_http_connection_handler<t_connection_context>::analyze_cached_request_header_and_invoke_state(size_t pos)
 	{ 
 		LOG_PRINT_L3("HTTP HEAD:\r\n" << m_cache.substr(0, pos));
 
@@ -415,7 +403,7 @@ namespace net_utils
 
 		if(!parse_cached_header(m_query_info.m_header_info, m_cache, pos))
 		{
-			LOG_ERROR_CC(m_conn_context, "simple_http_connection_handler<t_connection_context>::analize_cached_request_header_and_invoke_state(): failed to anilize request header: " << m_cache);
+			LOG_ERROR_CC(m_conn_context, "simple_http_connection_handler<t_connection_context>::analyze_cached_request_header_and_invoke_state(): failed to anilize request header: " << m_cache);
 			m_state = http_state_error;
 			return false;
 		}
@@ -429,9 +417,9 @@ namespace net_utils
 		{
 			m_state = http_state_retriving_body;
 			m_body_transfer_type = http_body_transfer_measure;
-			if(!get_len_from_content_lenght(m_query_info.m_header_info.m_content_length, m_len_summary))
+			if(!get_len_from_content_length(m_query_info.m_header_info.m_content_length, m_len_summary))
 			{
-				LOG_ERROR_CC(m_conn_context, "simple_http_connection_handler<t_connection_context>::analize_cached_request_header_and_invoke_state(): Failed to get_len_from_content_lenght();, m_query_info.m_content_length="<<m_query_info.m_header_info.m_content_length);
+				LOG_ERROR_CC(m_conn_context, "simple_http_connection_handler<t_connection_context>::analyze_cached_request_header_and_invoke_state(): Failed to get_len_from_content_length();, m_query_info.m_content_length="<<m_query_info.m_header_info.m_content_length);
 				m_state = http_state_error;
 				return false;
 			}
@@ -497,69 +485,66 @@ namespace net_utils
 		}
 		return true;
 	}
+
+	inline const std::regex rexp_http_header{
+			"\n?(?:"
+				"(Connection)|(Referer)|(Content-Length)|(Content-Type)|(Transfer-Encoding)|(Content-Encoding)|(Host)|(Cookie)|(User-Agent)|(Origin)|([\\w-]+?)"
+			") ?: ?(.*?)\r?\n(?=[^\t ])", std::regex::icase};
+
 	//--------------------------------------------------------------------------------------------
   template<class t_connection_context>
 	bool simple_http_connection_handler<t_connection_context>::parse_cached_header(http_header_info& body_info, const std::string& m_cache_to_process, size_t pos)
 	{ 
-		STATIC_REGEXP_EXPR_1(rexp_mach_field, 
-			"\n?((Connection)|(Referer)|(Content-Length)|(Content-Type)|(Transfer-Encoding)|(Content-Encoding)|(Host)|(Cookie)|(User-Agent)|(Origin)"
-			//  12            3         4                5              6                   7                  8      9        10           11
-			"|([\\w-]+?)) ?: ?((.*?)(\r?\n))[^\t ]",	
-			//11             1213   14 
-			boost::regex::icase | boost::regex::normal);
-
-		boost::smatch		result;
 		std::string::const_iterator it_current_bound = m_cache_to_process.begin();
 		std::string::const_iterator it_end_bound = m_cache_to_process.begin()+pos;
 
 		body_info.clear();
 
-		//lookup all fields and fill well-known fields
-		while( boost::regex_search( it_current_bound, it_end_bound, result, rexp_mach_field, boost::match_default) && result[0].matched) 
-		{
-			const size_t field_val = 14;
-			const size_t field_etc_name = 12;
+		constexpr size_t field_val = 12;
 
-			int i = 2; //start position = 2
-			if(result[i++].matched)//"Connection"
+		//lookup all fields and fill well-known fields
+		for (std::smatch result;
+				std::regex_search(it_current_bound, it_end_bound, result, rexp_http_header);
+				it_current_bound = result.suffix().first)
+		{
+			if(result[1].matched)//"Connection"
 				body_info.m_connection = result[field_val];
-			else if(result[i++].matched)//"Referer"
+			else if(result[2].matched)//"Referer"
 				body_info.m_referer = result[field_val];
-			else if(result[i++].matched)//"Content-Length"
+			else if(result[3].matched)//"Content-Length"
 				body_info.m_content_length = result[field_val];
-			else if(result[i++].matched)//"Content-Type"
+			else if(result[4].matched)//"Content-Type"
 				body_info.m_content_type = result[field_val];
-			else if(result[i++].matched)//"Transfer-Encoding"
+			else if(result[5].matched)//"Transfer-Encoding"
 				body_info.m_transfer_encoding = result[field_val];
-			else if(result[i++].matched)//"Content-Encoding"
+			else if(result[6].matched)//"Content-Encoding"
 				body_info.m_content_encoding = result[field_val];
-			else if(result[i++].matched)//"Host"
+			else if(result[7].matched)//"Host"
 				body_info.m_host = result[field_val];
-			else if(result[i++].matched)//"Cookie"
+			else if(result[8].matched)//"Cookie"
 				body_info.m_cookie = result[field_val];
-			else if(result[i++].matched)//"User-Agent"
+			else if(result[9].matched)//"User-Agent"
 				body_info.m_user_agent = result[field_val];
-			else if(result[i++].matched)//"Origin"
+			else if(result[10].matched)//"Origin"
 				body_info.m_origin = result[field_val];
-			else if(result[i++].matched)//e.t.c (HAVE TO BE MATCHED!)
-				body_info.m_etc_fields.push_back(std::pair<std::string, std::string>(result[field_etc_name], result[field_val]));
 			else
 			{
-				LOG_ERROR_CC(m_conn_context, "simple_http_connection_handler<t_connection_context>::parse_cached_header() not matched last entry in:" << m_cache_to_process);
+				assert(result[11].matched);
+				body_info.m_etc_fields.emplace_back(result[11], result[field_val]);
 			}
-
-			it_current_bound = result[(int)result.size()-1]. first;
 		}
 		return  true;
 	}
+
+  inline const std::regex rexp_digits{"\\d+"};
+
 	//-----------------------------------------------------------------------------------
   template<class t_connection_context>
-	bool simple_http_connection_handler<t_connection_context>::get_len_from_content_lenght(const std::string& str, size_t& OUT len)
+	bool simple_http_connection_handler<t_connection_context>::get_len_from_content_length(const std::string& str, size_t& len)
 	{
-		STATIC_REGEXP_EXPR_1(rexp_mach_field, "\\d+", boost::regex::normal);
 		std::string res;
-		boost::smatch result;
-		if(!(boost::regex_search( str, result, rexp_mach_field, boost::match_default) && result[0].matched))
+		std::smatch result;
+		if(!std::regex_search(str, result, rexp_digits))
 			return false;
 
 		try { len = boost::lexical_cast<size_t>(result[0]); }
@@ -584,14 +569,19 @@ namespace net_utils
 			response.m_response_comment = "OK";
 		}
 
+		if (response.m_body_pieces.empty())
+			response.m_body_pieces.push_back(std::move(response.m_body));
+
 		std::string response_data = get_response_header(response);
 		//LOG_PRINT_L0("HTTP_SEND: << \r\n" << response_data + response.m_body);
 
     LOG_PRINT_L3("HTTP_RESPONSE_HEAD: << \r\n" << response_data);
 		
-		m_psnd_hndlr->do_send((void*)response_data.data(), response_data.size());
-		if ((response.m_body.size() && (query_info.m_http_method != http::http_method_head)) || (query_info.m_http_method == http::http_method_options))
-			m_psnd_hndlr->do_send((void*)response.m_body.data(), response.m_body.size());
+		m_psnd_hndlr->do_send(shared_sv{std::move(response_data)});
+		if (query_info.m_http_method != http::http_method_head)
+			for (auto& body_piece : response.m_body_pieces)
+				m_psnd_hndlr->do_send(shared_sv{std::move(body_piece)});
+
 		m_psnd_hndlr->send_done();
 		return res;
 	}
@@ -605,23 +595,25 @@ namespace net_utils
 			uri_to_path = "/index.html";
 
 		//slash_to_back_slash(uri_to_path);
-		m_config.m_lock.lock();
-		std::string destination_file_path = m_config.m_folder + uri_to_path;
-		m_config.m_lock.unlock();
+    std::string destination_file_path;
+    {
+      std::lock_guard lock{m_config.m_config_mutex};
+		  destination_file_path = m_config.m_folder + uri_to_path;
+    }
 		if(!file_io_utils::load_file_to_string(destination_file_path.c_str(), response.m_body))
 		{
 			MWARNING("URI \""<< query_info.m_full_request_str.substr(0, query_info.m_full_request_str.size()-2) << "\" [" << destination_file_path << "] Not Found (404 )");
 			response.m_body = get_not_found_response_body(query_info.m_URI);
 			response.m_response_code = 404;
 			response.m_response_comment = "Not found";
-			response.m_mime_tipe = "text/html";
+			response.m_mime_type = "text/html";
 			return true;
 		}
 
 		MDEBUG(" -->> " << query_info.m_full_request_str << "\r\n<<--OK");
 		response.m_response_code = 200;
 		response.m_response_comment = "OK";
-		response.m_mime_tipe = get_file_mime_tipe(uri_to_path);
+		response.m_mime_type = get_file_mime_type(uri_to_path);
 
 		return true;
 	}
@@ -629,24 +621,33 @@ namespace net_utils
   template<class t_connection_context>
 	std::string simple_http_connection_handler<t_connection_context>::get_response_header(const http_response_info& response)
 	{
-		std::string buf = "HTTP/1.1 ";
-		buf += boost::lexical_cast<std::string>(response.m_response_code) + " " + response.m_response_comment + "\r\n" +
+		std::string buf;
+		buf.reserve(200); // Typical length seems to be around 145 bytes
+		buf += "HTTP/1.1 ";
+		buf += std::to_string(response.m_response_code);
+		buf += ' ';
+		buf += response.m_response_comment;
+		buf += "\r\n"
 			"Server: Epee-based\r\n"
 			"Content-Length: ";
-		buf += boost::lexical_cast<std::string>(response.m_body.size()) + "\r\n";
 
-		if(!response.m_mime_tipe.empty())
+		size_t size = 0;
+		for (auto& piece : response.m_body_pieces)
+			size += piece.size();
+
+		buf += std::to_string(size);
+		buf += "\r\n";
+
+		if(!response.m_mime_type.empty())
 		{
 			buf += "Content-Type: ";
-			buf += response.m_mime_tipe + "\r\n";
+			buf += response.m_mime_type;
+			buf += "\r\n";
 		}
 
-		buf += "Last-Modified: ";
-		time_t tm;
-		time(&tm);
-		buf += misc_utils::get_internet_time_str(tm) + "\r\n";
-		buf += "Accept-Ranges: bytes\r\n";
-		//Wed, 01 Dec 2010 03:27:41 GMT"
+		buf += "Last-Modified: "; //Wed, 01 Dec 2010 03:27:41 GMT"
+		buf += misc_utils::get_internet_time_str(std::time(nullptr));
+		buf += "\r\nAccept-Ranges: bytes\r\n";
 
 		string_tools::trim(m_query_info.m_header_info.m_connection);
 		if(m_query_info.m_header_info.m_connection.size())
@@ -685,7 +686,7 @@ namespace net_utils
 	}
 	//-----------------------------------------------------------------------------------
 	template<class t_connection_context>
-  std::string simple_http_connection_handler<t_connection_context>::get_file_mime_tipe(const std::string& path)
+  std::string simple_http_connection_handler<t_connection_context>::get_file_mime_type(const std::string& path)
 	{
 		std::string result;
 		std::string ext = string_tools::get_extension(path);

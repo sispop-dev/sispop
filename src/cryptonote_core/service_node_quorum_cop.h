@@ -32,8 +32,8 @@
 #include "cryptonote_protocol/cryptonote_protocol_handler_common.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "cryptonote_core/service_node_voting.h"
-
-#include "common/sispop.h"
+#include <cassert>
+#include <mutex>
 
 namespace cryptonote
 {
@@ -112,7 +112,7 @@ namespace service_nodes
     voting_pool       m_vote_pool;
     uint64_t          m_obligations_height;
     uint64_t          m_last_checkpointed_height;
-    mutable epee::critical_section m_lock;
+    mutable std::recursive_mutex m_lock;
   };
 
   int find_index_in_quorum_group(std::vector<crypto::public_key> const &group, const crypto::public_key &my_pubkey);

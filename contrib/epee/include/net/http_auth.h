@@ -27,11 +27,11 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #pragma once
 
-#include <boost/optional/optional.hpp>
-#include <boost/utility/string_ref.hpp>
+#include <optional>
 #include <cstdint>
 #include <functional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include "wipeable_string.h"
 #include "http_base.h"
@@ -74,18 +74,18 @@ namespace net_utils
       http_server_auth() : user(), rng() {}
       http_server_auth(login credentials, std::function<void(size_t, uint8_t*)> r);
 
-      //! \return Auth response, or `boost::none` iff `request` had valid auth.
-      boost::optional<http_response_info> get_response(const http_request_info& request)
+      //! \return Auth response, or `std::nullopt` iff `request` had valid auth.
+      std::optional<http_response_info> get_response(const http_request_info& request)
       {
         if (user)
           return do_get_response(request);
-        return boost::none;
+        return std::nullopt;
       }
 
     private:
-      boost::optional<http_response_info> do_get_response(const http_request_info& request);
+      std::optional<http_response_info> do_get_response(const http_request_info& request);
 
-      boost::optional<session> user;
+      std::optional<session> user;
 
       std::function<void(size_t, uint8_t*)> rng;
     };
@@ -105,7 +105,7 @@ namespace net_utils
         struct keys
         {
           using algorithm =
-            std::function<std::string(const session&, boost::string_ref, boost::string_ref)>;
+            std::function<std::string(const session&, std::string_view, std::string_view)>;
 
           keys() : nonce(), opaque(), realm(), generator() {}
           keys(std::string nonce_, std::string opaque_, std::string realm_, algorithm generator_)
@@ -154,19 +154,19 @@ namespace net_utils
         \return A HTTP "Authorization" field if `handle_401(...)` previously
           returned `kSuccess`.
       */
-      boost::optional<std::pair<std::string, std::string>> get_auth_field(
-        const boost::string_ref method, const boost::string_ref uri)
+      std::optional<std::pair<std::string, std::string>> get_auth_field(
+        std::string_view method, std::string_view uri)
       {
         if (user)
           return do_get_auth_field(method, uri);
-        return boost::none;
+        return std::nullopt;
       }
 
     private:
       status do_handle_401(const http_response_info&);
-      boost::optional<std::pair<std::string, std::string>> do_get_auth_field(boost::string_ref, boost::string_ref);
+      std::optional<std::pair<std::string, std::string>> do_get_auth_field(std::string_view, std::string_view);
 
-      boost::optional<session> user;
+      std::optional<session> user;
     };
   }
 }

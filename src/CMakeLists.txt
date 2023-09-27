@@ -89,10 +89,15 @@ if(NOT IOS)
   add_subdirectory(simplewallet)
 endif()
 
-if(CMAKE_BUILD_TYPE STREQUAL Debug)
-  if (NOT BUILD_INTEGRATION)
-    add_subdirectory(debug_utilities)
-  endif()
+# We'll always add, but with EXCLUDE_FROM_ALL if you didn't ask for them (but this lets you do a
+# `make cn_deserialize` or whatever from a build dir without needing to reconfigure).
+option(BUILD_DEBUG_UTILS "Build debug utils as part of the default build" OFF)
+if(BUILD_DEBUG_UTILS)
+  message(STATUS "Building debug utilities")
+  add_subdirectory(debug_utilities)
+else()
+  message(STATUS "Not building debug utilities by default")
+  add_subdirectory(debug_utilities EXCLUDE_FROM_ALL)
 endif()
 
 if(PER_BLOCK_CHECKPOINT)

@@ -1,6 +1,6 @@
 #pragma once
 
-#include <stdint.h>
+#include <ctime>
 #include <string>
 #include <vector>
 #include <map>
@@ -13,7 +13,7 @@ public:
     time_t t;
     size_t npoints;
     double min, max, mean, median, stddev, npskew;
-    std::vector<uint64_t> deciles;
+    std::vector<double> deciles;
   };
 
 public:

@@ -86,69 +86,18 @@ KV_SERIALIZE_MAP_CODE_END()
 KV_SERIALIZE_MAP_CODE_BEGIN(GET_TRANSACTIONS::request)
   KV_SERIALIZE(txs_hashes)
   KV_SERIALIZE(decode_as_json)
-  KV_SERIALIZE(tx_extra)
-  KV_SERIALIZE(prune)
-  KV_SERIALIZE(split)
-  KV_SERIALIZE(stake_info)
+  KV_SERIALIZE_OPT(prune, false)
+  KV_SERIALIZE_OPT(split, false)
 KV_SERIALIZE_MAP_CODE_END()
 
 
-KV_SERIALIZE_MAP_CODE_BEGIN(GET_TRANSACTIONS::extra_entry::sn_reg_info::contribution)
-  KV_SERIALIZE(wallet)
-  KV_SERIALIZE(portion)
-KV_SERIALIZE_MAP_CODE_END()
-KV_SERIALIZE_MAP_CODE_BEGIN(GET_TRANSACTIONS::extra_entry::sn_reg_info)
-  KV_SERIALIZE(contributors)
-  KV_SERIALIZE(fee)
-  KV_SERIALIZE(expiry)
-KV_SERIALIZE_MAP_CODE_END()
-KV_SERIALIZE_MAP_CODE_BEGIN(GET_TRANSACTIONS::extra_entry::state_change)
-  KV_SERIALIZE(old_dereg)
-  KV_SERIALIZE(type)
-  KV_SERIALIZE(height)
-  KV_SERIALIZE(index)
-  KV_SERIALIZE(voters)
-  KV_SERIALIZE(reasons);
-  KV_SERIALIZE(reasons_maybe);
-KV_SERIALIZE_MAP_CODE_END()
-KV_SERIALIZE_MAP_CODE_BEGIN(GET_TRANSACTIONS::extra_entry::ons_details)
-  KV_SERIALIZE(buy)
-  KV_SERIALIZE(update)
-  KV_SERIALIZE(renew)
-  KV_SERIALIZE(type)
-  KV_SERIALIZE(blocks)
-  KV_SERIALIZE(name_hash)
-  KV_SERIALIZE(prev_txid)
-  KV_SERIALIZE(value)
-  KV_SERIALIZE(owner)
-  KV_SERIALIZE(backup_owner)
-KV_SERIALIZE_MAP_CODE_END()
-KV_SERIALIZE_MAP_CODE_BEGIN(GET_TRANSACTIONS::extra_entry)
-  KV_SERIALIZE(pubkey)
-  KV_SERIALIZE(burn_amount)
-  KV_SERIALIZE(extra_nonce)
-  KV_SERIALIZE(payment_id)
-  KV_SERIALIZE(mm_depth)
-  KV_SERIALIZE(mm_root)
-  KV_SERIALIZE(additional_pubkeys)
-  KV_SERIALIZE(sn_winner)
-  KV_SERIALIZE(sn_pubkey)
-  KV_SERIALIZE(sn_registration)
-  KV_SERIALIZE(sn_contributor)
-  KV_SERIALIZE(sn_state_change)
-  KV_SERIALIZE(tx_secret_key)
-  KV_SERIALIZE(locked_key_images)
-  KV_SERIALIZE(key_image_unlock)
-  KV_SERIALIZE(ons)
-KV_SERIALIZE_MAP_CODE_END()
 KV_SERIALIZE_MAP_CODE_BEGIN(GET_TRANSACTIONS::entry)
   KV_SERIALIZE(tx_hash)
   KV_SERIALIZE(as_hex)
-  KV_SERIALIZE(as_json)
   KV_SERIALIZE(pruned_as_hex)
   KV_SERIALIZE(prunable_as_hex)
   KV_SERIALIZE(prunable_hash)
-  KV_SERIALIZE(size)
+  KV_SERIALIZE(as_json)
   KV_SERIALIZE(in_pool)
   KV_SERIALIZE(double_spend_seen)
   if (!in_pool)
@@ -163,12 +112,12 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_TRANSACTIONS::entry)
     KV_SERIALIZE(received_timestamp)
   }
   KV_SERIALIZE(blink)
-  KV_SERIALIZE(extra)
-  KV_SERIALIZE(stake_amount)
 KV_SERIALIZE_MAP_CODE_END()
 
 
 KV_SERIALIZE_MAP_CODE_BEGIN(GET_TRANSACTIONS::response)
+  KV_SERIALIZE(txs_as_hex)
+  KV_SERIALIZE(txs_as_json)
   KV_SERIALIZE(txs)
   KV_SERIALIZE(missed_tx)
   KV_SERIALIZE(status)
@@ -295,8 +244,6 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_INFO::response)
   KV_SERIALIZE(height)
   KV_SERIALIZE(target_height)
   KV_SERIALIZE(immutable_height)
-  KV_SERIALIZE(pulse_ideal_timestamp)
-  KV_SERIALIZE(pulse_target_timestamp)
   KV_SERIALIZE(difficulty)
   KV_SERIALIZE(target)
   KV_SERIALIZE(tx_count)
@@ -304,11 +251,12 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_INFO::response)
   KV_SERIALIZE(alt_blocks_count)
   KV_SERIALIZE(outgoing_connections_count)
   KV_SERIALIZE(incoming_connections_count)
+  KV_SERIALIZE(rpc_connections_count)
   KV_SERIALIZE(white_peerlist_size)
   KV_SERIALIZE(grey_peerlist_size)
   KV_SERIALIZE(mainnet)
   KV_SERIALIZE(testnet)
-  KV_SERIALIZE(devnet)
+  KV_SERIALIZE(stagenet)
   KV_SERIALIZE(nettype)
   KV_SERIALIZE(top_block_hash)
   KV_SERIALIZE(immutable_block_hash)
@@ -320,7 +268,7 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_INFO::response)
   KV_SERIALIZE(start_time)
   KV_SERIALIZE(service_node)
   KV_SERIALIZE(last_storage_server_ping)
-  KV_SERIALIZE(last_lokinet_ping)
+  KV_SERIALIZE(last_sispopnet_ping)
   KV_SERIALIZE(free_space)
   KV_SERIALIZE(offline)
   KV_SERIALIZE(untrusted)
@@ -328,6 +276,7 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_INFO::response)
   KV_SERIALIZE(height_without_bootstrap)
   KV_SERIALIZE(was_bootstrap_ever_used)
   KV_SERIALIZE(database_size)
+  KV_SERIALIZE(update_available)
   KV_SERIALIZE(version)
   KV_SERIALIZE(status_line)
 KV_SERIALIZE_MAP_CODE_END()
@@ -434,7 +383,6 @@ KV_SERIALIZE_MAP_CODE_END()
 
 KV_SERIALIZE_MAP_CODE_BEGIN(GET_LAST_BLOCK_HEADER::request)
   KV_SERIALIZE_OPT(fill_pow_hash, false);
-  KV_SERIALIZE_OPT(get_tx_hashes, false);
 KV_SERIALIZE_MAP_CODE_END()
 
 
@@ -449,7 +397,6 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_BLOCK_HEADER_BY_HASH::request)
   KV_SERIALIZE(hash)
   KV_SERIALIZE(hashes)
   KV_SERIALIZE_OPT(fill_pow_hash, false);
-  KV_SERIALIZE_OPT(get_tx_hashes, false);
 KV_SERIALIZE_MAP_CODE_END()
 
 
@@ -463,15 +410,12 @@ KV_SERIALIZE_MAP_CODE_END()
 
 KV_SERIALIZE_MAP_CODE_BEGIN(GET_BLOCK_HEADER_BY_HEIGHT::request)
   KV_SERIALIZE(height)
-  KV_SERIALIZE(heights)
   KV_SERIALIZE_OPT(fill_pow_hash, false);
-  KV_SERIALIZE_OPT(get_tx_hashes, false);
 KV_SERIALIZE_MAP_CODE_END()
 
 
 KV_SERIALIZE_MAP_CODE_BEGIN(GET_BLOCK_HEADER_BY_HEIGHT::response)
   KV_SERIALIZE(block_header)
-  KV_SERIALIZE(block_headers)
   KV_SERIALIZE(status)
   KV_SERIALIZE(untrusted)
 KV_SERIALIZE_MAP_CODE_END()
@@ -570,20 +514,12 @@ KV_SERIALIZE_MAP_CODE_BEGIN(tx_info)
   KV_SERIALIZE(do_not_relay)
   KV_SERIALIZE(double_spend_seen)
   KV_SERIALIZE(tx_blob)
-  KV_SERIALIZE(extra)
-  KV_SERIALIZE(stake_amount)
 KV_SERIALIZE_MAP_CODE_END()
 
 
 KV_SERIALIZE_MAP_CODE_BEGIN(spent_key_image_info)
   KV_SERIALIZE(id_hash)
   KV_SERIALIZE(txs_hashes)
-KV_SERIALIZE_MAP_CODE_END()
-
-
-KV_SERIALIZE_MAP_CODE_BEGIN(GET_TRANSACTION_POOL::request)
-  KV_SERIALIZE(tx_extra)
-  KV_SERIALIZE(stake_info)
 KV_SERIALIZE_MAP_CODE_END()
 
 
@@ -596,7 +532,6 @@ KV_SERIALIZE_MAP_CODE_END()
 
 
 KV_SERIALIZE_MAP_CODE_BEGIN(GET_TRANSACTION_POOL_HASHES_BIN::request)
-  KV_SERIALIZE_OPT(blinked_txs_only, false)
   KV_SERIALIZE_OPT(long_poll, false)
   KV_SERIALIZE_VAL_POD_AS_BLOB_OPT(tx_pool_checksum, crypto::hash{})
 KV_SERIALIZE_MAP_CODE_END()
@@ -663,7 +598,6 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_BLOCK_HEADERS_RANGE::request)
   KV_SERIALIZE(start_height)
   KV_SERIALIZE(end_height)
   KV_SERIALIZE_OPT(fill_pow_hash, false);
-  KV_SERIALIZE_OPT(get_tx_hashes, false);
 KV_SERIALIZE_MAP_CODE_END()
 
 
@@ -840,9 +774,6 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_BASE_FEE_ESTIMATE::response)
   KV_SERIALIZE(status)
   KV_SERIALIZE(fee_per_byte)
   KV_SERIALIZE(fee_per_output)
-  KV_SERIALIZE(blink_fee_per_byte)
-  KV_SERIALIZE(blink_fee_per_output)
-  KV_SERIALIZE(blink_fee_fixed)
   KV_SERIALIZE_OPT(quantization_mask, (uint64_t)1)
   KV_SERIALIZE(untrusted)
 KV_SERIALIZE_MAP_CODE_END()
@@ -861,6 +792,23 @@ KV_SERIALIZE_MAP_CODE_END()
 KV_SERIALIZE_MAP_CODE_BEGIN(GET_ALTERNATE_CHAINS::response)
   KV_SERIALIZE(status)
   KV_SERIALIZE(chains)
+KV_SERIALIZE_MAP_CODE_END()
+
+
+KV_SERIALIZE_MAP_CODE_BEGIN(UPDATE::request)
+  KV_SERIALIZE(command);
+  KV_SERIALIZE(path);
+KV_SERIALIZE_MAP_CODE_END()
+
+
+KV_SERIALIZE_MAP_CODE_BEGIN(UPDATE::response)
+  KV_SERIALIZE(status)
+  KV_SERIALIZE(update)
+  KV_SERIALIZE(version)
+  KV_SERIALIZE(user_uri)
+  KV_SERIALIZE(auto_uri)
+  KV_SERIALIZE(hash)
+  KV_SERIALIZE(path)
 KV_SERIALIZE_MAP_CODE_END()
 
 
@@ -1065,6 +1013,19 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_SERVICE_PRIVKEYS::response)
 KV_SERIALIZE_MAP_CODE_END()
 
 
+KV_SERIALIZE_MAP_CODE_BEGIN(PERFORM_BLOCKCHAIN_TEST::request)
+  KV_SERIALIZE(max_height)
+  KV_SERIALIZE(seed)
+KV_SERIALIZE_MAP_CODE_END()
+
+
+KV_SERIALIZE_MAP_CODE_BEGIN(PERFORM_BLOCKCHAIN_TEST::response)
+  KV_SERIALIZE(status)
+  KV_SERIALIZE(res_height)
+KV_SERIALIZE_MAP_CODE_END()
+
+
+
 KV_SERIALIZE_MAP_CODE_BEGIN(service_node_contribution)
   KV_SERIALIZE(key_image)
   KV_SERIALIZE(key_image_pub_key)
@@ -1116,11 +1077,11 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_SERVICE_NODES::requested_fields_t)
 
     KV_SERIALIZE(last_uptime_proof)
     KV_SERIALIZE(storage_server_reachable)
-    KV_SERIALIZE(storage_server_first_unreachable)
-    KV_SERIALIZE(storage_server_last_unreachable)
-    KV_SERIALIZE(storage_server_last_reachable)
-    KV_SERIALIZE(checkpoint_participation)
-    KV_SERIALIZE(pulse_participation)
+    KV_SERIALIZE(storage_server_reachable_timestamp)
+    KV_SERIALIZE(version_major)
+    KV_SERIALIZE(version_minor)
+    KV_SERIALIZE(version_patch)
+    KV_SERIALIZE(votes)
   }
 KV_SERIALIZE_MAP_CODE_END()
 
@@ -1137,7 +1098,7 @@ KV_SERIALIZE_MAP_CODE_END()
 
 KV_SERIALIZE_MAP_CODE_BEGIN(GET_SERVICE_NODES::response::entry)
   const auto* res = stg.template get_context<response>();
-  const bool all = !is_store || !res || res->fields.all;
+  const bool all = !res || res->fields.all;
 
   #define KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(var) if (all || res->fields.var) KV_SERIALIZE(var)
 
@@ -1168,11 +1129,11 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_SERVICE_NODES::response::entry)
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(pubkey_x25519);
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(last_uptime_proof);
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(storage_server_reachable);
-  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(storage_server_first_unreachable)
-  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(storage_server_last_unreachable)
-  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(storage_server_last_reachable)
-  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(checkpoint_participation);
-  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(pulse_participation);
+  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(storage_server_reachable_timestamp);
+  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(version_major);
+  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(version_minor);
+  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(version_patch);
+  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(votes);
 KV_SERIALIZE_MAP_CODE_END()
 
 
@@ -1203,13 +1164,14 @@ KV_SERIALIZE_MAP_CODE_END()
 
 
 KV_SERIALIZE_MAP_CODE_BEGIN(STORAGE_SERVER_PING::request)
-  KV_SERIALIZE(version);
-  KV_SERIALIZE(https_port);
-  KV_SERIALIZE(omq_port);
+  KV_SERIALIZE(version_major);
+  KV_SERIALIZE(version_minor);
+  KV_SERIALIZE(version_patch);
+  KV_SERIALIZE(storage_lmq_port);
 KV_SERIALIZE_MAP_CODE_END()
 
 
-KV_SERIALIZE_MAP_CODE_BEGIN(LOKINET_PING::request)
+KV_SERIALIZE_MAP_CODE_BEGIN(SISPOPNET_PING::request)
   KV_SERIALIZE(version);
 KV_SERIALIZE_MAP_CODE_END()
 
@@ -1253,7 +1215,7 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_CHECKPOINTS::request)
 KV_SERIALIZE_MAP_CODE_END()
 
 
-KV_SERIALIZE_MAP_CODE_BEGIN(GET_CHECKPOINTS::quorum_signature_serialized)
+KV_SERIALIZE_MAP_CODE_BEGIN(GET_CHECKPOINTS::voter_to_signature_serialized)
   KV_SERIALIZE(voter_index);
   KV_SERIALIZE(signature);
 KV_SERIALIZE_MAP_CODE_END()
@@ -1301,70 +1263,59 @@ KV_SERIALIZE_MAP_CODE_BEGIN(REPORT_PEER_SS_STATUS::request)
 KV_SERIALIZE_MAP_CODE_END()
 
 
-KV_SERIALIZE_MAP_CODE_BEGIN(ONS_NAMES_TO_OWNERS::request_entry)
+KV_SERIALIZE_MAP_CODE_BEGIN(LNS_NAMES_TO_OWNERS::request_entry)
   KV_SERIALIZE(name_hash)
   KV_SERIALIZE(types)
 KV_SERIALIZE_MAP_CODE_END()
 
 
-KV_SERIALIZE_MAP_CODE_BEGIN(ONS_NAMES_TO_OWNERS::request)
+KV_SERIALIZE_MAP_CODE_BEGIN(LNS_NAMES_TO_OWNERS::request)
   KV_SERIALIZE(entries)
-  KV_SERIALIZE(include_expired)
 KV_SERIALIZE_MAP_CODE_END()
 
 
-KV_SERIALIZE_MAP_CODE_BEGIN(ONS_NAMES_TO_OWNERS::response_entry)
+KV_SERIALIZE_MAP_CODE_BEGIN(LNS_NAMES_TO_OWNERS::response_entry)
   KV_SERIALIZE(entry_index)
-  KV_SERIALIZE_ENUM(type)
+  KV_SERIALIZE(type)
   KV_SERIALIZE(name_hash)
   KV_SERIALIZE(owner)
   KV_SERIALIZE(backup_owner)
   KV_SERIALIZE(encrypted_value)
+  KV_SERIALIZE(register_height)
   KV_SERIALIZE(update_height)
-  KV_SERIALIZE(expiration_height)
   KV_SERIALIZE(txid)
+  KV_SERIALIZE(prev_txid)
 KV_SERIALIZE_MAP_CODE_END()
 
 
-KV_SERIALIZE_MAP_CODE_BEGIN(ONS_NAMES_TO_OWNERS::response)
+KV_SERIALIZE_MAP_CODE_BEGIN(LNS_NAMES_TO_OWNERS::response)
   KV_SERIALIZE(entries)
   KV_SERIALIZE(status)
 KV_SERIALIZE_MAP_CODE_END()
 
-KV_SERIALIZE_MAP_CODE_BEGIN(ONS_OWNERS_TO_NAMES::request)
+
+KV_SERIALIZE_MAP_CODE_BEGIN(LNS_OWNERS_TO_NAMES::request)
   KV_SERIALIZE(entries)
-  KV_SERIALIZE(include_expired)
 KV_SERIALIZE_MAP_CODE_END()
 
 
-KV_SERIALIZE_MAP_CODE_BEGIN(ONS_OWNERS_TO_NAMES::response_entry)
+KV_SERIALIZE_MAP_CODE_BEGIN(LNS_OWNERS_TO_NAMES::response_entry)
   KV_SERIALIZE(request_index)
-  KV_SERIALIZE_ENUM(type)
+  KV_SERIALIZE(type)
   KV_SERIALIZE(name_hash)
   KV_SERIALIZE(owner)
   KV_SERIALIZE(backup_owner)
   KV_SERIALIZE(encrypted_value)
+  KV_SERIALIZE(register_height)
   KV_SERIALIZE(update_height)
-  KV_SERIALIZE(expiration_height)
   KV_SERIALIZE(txid)
+  KV_SERIALIZE(prev_txid)
 KV_SERIALIZE_MAP_CODE_END()
 
 
-KV_SERIALIZE_MAP_CODE_BEGIN(ONS_OWNERS_TO_NAMES::response)
+KV_SERIALIZE_MAP_CODE_BEGIN(LNS_OWNERS_TO_NAMES::response)
   KV_SERIALIZE(entries)
   KV_SERIALIZE(status)
-KV_SERIALIZE_MAP_CODE_END()
-
-
-KV_SERIALIZE_MAP_CODE_BEGIN(ONS_RESOLVE::request)
-  KV_SERIALIZE(name_hash)
-  KV_SERIALIZE_OPT(type, static_cast<uint16_t>(-1))
-KV_SERIALIZE_MAP_CODE_END()
-
-
-KV_SERIALIZE_MAP_CODE_BEGIN(ONS_RESOLVE::response)
-  KV_SERIALIZE(encrypted_value)
-  KV_SERIALIZE(nonce)
 KV_SERIALIZE_MAP_CODE_END()
 
 
@@ -1373,4 +1324,4 @@ KV_SERIALIZE_MAP_CODE_BEGIN(FLUSH_CACHE::request)
   KV_SERIALIZE_OPT(bad_blocks, false)
 KV_SERIALIZE_MAP_CODE_END()
 
-}
+}}

@@ -37,7 +37,7 @@ class gen_block_verification_base : public test_chain_unit_base
 public:
   gen_block_verification_base()
   {
-    REGISTER_CALLBACK("check_block_purged", gen_block_verification_base<invalid_block_idx>::check_block_purged);
+    REGISTER_CALLBACK(check_block_purged);
   }
 
   bool check_block_verification_context(const cryptonote::block_verification_context& bvc, size_t event_idx, const cryptonote::block& /*blk*/)
@@ -65,7 +65,7 @@ struct gen_block_accepted_base : public test_chain_unit_base
 {
   gen_block_accepted_base()
   {
-    REGISTER_CALLBACK("check_block_accepted", gen_block_accepted_base::check_block_accepted);
+    REGISTER_CALLBACK(check_block_accepted);
   }
 
   bool check_block_accepted(cryptonote::core& c, size_t /*ev_index*/, const std::vector<test_event_entry>& /*events*/)

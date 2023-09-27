@@ -29,8 +29,6 @@
 # Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 
-# This is broken up into two parts: first we check for miniupnp, compile it if we can't
-# find it, and thereafter we check for libunbound, and compile it if we can't find it.
 # We always compile if we are building statically to reduce static dependency issues...
 # ...except for FreeBSD, because FreeBSD is a special case that doesn't play well with
 # others.
@@ -39,7 +37,7 @@ if(NOT STATIC AND NOT BUILD_STATIC_DEPS)
   find_package(PkgConfig REQUIRED)
   pkg_check_modules(MINIUPNPC miniupnpc>=2.1)
   pkg_check_modules(UNBOUND libunbound)
-  pkg_check_modules(SISPIPMQ libsispopmq>=1.2)
+  pkg_check_modules(SISPOPMQ libsispopmq>=1.2)
 endif()
 
 if(MINIUPNPC_FOUND)

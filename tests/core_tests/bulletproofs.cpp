@@ -34,7 +34,6 @@
 #include "bulletproofs.h"
 #include "device/device.hpp"
 
-using namespace epee;
 using namespace crypto;
 using namespace cryptonote;
 
@@ -51,10 +50,26 @@ bool gen_bp_tx_validation_base::generate_with(std::vector<test_event_entry>& eve
   GENERATE_ACCOUNT(miner_account);
   MAKE_GENESIS_BLOCK(events, blk_0, miner_account, ts_start);
 
+  int target_hf = cryptonote::network_version_count - 1;
+  // NOTE: Monero tests use multiple null terminated entries in their arrays
+  {
+    int amounts_paid_len = 0;
+    for (int i = 0; amounts_paid[i] != (uint64_t)-1; ++i)
+      ++amounts_paid_len;
+
+    if (amounts_paid_len == 1) // NOTE: Number of destinations/outputs to generate
+    {
+        // NOTE: If we want 1 output then, in HF_VERSION_MIN_2_OUTPUTS, we enforce
+        // 2 outputs causing the test to fail. For that case, we set the target
+        // hardfork to 1 before.
+        target_hf = HF_VERSION_MIN_2_OUTPUTS - 1;
+    }
+  }
+
   std::vector<std::pair<uint8_t, uint64_t>> hard_forks = {
       std::make_pair(7, 0),
       std::make_pair(8, 1),
-      std::make_pair(cryptonote::network_version_count - 1, NUM_UNLOCKED_BLOCKS + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW + 1),
+      std::make_pair(target_hf, NUM_UNLOCKED_BLOCKS + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW + 1),
   };
   event_replay_settings settings = {};
   settings.hard_forks            = hard_forks;
@@ -91,7 +106,6 @@ bool gen_bp_tx_validation_base::generate_with(std::vector<test_event_entry>& eve
         "Failed to generate block");
     events.push_back(blocks[n]);
     prev_block = blocks + n;
-    LOG_PRINT_L0("Initial miner tx " << n << ": " << obj_to_json_str(blocks[n].miner_tx));
   }
 
   // rewind
@@ -163,7 +177,8 @@ bool gen_bp_tx_validation_base::generate_with(std::vector<test_event_entry>& eve
 
     // NOTE: Monero tests use multiple null terminated entries in their arrays
     int amounts_paid_len = 0;
-    for(int i = 0; amounts_paid[i] != (uint64_t)-1; ++i) ++amounts_paid_len;
+    for (int i = 0; amounts_paid[i] != (uint64_t)-1; ++i)
+      ++amounts_paid_len;
 
     uint64_t change_amount;
     fill_tx_sources_and_multi_destinations(events,
@@ -230,7 +245,25 @@ bool gen_bp_tx_validation_base::generate_with(std::vector<test_event_entry>& eve
       return false;
     }
 
-    starting_rct_tx_hashes.push_back(get_transaction_hash(rct_txes.back()));
+    // If we are constructing an invalid tx serialization may fail, in which case
+    // get_transaction_hash will throw (before Loki 8.x it returned a garbage hash made from the
+    // partially serialized transaction), but we still want to build a block with it, so if that
+    // happens just use a mostly random hash value.
+    crypto::hash tx_hash;
+    try {
+      tx_hash = get_transaction_hash(rct_txes.back());
+    } catch (...) {
+      // Serialization failed, so just make a random value.  We start it with 0123456789abcdef so
+      // that it looks obviously fake, then fill the rest with randomness (so that it is still
+      // unique).
+      for (size_t i = 0; i < 8; i++)
+        tx_hash.data[i] = 0x01 + (0x22 * i);
+      static std::mt19937_64 rng{std::random_device{}()};
+      std::uniform_int_distribution<char> unif{std::numeric_limits<char>::min()};
+      for (size_t i = 8; i < sizeof(tx_hash.data); i++)
+        tx_hash.data[i] = unif(rng);
+    }
+    starting_rct_tx_hashes.push_back(tx_hash);
     LOG_PRINT_L0("Test tx: " << obj_to_json_str(rct_txes.back()));
 
     uint64_t total_amount_encoded = 0;

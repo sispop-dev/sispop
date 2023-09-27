@@ -36,14 +36,12 @@
 #include "cryptonote_core/cryptonote_core.h"
 #include "blockchain_objects.h"
 #include "blockchain_db/blockchain_db.h"
-#include "blockchain_db/db_types.h"
 #include "version.h"
 
 #undef SISPOP_DEFAULT_LOG_CATEGORY
 #define SISPOP_DEFAULT_LOG_CATEGORY "bcutil"
 
 namespace po = boost::program_options;
-using namespace epee;
 using namespace cryptonote;
 
 static std::map<uint64_t, uint64_t> load_outputs(const std::string &filename)
@@ -105,21 +103,15 @@ int main(int argc, char* argv[])
 
   epee::string_tools::set_module_name_and_folder(argv[0]);
 
-  std::string default_db_type = "lmdb";
-
-  std::string available_dbs = cryptonote::blockchain_db_types(", ");
-  available_dbs = "available: " + available_dbs;
-
   uint32_t log_level = 0;
 
   tools::on_startup();
 
-  po::options_description desc_cmd_only("Command line options");
-  po::options_description desc_cmd_sett("Command line options and settings options");
+  auto opt_size = command_line::boost_option_sizes();
+
+  po::options_description desc_cmd_only("Command line options", opt_size.first, opt_size.second);
+  po::options_description desc_cmd_sett("Command line options and settings options", opt_size.first, opt_size.second);
   const command_line::arg_descriptor<std::string> arg_log_level  = {"log-level",  "0-4 or categories", ""};
-  const command_line::arg_descriptor<std::string> arg_database = {
-    "database", available_dbs.c_str(), default_db_type
-  };
   const command_line::arg_descriptor<bool> arg_verbose  = {"verbose", "Verbose output", false};
   const command_line::arg_descriptor<bool> arg_dry_run  = {"dry-run", "Do not actually prune", false};
   const command_line::arg_descriptor<std::string> arg_input = {"input", "Path to the known spent outputs file"};
@@ -128,7 +120,6 @@ int main(int argc, char* argv[])
   command_line::add_arg(desc_cmd_sett, cryptonote::arg_testnet_on);
   command_line::add_arg(desc_cmd_sett, cryptonote::arg_stagenet_on);
   command_line::add_arg(desc_cmd_sett, arg_log_level);
-  command_line::add_arg(desc_cmd_sett, arg_database);
   command_line::add_arg(desc_cmd_sett, arg_verbose);
   command_line::add_arg(desc_cmd_sett, arg_dry_run);
   command_line::add_arg(desc_cmd_sett, arg_input);
@@ -150,7 +141,7 @@ int main(int argc, char* argv[])
 
   if (command_line::get_arg(vm, command_line::arg_help))
   {
-    std::cout << "Sispop '" << SISPOP_RELEASE_NAME << "' (v" << SISPOP_VERSION_FULL << ")" << ENDL << ENDL;
+    std::cout << "Sispop '" << SISPOP_RELEASE_NAME << "' (v" << SISPOP_VERSION_FULL << ")\n\n";
     std::cout << desc_options << std::endl;
     return 1;
   }
@@ -170,25 +161,17 @@ int main(int argc, char* argv[])
   bool opt_verbose = command_line::get_arg(vm, arg_verbose);
   bool opt_dry_run = command_line::get_arg(vm, arg_dry_run);
 
-  std::string db_type = command_line::get_arg(vm, arg_database);
-  if (!cryptonote::blockchain_valid_db_type(db_type))
-  {
-    std::cerr << "Invalid database type: " << db_type << std::endl;
-    return 1;
-  }
-
   const std::string input = command_line::get_arg(vm, arg_input);
 
   LOG_PRINT_L0("Initializing source blockchain (BlockchainDB)");
   blockchain_objects_t blockchain_objects = {};
   Blockchain *core_storage = &blockchain_objects.m_blockchain;
-  BlockchainDB *db = new_db(db_type);
+  BlockchainDB *db = new_db();
   if (db == NULL)
   {
-    LOG_ERROR("Attempted to use non-existent database type: " << db_type);
-    throw std::runtime_error("Attempting to use non-existent database type");
+    LOG_ERROR("Failed to initialize a database");
+    throw std::runtime_error("Failed to initialize a database");
   }
-  LOG_PRINT_L0("database: " << db_type);
 
   const std::string filename = (boost::filesystem::path(opt_data_dir) / db->get_db_name()).string();
   LOG_PRINT_L0("Loading blockchain from folder " << filename << " ...");
@@ -214,12 +197,12 @@ int main(int argc, char* argv[])
 
     LOG_PRINT_L0("Scanning for known spent data...");
     db->for_all_transactions([&](const crypto::hash &txid, const cryptonote::transaction &tx){
-      const bool miner_tx = tx.vin.size() == 1 && tx.vin[0].type() == typeid(txin_gen);
+      const bool miner_tx = tx.vin.size() == 1 && std::holds_alternative<txin_gen>(tx.vin[0]);
       for (const auto &in: tx.vin)
       {
-        if (in.type() != typeid(txin_to_key))
+        if (!std::holds_alternative<txin_to_key>(in))
           continue;
-        const auto &txin = boost::get<txin_to_key>(in);
+        const auto& txin = std::get<txin_to_key>(in);
         if (txin.amount == 0)
           continue;
 
@@ -233,7 +216,7 @@ int main(int argc, char* argv[])
           amount = 0;
         if (amount == 0)
           continue;
-        if (out.target.type() != typeid(txout_to_key))
+        if (!std::holds_alternative<txout_to_key>(out.target))
           continue;
 
         outputs[amount].first++;
@@ -267,7 +250,7 @@ int main(int argc, char* argv[])
     uint64_t num_outputs = db->get_num_outputs(i->first);
     num_total_outputs += num_outputs;
     num_known_spent_outputs += i->second;
-    if (i->first == 0 || is_valid_decomposed_amount(i->first))
+    if (i->first == 0)
     {
       if (opt_verbose)
         MINFO("Ignoring output value " << i->first << ", with " << num_outputs << " outputs");

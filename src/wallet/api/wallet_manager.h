@@ -46,7 +46,8 @@ public:
                                        const std::string &mnemonic,
                                        NetworkType nettype,
                                        uint64_t restoreHeight,
-                                       uint64_t kdf_rounds = 1) override;
+                                       uint64_t kdf_rounds = 1,
+                                       const std::string &seed_offset = {}) override;
     virtual Wallet * createWalletFromKeys(const std::string &path,
                                              const std::string &password,
                                              const std::string &language,
@@ -88,14 +89,13 @@ public:
     double miningHashRate() override;
     uint64_t blockTarget() override;
     bool isMining() override;
-    bool startMining(const std::string &address, uint32_t threads = 1, bool background_mining = false, bool ignore_battery = true) override;
+    bool startMining(const std::string &address, uint32_t threads = 1) override;
     bool stopMining() override;
     std::string resolveOpenAlias(const std::string &address, bool &dnssec_valid) const override;
 
 private:
     WalletManagerImpl() {}
     friend struct WalletManagerFactory;
-    std::string m_daemonAddress;
     epee::net_utils::http::http_simple_client m_http_client;
     std::string m_errorString;
 };

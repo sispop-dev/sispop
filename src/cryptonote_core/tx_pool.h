@@ -36,10 +36,10 @@
 #include <unordered_set>
 #include <queue>
 #include <boost/serialization/version.hpp>
+#include <functional>
 
 #include "string_tools.h"
-#include "syncobj.h"
-#include "math_helper.h"
+#include "common/periodic_task.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "cryptonote_basic/verification_context.h"
 #include "blockchain_db/blockchain_db.h"
@@ -321,6 +321,16 @@ namespace cryptonote
     void on_idle();
 
     /**
+     * Specifies a callback to invoke when one or more transactions is added to the mempool.  Note
+     * that, because incoming blocks have their transactions added to the mempool, this *does*
+     * trigger for txes that arrive in new blocks.
+     *
+     * It does not, however, trigger for transactions that fail verification, that are flagged
+     * do-not-relay, or that are returned to the pool from a block (i.e. when doing a reorg).
+     */
+    void add_notify(std::function<void(const crypto::hash&, const transaction&, const std::string& blob, const tx_pool_options&)> notify);
+
+    /**
      * @brief locks the transaction pool
      */
     void lock() const { m_transactions_lock.lock(); }
@@ -335,23 +345,17 @@ namespace cryptonote
      */
     bool try_lock() const { return m_transactions_lock.try_lock(); }
 
-    /* These are needed as a workaround for boost::lock not considering the type lockable if const
-     * versions are defined.  When we switch to std::lock these can go. */
-    void lock() { m_transactions_lock.lock(); }
-    void unlock() { m_transactions_lock.unlock(); }
-    bool try_lock() { return m_transactions_lock.try_lock(); }
-
     /**
      * @brief obtains a unique lock on the approved blink tx pool
      */
     template <typename... Args>
-    auto blink_unique_lock(Args &&...args) const { return std::unique_lock<boost::shared_mutex>{m_blinks_mutex, std::forward<Args>(args)...}; }
+    auto blink_unique_lock(Args &&...args) const { return std::unique_lock{m_blinks_mutex, std::forward<Args>(args)...}; }
 
     /**
      * @brief obtains a shared lock on the approved blink tx pool
      */
     template <typename... Args>
-    auto blink_shared_lock(Args &&...args) const { return std::shared_lock<boost::shared_mutex>{m_blinks_mutex, std::forward<Args>(args)...}; }
+    auto blink_shared_lock(Args &&...args) const { return std::shared_lock{m_blinks_mutex, std::forward<Args>(args)...}; }
 
 
     // load/store operations
@@ -416,7 +420,7 @@ namespace cryptonote
      * @param include_unrelayed_txes include unrelayed txes in the result
      *
      */
-    void get_transaction_backlog(std::vector<tx_backlog_entry>& backlog, bool include_unrelayed_txes = true) const;
+    void get_transaction_backlog(std::vector<rpc::tx_backlog_entry>& backlog, bool include_unrelayed_txes = true) const;
 
     /**
      * @brief get a summary statistics of all transaction hashes in the pool
@@ -425,7 +429,7 @@ namespace cryptonote
      * @param include_unrelayed_txes include unrelayed txes in the result
      *
      */
-    void get_transaction_stats(struct txpool_stats& stats, bool include_unrelayed_txes = true) const;
+    void get_transaction_stats(struct rpc::txpool_stats& stats, bool include_unrelayed_txes = true) const;
 
     /**
      * @brief get information about all transactions and key images in the pool
@@ -438,7 +442,7 @@ namespace cryptonote
      *
      * @return true
      */
-    bool get_transactions_and_spent_keys_info(std::vector<tx_info>& tx_infos, std::vector<spent_key_image_info>& key_image_infos, bool include_sensitive_data = true) const;
+    bool get_transactions_and_spent_keys_info(std::vector<rpc::tx_info>& tx_infos, std::vector<rpc::spent_key_image_info>& key_image_infos, bool include_sensitive_data = true) const;
 
     /**
      * @brief get information about all transactions and key images in the pool
@@ -460,7 +464,7 @@ namespace cryptonote
      *
      * @return true
      */
-    bool check_for_key_images(const std::vector<crypto::key_image>& key_images, std::vector<bool> spent) const;
+    bool check_for_key_images(const std::vector<crypto::key_image>& key_images, std::vector<bool>& spent) const;
 
     /**
      * @brief get a specific transaction from the pool
@@ -555,6 +559,7 @@ namespace cryptonote
      * @param bytes the max cumulative txpool weight in bytes
      */
     void set_txpool_max_weight(size_t bytes);
+
   private:
 
     /**
@@ -722,20 +727,23 @@ namespace cryptonote
      */
     typedef std::unordered_map<crypto::key_image, std::unordered_set<crypto::hash> > key_images_container;
 
-    mutable boost::recursive_mutex m_transactions_lock;  //!< mutex for the pool
+    mutable std::recursive_mutex m_transactions_lock;  //!< mutex for the pool
 
     //! container for spent key images from the transactions in the pool
     key_images_container m_spent_key_images;  
 
     //TODO: this time should be a named constant somewhere, not hard-coded
     //! interval on which to check for stale/"stuck" transactions
-    epee::math_helper::periodic_task m_remove_stuck_tx_interval{30s};
+    tools::periodic_task m_remove_stuck_tx_interval{30s};
 
     //TODO: look into doing this better
     //!< container for transactions organized by fee per size and receive time
     sorted_tx_container m_txs_by_fee_and_receive_time;
 
     std::atomic<uint64_t> m_cookie; //!< incremented at each change
+
+    /// Callbacks for new tx notifications
+    std::vector<std::function<void(const crypto::hash&, const transaction&, const std::string& blob, const tx_pool_options&)>> m_tx_notify;
 
     /**
      * @brief get an iterator to a transaction in the sorted container
@@ -764,7 +772,7 @@ namespace cryptonote
 
     std::unordered_map<crypto::hash, transaction> m_parsed_tx_cache;
 
-    mutable boost::shared_mutex m_blinks_mutex;
+    mutable std::shared_mutex m_blinks_mutex;
 
     // Contains blink metadata for approved blink transactions. { txhash => blink_tx, ... }.
     mutable std::unordered_map<crypto::hash, std::shared_ptr<cryptonote::blink_tx>> m_blinks;

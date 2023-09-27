@@ -42,15 +42,6 @@ extern "C" {
 #include "skein.h"
 }
 
-#include <sys/auxv.h>
-#include <asm/hwcap.h>
-#include <arm_neon.h>
-
-static bool hw_check_aes()
-{
-	return (getauxval(AT_HWCAP) & HWCAP_AES) != 0;
-}
-
 extern "C" const bool cpu_aes_enabled = hw_check_aes() && !force_software_aes();
 
 extern const uint8_t saes_sbox[256];

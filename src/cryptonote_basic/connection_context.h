@@ -31,8 +31,10 @@
 #pragma once
 #include <unordered_set>
 #include <atomic>
+#include <chrono>
 #include "net/net_utils_base.h"
 #include "copyable_atomic.h"
+#include "crypto/hash.h"
 
 namespace cryptonote
 {
@@ -56,7 +58,7 @@ namespace cryptonote
     uint32_t m_drop_count{0}; // How many times we've wanted to drop
     uint64_t m_remote_blockchain_height{0};
     uint64_t m_last_response_height{0};
-    boost::posix_time::ptime m_last_request_time;
+    std::optional<std::chrono::steady_clock::time_point> m_last_request_time;
     epee::copyable_atomic m_callback_request_count{0}; //in debug purpose: problem with double callback rise
     crypto::hash m_last_known_hash{crypto::null_hash};
     uint32_t m_pruning_seed{0};

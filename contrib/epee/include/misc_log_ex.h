@@ -40,6 +40,9 @@
 #define MAX_LOG_FILE_SIZE 104850000 // 100 MB - 7600 bytes
 #define MAX_LOG_FILES 50
 
+#define CLOG_ENABLED(level, cat) ELPP->vRegistry()->allowed(el::Level::level, cat)
+#define LOG_ENABLED(level) CLOG_ENABLED(level, LOKI_DEFAULT_LOG_CATEGORY)
+
 #define MCLOG_TYPE(level, cat, type, x) do { \
     if (ELPP->vRegistry()->allowed(level, cat)) { \
       el::base::Writer(level, __FILE__, __LINE__, ELPP_FUNC, type).construct(cat) << x; \
@@ -104,16 +107,6 @@
 #define LOG_PRINT_L3(x) MTRACE(x)
 #define LOG_PRINT_L4(x) MTRACE(x)
 
-#define _dbg3(x) MTRACE(x)
-#define _dbg2(x) MDEBUG(x)
-#define _dbg1(x) MDEBUG(x)
-#define _info(x) MINFO(x)
-#define _note(x) MDEBUG(x)
-#define _fact(x) MDEBUG(x)
-#define _mark(x) MDEBUG(x)
-#define _warn(x) MWARNING(x)
-#define _erro(x) MERROR(x)
-
 #define MLOG_SET_THREAD_NAME(x) el::Helpers::setThreadName(x)
 
 #ifndef LOCAL_ASSERT
@@ -147,8 +140,6 @@ namespace debug
 }
 
 
-
-#define ENDL std::endl
 
 #define TRY_ENTRY()   try {
 #define CATCH_ENTRY(location, return_val) } \

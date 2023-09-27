@@ -32,21 +32,23 @@
 #include "ringct/rctOps.h"
 #include "ringct/multiexp.h"
 
-static const rct::key TESTPOW2SCALAR = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
-static const rct::key TESTSMALLSCALAR = {{5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+namespace {
+
+const rct::key TESTPOW2SCALAR = {{0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
+const rct::key TESTSMALLSCALAR = {{5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}};
 struct lazy_init
 {
    rct::key TESTSCALAR = rct::skGen();
    rct::key TESTPOINT = rct::scalarmultBase(rct::skGen());
 };
 
-static lazy_init &get_context()
+lazy_init &get_context()
 {
   static lazy_init result;
   return result;
 }
 
-static rct::key basic(const std::vector<rct::MultiexpData> &data)
+rct::key basic(const std::vector<rct::MultiexpData> &data)
 {
   ge_p3 res_p3 = ge_p3_identity;
   for (const auto &d: data)
@@ -64,12 +66,14 @@ static rct::key basic(const std::vector<rct::MultiexpData> &data)
   return res;
 }
 
-static ge_p3 get_p3(const rct::key &point)
+ge_p3 get_p3(const rct::key &point)
 {
   ge_p3 p3;
   EXPECT_TRUE(ge_frombytes_vartime(&p3, point.bytes) == 0);
   return p3;
 }
+
+} // empty namespace
 
 TEST(multiexp, bos_coster_empty)
 {

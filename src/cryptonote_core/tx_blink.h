@@ -33,7 +33,7 @@
 #include "service_node_rules.h"
 #include <iostream>
 #include <shared_mutex>
-#include <boost/thread/shared_mutex.hpp>
+#include <variant>
 
 namespace service_nodes {
 class service_node_list;
@@ -53,7 +53,7 @@ public:
     /// transaction was created.
     const uint64_t height;
 
-    class tx_hash_visitor : public boost::static_visitor<crypto::hash> {
+    class tx_hash_visitor {
     public:
         crypto::hash operator()(const crypto::hash &h) const { return h; }
         crypto::hash operator()(const transaction &tx) const;
@@ -62,10 +62,10 @@ public:
     /// The blink transaction *or* hash.  The transaction is present when building a blink tx for
     /// blink quorum signing; for regular blink txes received via p2p this will contain the hash
     /// instead.
-    boost::variant<transaction, crypto::hash> tx;
+    std::variant<transaction, crypto::hash> tx;
 
     /// Returns the transaction hash
-    crypto::hash get_txhash() const { return boost::apply_visitor(tx_hash_visitor{}, tx); }
+    crypto::hash get_txhash() const { return std::visit(tx_hash_visitor{}, tx); }
 
     class signature_verification_error : public std::runtime_error {
         using std::runtime_error::runtime_error;
@@ -87,12 +87,12 @@ public:
     /// Obtains a unique lock on this blink tx; required for any signature-mutating method unless
     /// otherwise noted
     template <typename... Args>
-    auto unique_lock(Args &&...args) { return std::unique_lock<boost::shared_mutex>{mutex_, std::forward<Args>(args)...}; }
+    auto unique_lock(Args &&...args) { return std::unique_lock{mutex_, std::forward<Args>(args)...}; }
 
     /// Obtains a shared lock on this blink tx; required for any signature-dependent method unless
     /// otherwise noted
     template <typename... Args>
-    auto shared_lock(Args &&...args) { return std::shared_lock<boost::shared_mutex>{mutex_, std::forward<Args>(args)...}; }
+    auto shared_lock(Args &&...args) { return std::shared_lock{mutex_, std::forward<Args>(args)...}; }
 
     /**
      * Sets the maximum number of signatures for the given subquorum type, if the given size is less
@@ -195,7 +195,7 @@ private:
     }
 
     std::array<std::array<quorum_signature, service_nodes::BLINK_SUBQUORUM_SIZE>, tools::enum_count<subquorum>> signatures_;
-    boost::shared_mutex mutex_;
+    std::shared_mutex mutex_;
 };
 
 }

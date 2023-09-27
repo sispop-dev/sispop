@@ -28,16 +28,15 @@
 
 #include "node_rpc_proxy.h"
 #include "storages/http_abstract_invoke.h"
-#include <boost/thread.hpp>
 
-using namespace epee;
+namespace rpc = cryptonote::rpc;
 
 namespace tools
 {
 
 static const std::chrono::seconds rpc_timeout = std::chrono::minutes(3) + std::chrono::seconds(30);
 
-NodeRPCProxy::NodeRPCProxy(epee::net_utils::http::http_simple_client &http_client, std::recursive_mutex &mutex)
+NodeRPCProxy::NodeRPCProxy(epee::net_utils::http::abstract_http_client &http_client, std::recursive_mutex &mutex)
   : m_http_client(http_client)
   , m_daemon_rpc_mutex(mutex)
   , m_offline(false)
@@ -65,30 +64,31 @@ void NodeRPCProxy::invalidate()
   m_dynamic_base_fee_estimate_cached_height = 0;
   m_dynamic_base_fee_estimate_grace_blocks = 0;
   m_fee_quantization_mask = 1;
-  m_rpc_version = 0;
+  m_rpc_version = {0, 0};
   m_target_height = 0;
   m_block_weight_limit = 0;
   m_get_info_time = 0;
+  m_height_time = 0;
 }
 
-boost::optional<std::string> NodeRPCProxy::get_rpc_version(uint32_t &rpc_version) const
+std::optional<std::string> NodeRPCProxy::get_rpc_version(rpc::version_t &rpc_version) const
 {
   if (m_offline)
-    return boost::optional<std::string>("offline");
-  if (m_rpc_version == 0)
+    return std::optional<std::string>("offline");
+  if (m_rpc_version == rpc::version_t{0, 0})
   {
-    cryptonote::COMMAND_RPC_GET_VERSION::request req_t{};
-    cryptonote::COMMAND_RPC_GET_VERSION::response resp_t{};
+    cryptonote::rpc::GET_VERSION::request req_t{};
+    cryptonote::rpc::GET_VERSION::response resp_t{};
     m_daemon_rpc_mutex.lock();
-    bool r = net_utils::invoke_http_json_rpc("/json_rpc", "get_version", req_t, resp_t, m_http_client, rpc_timeout);
+    bool r = epee::net_utils::invoke_http_json_rpc("/json_rpc", "get_version", req_t, resp_t, m_http_client, rpc_timeout);
     m_daemon_rpc_mutex.unlock();
     CHECK_AND_ASSERT_MES(r, std::string("Failed to connect to daemon"), "Failed to connect to daemon");
-    CHECK_AND_ASSERT_MES(resp_t.status != CORE_RPC_STATUS_BUSY, resp_t.status, "Failed to connect to daemon");
-    CHECK_AND_ASSERT_MES(resp_t.status == CORE_RPC_STATUS_OK, resp_t.status, "Failed to get daemon RPC version");
-    m_rpc_version = resp_t.version;
+    CHECK_AND_ASSERT_MES(resp_t.status != rpc::STATUS_BUSY, resp_t.status, "Failed to connect to daemon");
+    CHECK_AND_ASSERT_MES(resp_t.status == rpc::STATUS_OK, resp_t.status, "Failed to get daemon RPC version");
+    m_rpc_version = rpc::make_version(resp_t.version);
   }
   rpc_version = m_rpc_version;
-  return boost::optional<std::string>();
+  return std::nullopt;
 }
 
 void NodeRPCProxy::set_height(uint64_t h)
@@ -96,112 +96,121 @@ void NodeRPCProxy::set_height(uint64_t h)
   m_height = h;
   if (h < m_immutable_height)
       m_immutable_height = 0;
+  m_height_time = time(NULL);
 }
 
-boost::optional<std::string> NodeRPCProxy::get_info() const
+std::optional<std::string> NodeRPCProxy::get_info() const
 {
   if (m_offline)
-    return boost::optional<std::string>("offline");
+    return std::optional<std::string>("offline");
   const time_t now = time(NULL);
   if (now >= m_get_info_time + 30) // re-cache every 30 seconds
   {
-    cryptonote::COMMAND_RPC_GET_INFO::request req_t{};
-    cryptonote::COMMAND_RPC_GET_INFO::response resp_t{};
+    cryptonote::rpc::GET_INFO::request req_t{};
+    cryptonote::rpc::GET_INFO::response resp_t{};
 
     m_daemon_rpc_mutex.lock();
-    bool r = net_utils::invoke_http_json_rpc("/json_rpc", "get_info", req_t, resp_t, m_http_client, rpc_timeout);
+    bool r = epee::net_utils::invoke_http_json_rpc("/json_rpc", "get_info", req_t, resp_t, m_http_client, rpc_timeout);
     m_daemon_rpc_mutex.unlock();
 
     CHECK_AND_ASSERT_MES(r, std::string("Failed to connect to daemon"), "Failed to connect to daemon");
-    CHECK_AND_ASSERT_MES(resp_t.status != CORE_RPC_STATUS_BUSY, resp_t.status, "Failed to connect to daemon");
-    CHECK_AND_ASSERT_MES(resp_t.status == CORE_RPC_STATUS_OK, resp_t.status, "Failed to get target blockchain height");
+    CHECK_AND_ASSERT_MES(resp_t.status != rpc::STATUS_BUSY, resp_t.status, "Failed to connect to daemon");
+    CHECK_AND_ASSERT_MES(resp_t.status == rpc::STATUS_OK, resp_t.status, "Failed to get target blockchain height");
     m_height = resp_t.height;
     m_target_height = resp_t.target_height;
     m_block_weight_limit = resp_t.block_weight_limit ? resp_t.block_weight_limit : resp_t.block_size_limit;
     m_immutable_height = resp_t.immutable_height;
     m_get_info_time = now;
+    m_height_time = now;
   }
-  return boost::optional<std::string>();
+  return std::nullopt;
 }
 
-boost::optional<std::string> NodeRPCProxy::get_height(uint64_t &height) const
+std::optional<std::string> NodeRPCProxy::get_height(uint64_t &height) const
 {
+  const time_t now = time(NULL);
+  if (now < m_height_time + 30) // re-cache every 30 seconds
+  {
+    height = m_height;
+    return std::nullopt;
+  }
+
   auto res = get_info();
   if (res)
     return res;
   height = m_height;
-  return boost::optional<std::string>();
+  return std::nullopt;
 }
 
-boost::optional<std::string> NodeRPCProxy::get_target_height(uint64_t &height) const
+std::optional<std::string> NodeRPCProxy::get_target_height(uint64_t &height) const
 {
   auto res = get_info();
   if (res)
     return res;
   height = m_target_height;
-  return boost::optional<std::string>();
+  return std::nullopt;
 }
 
-boost::optional<std::string> NodeRPCProxy::get_immutable_height(uint64_t &height) const
+std::optional<std::string> NodeRPCProxy::get_immutable_height(uint64_t &height) const
 {
   auto res = get_info();
   if (res)
     return res;
   height = m_immutable_height;
-  return boost::optional<std::string>();
+  return std::nullopt;
 }
 
-boost::optional<std::string> NodeRPCProxy::get_block_weight_limit(uint64_t &block_weight_limit) const
+std::optional<std::string> NodeRPCProxy::get_block_weight_limit(uint64_t &block_weight_limit) const
 {
   auto res = get_info();
   if (res)
     return res;
   block_weight_limit = m_block_weight_limit;
-  return boost::optional<std::string>();
+  return std::nullopt;
 }
 
-boost::optional<std::string> NodeRPCProxy::get_earliest_height(uint8_t version, uint64_t &earliest_height) const
+std::optional<std::string> NodeRPCProxy::get_earliest_height(uint8_t version, uint64_t &earliest_height) const
 {
   if (m_offline)
-    return boost::optional<std::string>("offline");
+    return std::optional<std::string>("offline");
   if (m_earliest_height[version] == 0)
   {
-    cryptonote::COMMAND_RPC_HARD_FORK_INFO::request req_t{};
-    cryptonote::COMMAND_RPC_HARD_FORK_INFO::response resp_t{};
+    cryptonote::rpc::HARD_FORK_INFO::request req_t{};
+    cryptonote::rpc::HARD_FORK_INFO::response resp_t{};
 
     m_daemon_rpc_mutex.lock();
     req_t.version = version;
-    bool r = net_utils::invoke_http_json_rpc("/json_rpc", "hard_fork_info", req_t, resp_t, m_http_client, rpc_timeout);
+    bool r = epee::net_utils::invoke_http_json_rpc("/json_rpc", "hard_fork_info", req_t, resp_t, m_http_client, rpc_timeout);
     m_daemon_rpc_mutex.unlock();
     CHECK_AND_ASSERT_MES(r, std::string("Failed to connect to daemon"), "Failed to connect to daemon");
-    CHECK_AND_ASSERT_MES(resp_t.status != CORE_RPC_STATUS_BUSY, resp_t.status, "Failed to connect to daemon");
-    CHECK_AND_ASSERT_MES(resp_t.status == CORE_RPC_STATUS_OK, resp_t.status, "Failed to get hard fork status");
+    CHECK_AND_ASSERT_MES(resp_t.status != rpc::STATUS_BUSY, resp_t.status, "Failed to connect to daemon");
+    CHECK_AND_ASSERT_MES(resp_t.status == rpc::STATUS_OK, resp_t.status, "Failed to get hard fork status");
     m_earliest_height[version] = resp_t.earliest_height;
   }
 
   earliest_height = m_earliest_height[version];
-  return boost::optional<std::string>();
+  return std::nullopt;
 }
 
-boost::optional<uint8_t> NodeRPCProxy::get_hardfork_version() const
+std::optional<uint8_t> NodeRPCProxy::get_hardfork_version() const
 {
   if (m_offline)
-    return boost::none;
+    return std::nullopt;
 
-  cryptonote::COMMAND_RPC_HARD_FORK_INFO::request req{};
-  cryptonote::COMMAND_RPC_HARD_FORK_INFO::response resp{};
+  cryptonote::rpc::HARD_FORK_INFO::request req{};
+  cryptonote::rpc::HARD_FORK_INFO::response resp{};
 
   m_daemon_rpc_mutex.lock();
-  bool r = net_utils::invoke_http_json_rpc("/json_rpc", "hard_fork_info", req, resp, m_http_client, rpc_timeout);
+  bool r = epee::net_utils::invoke_http_json_rpc("/json_rpc", "hard_fork_info", req, resp, m_http_client, rpc_timeout);
   m_daemon_rpc_mutex.unlock();
   CHECK_AND_ASSERT_MES(r, {}, "Failed to connect to daemon");
-  CHECK_AND_ASSERT_MES(resp.status != CORE_RPC_STATUS_BUSY, {}, "Failed to connect to daemon");
-  CHECK_AND_ASSERT_MES(resp.status == CORE_RPC_STATUS_OK, {}, "Failed to get hard fork status");
+  CHECK_AND_ASSERT_MES(resp.status != rpc::STATUS_BUSY, {}, "Failed to connect to daemon");
+  CHECK_AND_ASSERT_MES(resp.status == rpc::STATUS_OK, {}, "Failed to get hard fork status");
 
   return resp.version;
 }
 
-boost::optional<std::string> NodeRPCProxy::refresh_dynamic_base_fee_cache(uint64_t grace_blocks) const
+std::optional<std::string> NodeRPCProxy::refresh_dynamic_base_fee_cache(uint64_t grace_blocks) const
 {
   uint64_t height;
 
@@ -213,16 +222,16 @@ boost::optional<std::string> NodeRPCProxy::refresh_dynamic_base_fee_cache(uint64
 
   if (m_dynamic_base_fee_estimate_cached_height != height || m_dynamic_base_fee_estimate_grace_blocks != grace_blocks)
   {
-    cryptonote::COMMAND_RPC_GET_BASE_FEE_ESTIMATE::request req_t{};
-    cryptonote::COMMAND_RPC_GET_BASE_FEE_ESTIMATE::response resp_t{};
+    cryptonote::rpc::GET_BASE_FEE_ESTIMATE::request req_t{};
+    cryptonote::rpc::GET_BASE_FEE_ESTIMATE::response resp_t{};
 
     m_daemon_rpc_mutex.lock();
     req_t.grace_blocks = grace_blocks;
-    bool r = net_utils::invoke_http_json_rpc("/json_rpc", "get_fee_estimate", req_t, resp_t, m_http_client, rpc_timeout);
+    bool r = epee::net_utils::invoke_http_json_rpc("/json_rpc", "get_fee_estimate", req_t, resp_t, m_http_client, rpc_timeout);
     m_daemon_rpc_mutex.unlock();
     CHECK_AND_ASSERT_MES(r, std::string("Failed to connect to daemon"), "Failed to connect to daemon");
-    CHECK_AND_ASSERT_MES(resp_t.status != CORE_RPC_STATUS_BUSY, resp_t.status, "Failed to connect to daemon");
-    CHECK_AND_ASSERT_MES(resp_t.status == CORE_RPC_STATUS_OK, resp_t.status, "Failed to get fee estimate");
+    CHECK_AND_ASSERT_MES(resp_t.status != rpc::STATUS_BUSY, resp_t.status, "Failed to connect to daemon");
+    CHECK_AND_ASSERT_MES(resp_t.status == rpc::STATUS_OK, resp_t.status, "Failed to get fee estimate");
     m_dynamic_base_fee_estimate = {resp_t.fee_per_byte, resp_t.fee_per_output};
     m_dynamic_base_fee_estimate_cached_height = height;
     m_dynamic_base_fee_estimate_grace_blocks = grace_blocks;
@@ -231,7 +240,7 @@ boost::optional<std::string> NodeRPCProxy::refresh_dynamic_base_fee_cache(uint64
   return {};
 }
 
-boost::optional<std::string> NodeRPCProxy::get_dynamic_base_fee_estimate(uint64_t grace_blocks, cryptonote::byte_and_output_fees &fees) const
+std::optional<std::string> NodeRPCProxy::get_dynamic_base_fee_estimate(uint64_t grace_blocks, cryptonote::byte_and_output_fees &fees) const
 {
   if (auto error = refresh_dynamic_base_fee_cache(grace_blocks))
     return error;
@@ -239,7 +248,7 @@ boost::optional<std::string> NodeRPCProxy::get_dynamic_base_fee_estimate(uint64_
   return {};
 }
 
-boost::optional<std::string> NodeRPCProxy::get_fee_quantization_mask(uint64_t &fee_quantization_mask) const
+std::optional<std::string> NodeRPCProxy::get_fee_quantization_mask(uint64_t &fee_quantization_mask) const
 {
   if (auto error = refresh_dynamic_base_fee_cache(m_dynamic_base_fee_estimate_grace_blocks))
     return error;
@@ -254,7 +263,7 @@ boost::optional<std::string> NodeRPCProxy::get_fee_quantization_mask(uint64_t &f
 }
 
 template <typename T>
-static bool check_invoke(bool r, T &response, boost::optional<std::string> &failed)
+static bool check_invoke(bool r, T &response, std::optional<std::string> &failed)
 {
   if (!r)
   {
@@ -262,7 +271,7 @@ static bool check_invoke(bool r, T &response, boost::optional<std::string> &fail
     return false;
   }
 
-  if (response.status != CORE_RPC_STATUS_OK)
+  if (response.status != rpc::STATUS_OK)
   {
     failed = response.status;
     return false;
@@ -271,17 +280,17 @@ static bool check_invoke(bool r, T &response, boost::optional<std::string> &fail
   return true;
 }
 
-std::vector<cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response::entry> NodeRPCProxy::get_service_nodes(std::vector<std::string> const &pubkeys, boost::optional<std::string> &failed) const
+std::vector<cryptonote::rpc::GET_SERVICE_NODES::response::entry> NodeRPCProxy::get_service_nodes(std::vector<std::string> const &pubkeys, std::optional<std::string> &failed) const
 {
-  std::vector<cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response::entry> result;
+  std::vector<cryptonote::rpc::GET_SERVICE_NODES::response::entry> result;
   if (m_offline)
   {
     failed = std::string("offline");
     return result;
   }
 
-  cryptonote::COMMAND_RPC_GET_SERVICE_NODES::request req = {};
-  cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response res = {};
+  cryptonote::rpc::GET_SERVICE_NODES::request req = {};
+  cryptonote::rpc::GET_SERVICE_NODES::response res = {};
   req.service_node_pubkeys = pubkeys;
 
   m_daemon_rpc_mutex.lock();
@@ -295,15 +304,15 @@ std::vector<cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response::entry> NodeRPCP
 }
 
 // Updates the cache of all service nodes; the mutex lock must be already held
-bool NodeRPCProxy::update_all_service_nodes_cache(uint64_t height, boost::optional<std::string> &failed) const {
+bool NodeRPCProxy::update_all_service_nodes_cache(uint64_t height, std::optional<std::string> &failed) const {
   if (m_offline)
   {
     failed = std::string("offline");
     return false;
   }
 
-  cryptonote::COMMAND_RPC_GET_SERVICE_NODES::request req = {};
-  cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response res = {};
+  cryptonote::rpc::GET_SERVICE_NODES::request req = {};
+  cryptonote::rpc::GET_SERVICE_NODES::response res = {};
 
   bool r = epee::net_utils::invoke_http_json_rpc("/json_rpc", "get_all_service_nodes", req, res, m_http_client, rpc_timeout);
   if (!check_invoke(r, res, failed))
@@ -315,11 +324,11 @@ bool NodeRPCProxy::update_all_service_nodes_cache(uint64_t height, boost::option
 }
 
 
-std::vector<cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response::entry> NodeRPCProxy::get_all_service_nodes(boost::optional<std::string> &failed) const
+std::vector<cryptonote::rpc::GET_SERVICE_NODES::response::entry> NodeRPCProxy::get_all_service_nodes(std::optional<std::string> &failed) const
 {
-  std::vector<cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response::entry> result;
+  std::vector<cryptonote::rpc::GET_SERVICE_NODES::response::entry> result{};
 
-  uint64_t height;
+  uint64_t height{0};
   failed = get_height(height);
   if (failed)
     return result;
@@ -337,9 +346,9 @@ std::vector<cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response::entry> NodeRPCP
 
 // Filtered version of the above that caches the filtered result as long as used on the same
 // contributor at the same height (which is very common, for example, for wallet balance lookups).
-std::vector<cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response::entry> NodeRPCProxy::get_contributed_service_nodes(const std::string &contributor, boost::optional<std::string> &failed) const
+std::vector<cryptonote::rpc::GET_SERVICE_NODES::response::entry> NodeRPCProxy::get_contributed_service_nodes(const std::string &contributor, std::optional<std::string> &failed) const
 {
-  std::vector<cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response::entry> result;
+  std::vector<cryptonote::rpc::GET_SERVICE_NODES::response::entry> result{};
 
   uint64_t height;
   failed = get_height(height);
@@ -355,10 +364,10 @@ std::vector<cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response::entry> NodeRPCP
 
       m_contributed_service_nodes.clear();
       std::copy_if(m_all_service_nodes.begin(), m_all_service_nodes.end(), std::back_inserter(m_contributed_service_nodes),
-          [&contributor](const cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response::entry &e)
+          [&contributor](const cryptonote::rpc::GET_SERVICE_NODES::response::entry &e)
           {
             return std::any_of(e.contributors.begin(), e.contributors.end(),
-                [&contributor](const cryptonote::service_node_contributor &c) { return contributor == c.address; });
+                [&contributor](const cryptonote::rpc::service_node_contributor &c) { return contributor == c.address; });
           }
       );
       m_contributed_service_nodes_cached_height = height;
@@ -371,9 +380,9 @@ std::vector<cryptonote::COMMAND_RPC_GET_SERVICE_NODES::response::entry> NodeRPCP
   return result;
 }
 
-std::vector<cryptonote::COMMAND_RPC_GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES::entry> NodeRPCProxy::get_service_node_blacklisted_key_images(boost::optional<std::string> &failed) const
+std::vector<cryptonote::rpc::GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES::entry> NodeRPCProxy::get_service_node_blacklisted_key_images(std::optional<std::string> &failed) const
 {
-  std::vector<cryptonote::COMMAND_RPC_GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES::entry> result;
+  std::vector<cryptonote::rpc::GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES::entry> result{};
   if (m_offline)
   {
     failed = std::string("offline");
@@ -389,8 +398,8 @@ std::vector<cryptonote::COMMAND_RPC_GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES::ent
     std::lock_guard<std::recursive_mutex> lock(m_daemon_rpc_mutex);
     if (m_service_node_blacklisted_key_images_cached_height != height)
     {
-      cryptonote::COMMAND_RPC_GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES::request req = {};
-      cryptonote::COMMAND_RPC_GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES::response res = {};
+      cryptonote::rpc::GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES::request req = {};
+      cryptonote::rpc::GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES::response res = {};
 
       bool r = epee::net_utils::invoke_http_json_rpc("/json_rpc", "get_service_node_blacklisted_key_images", req, res, m_http_client, rpc_timeout);
       if (!check_invoke(r, res, failed))
@@ -406,7 +415,7 @@ std::vector<cryptonote::COMMAND_RPC_GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES::ent
   return result;
 }
 
-std::vector<cryptonote::COMMAND_RPC_LNS_OWNERS_TO_NAMES::response_entry> NodeRPCProxy::lns_owners_to_names(cryptonote::COMMAND_RPC_LNS_OWNERS_TO_NAMES::request const &request, boost::optional<std::string> &failed) const
+std::vector<cryptonote::rpc::LNS_OWNERS_TO_NAMES::response_entry> NodeRPCProxy::lns_owners_to_names(cryptonote::rpc::LNS_OWNERS_TO_NAMES::request const &request, std::optional<std::string> &failed) const
 {
   if (m_offline)
   {
@@ -414,7 +423,7 @@ std::vector<cryptonote::COMMAND_RPC_LNS_OWNERS_TO_NAMES::response_entry> NodeRPC
     return {};
   }
 
-  cryptonote::COMMAND_RPC_LNS_OWNERS_TO_NAMES::response res = {};
+  cryptonote::rpc::LNS_OWNERS_TO_NAMES::response res = {};
   {
     std::lock_guard<std::recursive_mutex> lock(m_daemon_rpc_mutex);
     bool r = epee::net_utils::invoke_http_json_rpc("/json_rpc", "lns_owners_to_names", request, res, m_http_client, rpc_timeout);
@@ -425,7 +434,7 @@ std::vector<cryptonote::COMMAND_RPC_LNS_OWNERS_TO_NAMES::response_entry> NodeRPC
   return res.entries;
 }
 
-std::vector<cryptonote::COMMAND_RPC_LNS_NAMES_TO_OWNERS::response_entry> NodeRPCProxy::lns_names_to_owners(cryptonote::COMMAND_RPC_LNS_NAMES_TO_OWNERS::request const &request, boost::optional<std::string> &failed) const
+std::vector<cryptonote::rpc::LNS_NAMES_TO_OWNERS::response_entry> NodeRPCProxy::lns_names_to_owners(cryptonote::rpc::LNS_NAMES_TO_OWNERS::request const &request, std::optional<std::string> &failed) const
 {
   if (m_offline)
   {
@@ -433,7 +442,7 @@ std::vector<cryptonote::COMMAND_RPC_LNS_NAMES_TO_OWNERS::response_entry> NodeRPC
     return {};
   }
 
-  cryptonote::COMMAND_RPC_LNS_NAMES_TO_OWNERS::response res = {};
+  cryptonote::rpc::LNS_NAMES_TO_OWNERS::response res = {};
   {
     std::lock_guard<std::recursive_mutex> lock(m_daemon_rpc_mutex);
     bool r = epee::net_utils::invoke_http_json_rpc("/json_rpc", "lns_names_to_owners", request, res, m_http_client, rpc_timeout);

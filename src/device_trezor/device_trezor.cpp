@@ -79,7 +79,7 @@ namespace trezor {
       if (r && !m_live_refresh_thread)
       {
         m_live_refresh_thread_running = true;
-        m_live_refresh_thread.reset(new boost::thread(boost::bind(&device_trezor::live_refresh_thread_main, this)));
+        m_live_refresh_thread.emplace([this] { live_refresh_thread_main(); });
       }
       return r;
     }
@@ -91,7 +91,7 @@ namespace trezor {
       if (m_live_refresh_thread)
       {
         m_live_refresh_thread->join();
-        m_live_refresh_thread = nullptr;
+        m_live_refresh_thread.reset();
       }
       return device_trezor_base::release();
     }
@@ -102,7 +102,7 @@ namespace trezor {
       return device_trezor_base::disconnect();
     }
 
-    void device_trezor::device_state_reset_unsafe()
+    void device_trezor::device_state_initialize_unsafe()
     {
       require_connected();
       if (m_live_refresh_in_progress)
@@ -118,14 +118,14 @@ namespace trezor {
       }
 
       m_live_refresh_in_progress = false;
-      device_trezor_base::device_state_reset_unsafe();
+      device_trezor_base::device_state_initialize_unsafe();
     }
 
     void device_trezor::live_refresh_thread_main()
     {
       while(m_live_refresh_thread_running)
       {
-        boost::this_thread::sleep_for(boost::chrono::milliseconds(100));
+        std::this_thread::sleep_for(100ms);
         if (!m_live_refresh_in_progress)
         {
           continue;
@@ -201,6 +201,10 @@ namespace trezor {
       }
     }
 
+    void device_trezor::display_address(const cryptonote::subaddress_index& index, const std::optional<crypto::hash8> &payment_id) {
+      get_address(index, payment_id, true);
+    }
+
     /* ======================================================================= */
     /*  Helpers                                                                */
     /* ======================================================================= */
@@ -210,16 +214,28 @@ namespace trezor {
     /* ======================================================================= */
 
     std::shared_ptr<messages::monero::MoneroAddress> device_trezor::get_address(
-        const boost::optional<std::vector<uint32_t>> & path,
-        const boost::optional<cryptonote::network_type> & network_type){
+        const std::optional<cryptonote::subaddress_index> & subaddress,
+        const std::optional<crypto::hash8> & payment_id,
+        bool show_address,
+        const std::optional<std::vector<uint32_t>> & path,
+        const std::optional<cryptonote::network_type> & network_type){
+
       CHECK_AND_ASSERT_THROW_MES(!payment_id || !subaddress || subaddress->is_zero(), "Subaddress cannot be integrated");
       auto locks = tools::unique_locks(device_locker, command_locker);
       require_connected();
-      device_state_reset_unsafe();
+      device_state_initialize_unsafe();
       require_initialized();
 
       auto req = std::make_shared<messages::monero::MoneroGetAddress>();
       this->set_msg_addr<messages::monero::MoneroGetAddress>(req.get(), path, network_type);
+      req->set_show_display(show_address);
+      if (subaddress){
+        req->set_account(subaddress->major);
+        req->set_minor(subaddress->minor);
+      }
+      if (payment_id){
+        req->set_payment_id(std::string(payment_id->data, 8));
+      }
 
       auto response = this->client_exchange<messages::monero::MoneroAddress>(req);
       MTRACE("Get address response received");
@@ -227,11 +243,11 @@ namespace trezor {
     }
 
     std::shared_ptr<messages::monero::MoneroWatchKey> device_trezor::get_view_key(
-        const boost::optional<std::vector<uint32_t>> & path,
-        const boost::optional<cryptonote::network_type> & network_type){
+        const std::optional<std::vector<uint32_t>> & path,
+        const std::optional<cryptonote::network_type> & network_type){
       auto locks = tools::unique_locks(device_locker, command_locker);
       require_connected();
-      device_state_reset_unsafe();
+      device_state_initialize_unsafe();
       require_initialized();
 
       auto req = std::make_shared<messages::monero::MoneroGetWatchKey>();
@@ -260,7 +276,7 @@ namespace trezor {
     {
       auto locks = tools::unique_locks(device_locker, command_locker);
       require_connected();
-      device_state_reset_unsafe();
+      device_state_initialize_unsafe();
       require_initialized();
 
       auto req = protocol::tx::get_tx_key(tx_aux_data);
@@ -280,15 +296,15 @@ namespace trezor {
 
       auto locks = tools::unique_locks(device_locker, command_locker);
       require_connected();
-      device_state_reset_unsafe();
+      device_state_initialize_unsafe();
       require_initialized();
 
       std::shared_ptr<messages::monero::MoneroKeyImageExportInitRequest> req;
 
       std::vector<protocol::ki::MoneroTransferDetails> mtds;
       std::vector<protocol::ki::MoneroExportedKeyImage> kis;
-      protocol::ki::key_image_data(wallet, transfers, mtds);
-      protocol::ki::generate_commitment(mtds, transfers, req);
+      protocol::ki::key_image_data(wallet, transfers, mtds, client_version() <= 1);
+      protocol::ki::generate_commitment(mtds, transfers, req, client_version() <= 1);
 
       EVENT_PROGRESS(0.);
       this->set_msg_addr<messages::monero::MoneroKeyImageExportInitRequest>(req.get());
@@ -372,7 +388,7 @@ namespace trezor {
 
     void device_trezor::live_refresh_start_unsafe()
     {
-      device_state_reset_unsafe();
+      device_state_initialize_unsafe();
       require_initialized();
 
       auto req = std::make_shared<messages::monero::MoneroLiveRefreshStartRequest>();
@@ -478,7 +494,7 @@ namespace trezor {
 
       auto locks = tools::unique_locks(device_locker, command_locker);
       require_connected();
-      device_state_reset_unsafe();
+      device_state_initialize_unsafe();
       require_initialized();
       transaction_versions_check(unsigned_tx, aux_data);
 
@@ -500,7 +516,7 @@ namespace trezor {
         auto & cpend = signed_tx.ptx.back();
         cpend.tx = cdata.tx;
         cpend.dust = 0;
-        cpend.fee = 0;
+        cpend.fee = cpend.tx.rct_signatures.txnFee;
         cpend.dust_added_to_fee = false;
         cpend.change_dts = cdata.tx_data.change_dts;
         cpend.selected_transfers = cdata.tx_data.selected_transfers;
@@ -510,22 +526,23 @@ namespace trezor {
 
         // Transaction check
         try {
+          MDEBUG("signed transaction: " << cryptonote::get_transaction_hash(cpend.tx) << "\n" << cryptonote::obj_to_json_str(cpend.tx) << "\n");
           transaction_check(cdata, aux_data);
         } catch(const std::exception &e){
           throw exc::ProtocolException(std::string("Transaction verification failed: ") + e.what());
         }
 
-        std::string key_images;
+        std::ostringstream key_images;
         bool all_are_txin_to_key = std::all_of(cdata.tx.vin.begin(), cdata.tx.vin.end(), [&](const cryptonote::txin_v& s_e) -> bool
         {
-          CHECKED_GET_SPECIFIC_VARIANT(s_e, const cryptonote::txin_to_key, in, false);
-          key_images += boost::to_string(in.k_image) + " ";
+          CHECKED_GET_SPECIFIC_VARIANT(s_e, cryptonote::txin_to_key, in, false);
+          key_images << in.k_image << ' ';
           return true;
         });
         if(!all_are_txin_to_key) {
           throw std::invalid_argument("Not all are txin_to_key");
         }
-        cpend.key_images = key_images;
+        cpend.key_images = key_images.str();
 
         // KI sync
         for(size_t cidx=0, trans_max=unsigned_tx.transfers.second.size(); cidx < trans_max; ++cidx){
@@ -546,7 +563,7 @@ namespace trezor {
           idx_map_src -= unsigned_tx.transfers.first;
           CHECK_AND_ASSERT_THROW_MES(idx_map_src < signed_tx.key_images.size(), "Invalid key image index");
 
-          const auto vini = boost::get<cryptonote::txin_to_key>(cdata.tx.vin[src_idx]);
+          const auto& vini = std::get<cryptonote::txin_to_key>(cdata.tx.vin[src_idx]);
           signed_tx.key_images[idx_map_src] = vini.k_image;
         }
       }
@@ -568,7 +585,7 @@ namespace trezor {
 
       require_connected();
       if (idx > 0)
-        device_state_reset_unsafe();
+        device_state_initialize_unsafe();
 
       require_initialized();
       EVENT_PROGRESS(0, 1, 1);
@@ -656,28 +673,42 @@ namespace trezor {
 #undef EVENT_PROGRESS
     }
 
-    void device_trezor::transaction_versions_check(const ::tools::wallet2::unsigned_tx_set & unsigned_tx, hw::tx_aux_data & aux_data)
+    unsigned device_trezor::client_version()
     {
       auto trezor_version = get_version();
-      unsigned client_version = 1;  // default client version for tx
-
       if (trezor_version <= pack_version(2, 0, 10)){
-        client_version = 0;
+        throw exc::TrezorException("Trezor firmware 2.0.10 and lower are not supported. Please update.");
       }
 
-      if (aux_data.client_version){
-        auto wanted_client_version = aux_data.client_version.get();
-        if (wanted_client_version > client_version){
-          throw exc::TrezorException("Trezor firmware 2.0.10 and lower does not support current transaction sign protocol. Please update.");
-        } else {
-          client_version = wanted_client_version;
+      // default client version, higher versions check will be added
+      unsigned client_version = 1;
+
+#ifdef WITH_TREZOR_DEBUGGING
+      // Override client version for tests
+      const char *env_trezor_client_version = nullptr;
+      if ((env_trezor_client_version = getenv("TREZOR_CLIENT_VERSION")) != nullptr){
+        auto succ = epee::string_tools::get_xtype_from_string(client_version, env_trezor_client_version);
+        if (succ){
+          MINFO("Trezor client version overriden by TREZOR_CLIENT_VERSION to: " << client_version);
         }
       }
-      aux_data.client_version = client_version;
+#endif
+      return client_version;
+    }
 
-      if (client_version == 0 && aux_data.bp_version && aux_data.bp_version.get() != 1){
-        throw exc::TrezorException("Trezor firmware 2.0.10 and lower does not support current transaction sign protocol (BPv2+). Please update.");
+    void device_trezor::transaction_versions_check(const ::tools::wallet2::unsigned_tx_set & unsigned_tx, hw::tx_aux_data & aux_data)
+    {
+      unsigned cversion = client_version();
+
+      if (aux_data.client_version){
+        auto wanted_client_version = *aux_data.client_version;
+        if (wanted_client_version > cversion){
+          throw exc::TrezorException("Trezor has too old firmware version. Please update.");
+        } else {
+          cversion = wanted_client_version;
+        }
       }
+      aux_data.client_version = cversion;
     }
 
     void device_trezor::transaction_pre_check(std::shared_ptr<messages::monero::MoneroTransactionInitRequest> init_msg)

@@ -27,7 +27,7 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <boost/algorithm/string.hpp>
+#include "common/string_util.h"
 #include "misc_log_ex.h"
 #include "util.h"
 #include "dns_utils.h"
@@ -53,8 +53,7 @@ namespace tools
 
     for (const auto& record : records)
     {
-      std::vector<std::string> fields;
-      boost::split(fields, record, boost::is_any_of(":"));
+      auto fields = tools::split(record, ":");
       if (fields.size() != 4)
       {
         MWARNING("Updates record does not have 4 fields: " << record);
@@ -77,7 +76,7 @@ namespace tools
       // use highest version
       if (found)
       {
-        int cmp = vercmp(version.c_str(), fields[2].c_str());
+        int cmp = vercmp(version, fields[2]);
         if (cmp > 0)
           continue;
         if (cmp == 0 && hash != fields[3])
@@ -97,7 +96,7 @@ namespace tools
   {
     const char *base = user ? "https://downloads.getmonero.org/" : "https://updates.getmonero.org/";
 #ifdef _WIN32
-    static const char *extension = strncmp(buildtag.c_str(), "install-", 8) ? ".zip" : ".exe";
+    static const char *extension = strncmp(buildtag.c_str(), "source", 6) ? (strncmp(buildtag.c_str(), "install-", 8) ? ".zip" : ".exe") : ".tar.bz2";
 #else
     static const char extension[] = ".tar.bz2";
 #endif

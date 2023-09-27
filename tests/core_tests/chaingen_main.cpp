@@ -83,8 +83,7 @@ int main(int argc, char* argv[])
     return 0;
   }
 
-  const std::string filter = tools::glob_to_regex(command_line::get_arg(vm, arg_filter));
-  boost::smatch match;
+  const std::string filter = command_line::get_arg(vm, arg_filter);
 
   size_t tests_count = 0;
   std::vector<std::string> failed_tests;
@@ -288,6 +287,11 @@ int main(int argc, char* argv[])
       GENERATE_AND_PLAY(gen_rct_tx_pre_rct_increase_vin_and_fee);
       GENERATE_AND_PLAY(gen_rct_tx_pre_rct_altered_extra);
       GENERATE_AND_PLAY(gen_rct_tx_rct_altered_extra);
+
+      // NOTE: For loki we should re-write this which is trivial to do with
+      // generating some funds and attempting to spend them immediately instead
+      // of the minutia of the monero framework.
+      GENERATE_AND_PLAY(gen_rct_tx_uses_output_too_early);
 
       GENERATE_AND_PLAY(gen_multisig_tx_valid_22_1_2);
       GENERATE_AND_PLAY(gen_multisig_tx_valid_22_1_2_many_inputs);

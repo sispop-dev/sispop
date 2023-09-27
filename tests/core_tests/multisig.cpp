@@ -35,7 +35,6 @@
 #include "chaingen.h"
 #include "multisig.h"
 #include "device/device.hpp"
-using namespace epee;
 using namespace crypto;
 using namespace cryptonote;
 
@@ -183,8 +182,6 @@ bool gen_multisig_tx_validation_base::generate_with(std::vector<test_event_entry
         false, "Failed to generate block");
     events.push_back(blocks[n]);
     prev_block = blocks + n;
-    LOG_PRINT_L0("Initial miner tx " << n << ": " << obj_to_json_str(blocks[n].miner_tx));
-    LOG_PRINT_L0("in block: " << obj_to_json_str(blocks[n]));
   }
 
   // rewind
@@ -212,7 +209,7 @@ bool gen_multisig_tx_validation_base::generate_with(std::vector<test_event_entry
   {
     tx_pub_key[n] = get_tx_pub_key_from_extra(blocks[n].miner_tx);
     MDEBUG("tx_pub_key: " << tx_pub_key);
-    output_pub_key[n] = boost::get<txout_to_key>(blocks[n].miner_tx.vout[0].target).key;
+    output_pub_key[n] = std::get<txout_to_key>(blocks[n].miner_tx.vout[0].target).key;
     MDEBUG("output_pub_key: " << output_pub_key);
   }
 
@@ -341,7 +338,7 @@ bool gen_multisig_tx_validation_base::generate_with(std::vector<test_event_entry
     for (size_t m = 0; m <= mixin; ++m)
     {
       rct::ctkey ctkey;
-      ctkey.dest = rct::pk2rct(boost::get<txout_to_key>(blocks[m].miner_tx.vout[0].target).key);
+      ctkey.dest = rct::pk2rct(std::get<txout_to_key>(blocks[m].miner_tx.vout[0].target).key);
       MDEBUG("using " << (m == n ? "real" : "fake") << " input " << ctkey.dest);
       ctkey.mask = rct::commit(blocks[m].miner_tx.vout[0].amount, rct::identity()); // since those are coinbases, the masks are known
       src.outputs.push_back(std::make_pair(m, ctkey));
@@ -370,7 +367,7 @@ bool gen_multisig_tx_validation_base::generate_with(std::vector<test_event_entry
   auto sources_copy = sources;
   sispop_construct_tx_params tx_params;
   tx_params.hf_version = cryptonote::network_version_8;
-  r = construct_tx_and_get_tx_key(miner_account[creator].get_keys(), subaddresses, sources, destinations, boost::none, std::vector<uint8_t>(), tx, 0, tx_key, additional_tx_secret_keys, { rct::RangeProofBorromean, 0 }, msoutp, tx_params);
+  r = construct_tx_and_get_tx_key(miner_account[creator].get_keys(), subaddresses, sources, destinations, std::nullopt, std::vector<uint8_t>(), tx, 0, tx_key, additional_tx_secret_keys, { rct::RangeProofBorromean, 0 }, msoutp, tx_params);
   CHECK_AND_ASSERT_MES(r, false, "failed to construct transaction");
 
 #ifndef NO_MULTISIG
@@ -451,8 +448,8 @@ bool gen_multisig_tx_validation_base::generate_with(std::vector<test_event_entry
   std::vector<crypto::key_derivation> additional_derivations;
   for (size_t n = 0; n < tx.vout.size(); ++n)
   {
-    CHECK_AND_ASSERT_MES(typeid(txout_to_key) == tx.vout[n].target.type(), false, "Unexpected tx out type");
-    if (is_out_to_acc_precomp(subaddresses, boost::get<txout_to_key>(tx.vout[n].target).key, derivation, additional_derivations, n, hw::get_device(("default"))))
+    CHECK_AND_ASSERT_MES(std::holds_alternative<txout_to_key>(tx.vout[n].target), false, "Unexpected tx out type");
+    if (is_out_to_acc_precomp(subaddresses, std::get<txout_to_key>(tx.vout[n].target).key, derivation, additional_derivations, n, hw::get_device(("default"))))
     {
       ++n_outs;
       CHECK_AND_ASSERT_MES(tx.vout[n].amount == 0, false, "Destination amount is not zero");

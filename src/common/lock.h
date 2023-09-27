@@ -1,4 +1,4 @@
-// Copyright (c) 2019, The Sispop Project
+// Copyright (c)      2023, The Sispop Project
 // Copyright (c) 2019-2020, The Loki Project
 //
 // All rights reserved.

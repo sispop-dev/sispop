@@ -43,7 +43,6 @@
 #include <unordered_set>
 
 #include "span.h"
-#include "syncobj.h"
 #include "string_tools.h"
 #include "rolling_median.h"
 #include "cryptonote_basic/cryptonote_basic.h"
@@ -94,7 +93,7 @@ namespace cryptonote
    * 
    * @return checkpoints data, empty span if there ain't any checkpoints for specific network type
    */
-  typedef std::function<const epee::span<const unsigned char>(cryptonote::network_type network)> GetCheckpointsCallback;
+  using GetCheckpointsCallback = std::function<std::string_view(cryptonote::network_type network)>;
 
   /************************************************************************/
   /*                                                                      */
@@ -514,7 +513,7 @@ namespace cryptonote
      *
      * @return true
      */
-    bool get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMAND_RPC_GET_OUTPUTS_BIN::response& res) const;
+    bool get_outs(const rpc::GET_OUTPUTS_BIN::request& req, rpc::GET_OUTPUTS_BIN::response& res) const;
 
     /**
      * @brief gets an output's key and unlocked state
@@ -544,7 +543,7 @@ namespace cryptonote
      *
      * @param return-by-reference blacklist global indexes of rct outputs to ignore
      */
-    bool get_output_blacklist(std::vector<uint64_t> &blacklist) const;
+    void get_output_blacklist(std::vector<uint64_t> &blacklist) const;
 
     /**
      * @brief gets the global indices for outputs from a given transaction
@@ -657,7 +656,7 @@ namespace cryptonote
      *
      * @return false if any outputs do not conform, otherwise true
      */
-    bool check_tx_outputs(const transaction& tx, tx_verification_context &tvc);
+    bool check_tx_outputs(const transaction& tx, tx_verification_context &tvc) const;
 
     /**
      * @brief gets the block weight limit based on recent blocks
@@ -982,9 +981,9 @@ namespace cryptonote
     /**
      * @brief returns a set of known alternate chains
      *
-     * @return a list of chains
+     * @return a vector of chains
      */
-    std::list<std::pair<block_extended_info,std::vector<crypto::hash>>> get_alternative_chains() const;
+    std::vector<std::pair<block_extended_info,std::vector<crypto::hash>>> get_alternative_chains() const;
 
     void add_txpool_tx(const crypto::hash &txid, const cryptonote::blobdata &blob, const txpool_tx_meta_t &meta);
     void update_txpool_tx(const crypto::hash &txid, const txpool_tx_meta_t &meta);
@@ -1011,12 +1010,6 @@ namespace cryptonote
     void unlock() const { m_blockchain_lock.unlock(); }
     bool try_lock() const { return m_blockchain_lock.try_lock(); }
 
-    /* These are needed as a workaround for boost::lock not considering the type lockable if const
-     * versions are defined.  When we switch to std::lock these can go. */
-    void lock() { m_blockchain_lock.lock(); }
-    void unlock() { m_blockchain_lock.unlock(); }
-    bool try_lock() { return m_blockchain_lock.try_lock(); }
-
     void cancel();
 
     /**
@@ -1028,6 +1021,8 @@ namespace cryptonote
 
     /**
      * @brief add a hook for processing new blocks and rollbacks for reorgs
+     *
+     * TODO: replace these with more versatile std::functions
      */
     void hook_block_added        (BlockAddedHook& hook)         { m_block_added_hooks.push_back(&hook); }
     void hook_blockchain_detached(BlockchainDetachedHook& hook) { m_blockchain_detached_hooks.push_back(&hook); }
@@ -1057,6 +1052,11 @@ namespace cryptonote
 
     const lns::name_system_db &name_system_db() const { return m_lns_db; }
 
+    /**
+     * @brief flush the invalid blocks set
+     */
+    void flush_invalid_blocks();
+
 #ifndef IN_UNIT_TESTS
   private:
 #endif
@@ -1077,7 +1077,7 @@ namespace cryptonote
     service_nodes::service_node_list& m_service_node_list;
     lns::name_system_db               m_lns_db;
 
-    mutable boost::recursive_mutex m_blockchain_lock; // TODO: add here reader/writer lock
+    mutable std::recursive_mutex m_blockchain_lock; // TODO: add here reader/writer lock
 
     // main chain
     size_t m_current_block_cumul_weight_limit;
@@ -1086,9 +1086,8 @@ namespace cryptonote
     // metadata containers
     std::unordered_map<crypto::hash, std::unordered_map<crypto::key_image, std::vector<output_data_t>>> m_scan_table;
     std::unordered_map<crypto::hash, crypto::hash> m_blocks_longhash_table;
-    std::unordered_map<crypto::hash, std::unordered_map<crypto::key_image, bool>> m_check_txin_table;
 
-    // SHA-3 hashes for each block and for fast pow checking
+    // Keccak hashes for each block and for fast pow checking
     std::vector<crypto::hash> m_blocks_hash_of_hashes;
     std::vector<crypto::hash> m_blocks_hash_check;
     std::vector<crypto::hash> m_blocks_txs_check;
@@ -1117,7 +1116,7 @@ namespace cryptonote
     difficulty_type m_difficulty_for_next_block;
 
     boost::asio::io_service m_async_service;
-    boost::thread_group m_async_pool;
+    std::thread m_async_thread;
     std::unique_ptr<boost::asio::io_service::work> m_async_work_idle;
 
     // some invalid blocks
@@ -1256,10 +1255,11 @@ namespace cryptonote
      *
      * @param bl the block to be added
      * @param bvc metadata concerning the block's validity
+     * @param notify if set to true, sends new block notification on success
      *
      * @return true if the block was added successfully, otherwise false
      */
-    bool handle_block_to_main_chain(const block& bl, block_verification_context& bvc);
+    bool handle_block_to_main_chain(const block& bl, block_verification_context& bvc, bool notify = true);
 
     /**
      * @brief validate and add a new block to the end of the blockchain
@@ -1271,10 +1271,11 @@ namespace cryptonote
      * @param bl the block to be added
      * @param id the hash of the block
      * @param bvc metadata concerning the block's validity
+     * @param notify if set to true, sends new block notification on success
      *
      * @return true if the block was added successfully, otherwise false
      */
-    bool handle_block_to_main_chain(const block& bl, const crypto::hash& id, block_verification_context& bvc, checkpoint_t const *checkpoint);
+    bool handle_block_to_main_chain(const block& bl, const crypto::hash& id, block_verification_context& bvc, checkpoint_t const *checkpoint, bool notify = true);
 
     /**
      * @brief validate and add a new block to an alternate blockchain
@@ -1321,10 +1322,11 @@ namespace cryptonote
      *
      * @param b the block containing the miner transaction
      * @param height the height at which the block will be added
+     * @param hf_version the consensus rules to apply
      *
      * @return false if anything is found wrong with the miner transaction, otherwise true
      */
-    bool prevalidate_miner_transaction(const block& b, uint64_t height);
+    bool prevalidate_miner_transaction(const block& b, uint64_t height, uint8_t hf_version);
 
     /**
      * @brief validates a miner (coinbase) transaction
@@ -1490,7 +1492,7 @@ namespace cryptonote
      * @param result false if the ring signature is invalid, otherwise true
      */
     void check_ring_signature(const crypto::hash &tx_prefix_hash, const crypto::key_image &key_image,
-        const std::vector<rct::ctkey> &pubkeys, const std::vector<crypto::signature> &sig, uint64_t &result);
+        const std::vector<rct::ctkey> &pubkeys, const std::vector<crypto::signature> &sig, uint64_t &result) const;
 
     /**
      * @brief loads block hashes from compiled-in data set
@@ -1510,7 +1512,7 @@ namespace cryptonote
      * can be reconstituted by the receiver. This function expands
      * that implicit data.
      */
-    bool expand_transaction_2(transaction &tx, const crypto::hash &tx_prefix_hash, const std::vector<std::vector<rct::ctkey>> &pubkeys);
+    bool expand_transaction_2(transaction &tx, const crypto::hash &tx_prefix_hash, const std::vector<std::vector<rct::ctkey>> &pubkeys) const;
 
     /**
      * @brief invalidates any cached block template

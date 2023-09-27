@@ -31,13 +31,11 @@
 #include "transaction_info.h"
 
 
-using namespace std;
-
 namespace Monero {
 
 TransactionInfo::~TransactionInfo() {}
 
-TransactionInfo::Transfer::Transfer(uint64_t _amount, const string &_address)
+TransactionInfo::Transfer::Transfer(uint64_t _amount, const std::string &_address)
     : amount(_amount), address(_address) {}
 
 
@@ -112,13 +110,13 @@ uint32_t TransactionInfoImpl::subaddrAccount() const
     return m_subaddrAccount;
 }
 
-string TransactionInfoImpl::label() const
+std::string TransactionInfoImpl::label() const
 {
     return m_label;
 }
 
 
-string TransactionInfoImpl::hash() const
+std::string TransactionInfoImpl::hash() const
 {
     return m_hash;
 }
@@ -128,7 +126,7 @@ std::time_t TransactionInfoImpl::timestamp() const
     return m_timestamp;
 }
 
-string TransactionInfoImpl::paymentId() const
+std::string TransactionInfoImpl::paymentId() const
 {
     return m_paymentid;
 }

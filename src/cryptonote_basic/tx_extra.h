@@ -32,37 +32,44 @@
 
 #include "serialization/serialization.h"
 #include "serialization/binary_archive.h"
+#include "serialization/binary_utils.h"
 #include "serialization/variant.h"
 #include "crypto/crypto.h"
-#include <boost/variant.hpp>
 #include "sispop_economy.h"
 #include "cryptonote_basic.h"
 
 
-#define TX_EXTRA_PADDING_MAX_COUNT              255
-#define TX_EXTRA_NONCE_MAX_COUNT                255
+namespace cryptonote {
 
-#define TX_EXTRA_TAG_PADDING                    0x00
-#define TX_EXTRA_TAG_PUBKEY                     0x01
-#define TX_EXTRA_NONCE                          0x02
-#define TX_EXTRA_MERGE_MINING_TAG               0x03
-#define TX_EXTRA_TAG_ADDITIONAL_PUBKEYS         0x04
-#define TX_EXTRA_TAG_SERVICE_NODE_REGISTER      0x70
-#define TX_EXTRA_TAG_SERVICE_NODE_DEREG_OLD     0x71
-#define TX_EXTRA_TAG_SERVICE_NODE_WINNER        0x72
-#define TX_EXTRA_TAG_SERVICE_NODE_CONTRIBUTOR   0x73
-#define TX_EXTRA_TAG_SERVICE_NODE_PUBKEY        0x74
-#define TX_EXTRA_TAG_TX_SECRET_KEY              0x75
-#define TX_EXTRA_TAG_TX_KEY_IMAGE_PROOFS        0x76
-#define TX_EXTRA_TAG_TX_KEY_IMAGE_UNLOCK        0x77
-#define TX_EXTRA_TAG_SERVICE_NODE_STATE_CHANGE  0x78
-#define TX_EXTRA_TAG_BURN                       0x79
-#define TX_EXTRA_TAG_SISPOP_NAME_SYSTEM           0x7A
+constexpr size_t
+  TX_EXTRA_PADDING_MAX_COUNT = 255,
+  TX_EXTRA_NONCE_MAX_COUNT   = 255;
 
-#define TX_EXTRA_MYSTERIOUS_MINERGATE_TAG       0xDE
+constexpr uint8_t
+  TX_EXTRA_TAG_PADDING                    = 0x00,
+  TX_EXTRA_TAG_PUBKEY                     = 0x01,
+  TX_EXTRA_NONCE                          = 0x02,
+  TX_EXTRA_MERGE_MINING_TAG               = 0x03,
+  TX_EXTRA_TAG_ADDITIONAL_PUBKEYS         = 0x04,
+  TX_EXTRA_TAG_SERVICE_NODE_REGISTER      = 0x70,
+  TX_EXTRA_TAG_SERVICE_NODE_DEREG_OLD     = 0x71,
+  TX_EXTRA_TAG_SERVICE_NODE_WINNER        = 0x72,
+  TX_EXTRA_TAG_SERVICE_NODE_CONTRIBUTOR   = 0x73,
+  TX_EXTRA_TAG_SERVICE_NODE_PUBKEY        = 0x74,
+  TX_EXTRA_TAG_TX_SECRET_KEY              = 0x75,
+  TX_EXTRA_TAG_TX_KEY_IMAGE_PROOFS        = 0x76,
+  TX_EXTRA_TAG_TX_KEY_IMAGE_UNLOCK        = 0x77,
+  TX_EXTRA_TAG_SERVICE_NODE_STATE_CHANGE  = 0x78,
+  TX_EXTRA_TAG_BURN                       = 0x79,
+  TX_EXTRA_TAG_SISPOP_NAME_SYSTEM           = 0x7A,
 
-#define TX_EXTRA_NONCE_PAYMENT_ID               0x00
-#define TX_EXTRA_NONCE_ENCRYPTED_PAYMENT_ID     0x01
+  TX_EXTRA_MYSTERIOUS_MINERGATE_TAG       = 0xDE;
+
+constexpr char
+  TX_EXTRA_NONCE_PAYMENT_ID               = 0x00,
+  TX_EXTRA_NONCE_ENCRYPTED_PAYMENT_ID     = 0x01;
+
+}
 
 namespace lns
 {
@@ -143,6 +150,14 @@ static_assert(sizeof(crypto::ed25519_signature) == sizeof(crypto::signature), "L
 inline std::ostream &operator<<(std::ostream &o, const generic_signature &v) { epee::to_hex::formatted(o, epee::as_byte_span(v.data)); return o; }
 }
 
+namespace std {
+  static_assert(sizeof(lns::generic_owner) >= sizeof(std::size_t) && alignof(lns::generic_owner) >= alignof(std::size_t),
+                "Size and alignment of hash must be at least that of size_t");
+  template <> struct hash<lns::generic_owner> {
+    std::size_t operator()(const lns::generic_owner &v) const { return reinterpret_cast<const std::size_t &>(v); }
+  };
+}
+
 namespace service_nodes {
   enum class new_state : uint16_t
   {
@@ -152,56 +167,39 @@ namespace service_nodes {
     ip_change_penalty,
     _count,
   };
-};
+}
 
 namespace cryptonote
 {
   struct tx_extra_padding
   {
     size_t size;
-
-    // load
-    template <template <bool> class Archive>
-    bool do_serialize(Archive<false>& ar)
-    {
-      // size - 1 - because of variant tag
-      for (size = 1; size <= TX_EXTRA_PADDING_MAX_COUNT; ++size)
-      {
-        std::ios_base::iostate state = ar.stream().rdstate();
-        bool eof = EOF == ar.stream().peek();
-        ar.stream().clear(state);
-
-        if (eof)
-          break;
-
-        uint8_t zero;
-        if (!::do_serialize(ar, zero))
-          return false;
-
-        if (0 != zero)
-          return false;
-      }
-
-      return size <= TX_EXTRA_PADDING_MAX_COUNT;
-    }
-
-    // store
-    template <template <bool> class Archive>
-    bool do_serialize(Archive<true>& ar)
-    {
-      if(TX_EXTRA_PADDING_MAX_COUNT < size)
-        return false;
-
-      // i = 1 - because of variant tag
-      for (size_t i = 1; i < size; ++i)
-      {
-        uint8_t zero = 0;
-        if (!::do_serialize(ar, zero))
-          return false;
-      }
-      return true;
-    }
   };
+
+  template <class Archive>
+  void serialize_value(Archive& ar, tx_extra_padding& pad)
+  {
+    size_t remaining;
+    if constexpr (Archive::is_deserializer)
+      remaining = ar.remaining_bytes();
+    else if (pad.size <= 1)
+      return;
+    else
+      remaining = pad.size - 1; // - 1 here (and just below) because we consider the 0x00 variant tag part of the padding
+
+    if (remaining > TX_EXTRA_PADDING_MAX_COUNT - 1) // - 1 as above.
+      throw std::invalid_argument{"tx_extra_padding size is larger than maximum allowed"};
+
+    char buf[TX_EXTRA_PADDING_MAX_COUNT - 1] = {};
+    ar.serialize_blob(buf, remaining);
+
+    if (Archive::is_deserializer)
+    {
+      if (std::string_view{buf, remaining}.find_first_not_of('\0') != std::string::npos)
+        throw std::invalid_argument{"Invalid non-0 padding byte"};
+      pad.size = remaining + 1;
+    }
+  }
 
   struct tx_extra_pub_key
   {
@@ -218,57 +216,48 @@ namespace cryptonote
 
     BEGIN_SERIALIZE()
       FIELD(nonce)
-      if(TX_EXTRA_NONCE_MAX_COUNT < nonce.size()) return false;
+      if(TX_EXTRA_NONCE_MAX_COUNT < nonce.size())
+        throw std::invalid_argument{"invalid extra nonce: too long"};
     END_SERIALIZE()
   };
 
   struct tx_extra_merge_mining_tag
   {
-    struct serialize_helper
-    {
-      tx_extra_merge_mining_tag& mm_tag;
-
-      serialize_helper(tx_extra_merge_mining_tag& mm_tag_) : mm_tag(mm_tag_)
-      {
-      }
-
-      BEGIN_SERIALIZE()
-        VARINT_FIELD_N("depth", mm_tag.depth)
-        FIELD_N("merkle_root", mm_tag.merkle_root)
-      END_SERIALIZE()
-    };
-
     size_t depth;
     crypto::hash merkle_root;
-
-    // load
-    template <template <bool> class Archive>
-    bool do_serialize(Archive<false>& ar)
-    {
-      std::string field;
-      if(!::do_serialize(ar, field))
-        return false;
-
-      std::istringstream iss(field);
-      binary_archive<false> iar(iss);
-      serialize_helper helper(*this);
-      return ::serialization::serialize(iar, helper);
-    }
-
-    // store
-    template <template <bool> class Archive>
-    bool do_serialize(Archive<true>& ar)
-    {
-      std::ostringstream oss;
-      binary_archive<true> oar(oss);
-      serialize_helper helper(*this);
-      if(!::do_serialize(oar, helper))
-        return false;
-
-      std::string field = oss.str();
-      return ::serialization::serialize(ar, field);
-    }
   };
+
+  template <class Archive>
+  void inner_serializer(Archive& ar, tx_extra_merge_mining_tag& mm)
+  {
+    field_varint(ar, "depth", mm.depth);
+    field(ar, "merkle_root", mm.merkle_root);
+  }
+
+  // load
+  template <class Archive, std::enable_if_t<Archive::is_deserializer, int> = 0>
+  void serialize_value(Archive& ar, tx_extra_merge_mining_tag& mm)
+  {
+    // MM tag gets binary-serialized into a string, and then that string gets serialized (as a
+    // string).  This is very strange.
+    std::string field;
+    value(ar, field);
+
+    serialization::binary_string_unarchiver inner_ar{field};
+    inner_serializer(inner_ar, mm);
+  }
+
+  // store
+  template <class Archive, std::enable_if_t<Archive::is_serializer, int> = 0>
+  void serialize_value(Archive& ar, tx_extra_merge_mining_tag& mm)
+  {
+    // As above: first we binary-serialize into a string, then we serialize the string.
+    serialization::binary_string_archiver inner_ar;
+    inner_serializer(inner_ar, mm);
+
+    std::string field = inner_ar.str();
+    value(ar, field);
+  }
 
   // per-output additional tx pubkey for multi-destination transfers involving at least one subaddress
   struct tx_extra_additional_pub_keys
@@ -552,43 +541,48 @@ namespace cryptonote
   //   varint tag;
   //   varint size;
   //   varint data[];
-  typedef boost::variant<tx_extra_padding,
-                         tx_extra_pub_key,
-                         tx_extra_nonce,
-                         tx_extra_merge_mining_tag,
-                         tx_extra_additional_pub_keys,
-                         tx_extra_mysterious_minergate,
-                         tx_extra_service_node_pubkey,
-                         tx_extra_service_node_register,
-                         tx_extra_service_node_contributor,
-                         tx_extra_service_node_winner,
-                         tx_extra_service_node_state_change,
-                         tx_extra_service_node_deregister_old,
-                         tx_extra_tx_secret_key,
-                         tx_extra_tx_key_image_proofs,
-                         tx_extra_tx_key_image_unlock,
-                         tx_extra_burn,
-                         tx_extra_sispop_name_system
-                        > tx_extra_field;
+  //
+  // Note that the order of fields here also determines the tx extra sort order.  You should not
+  // change the relative orders of existing tags, but new tags can be added wherever seems
+  // appropriate.
+  using tx_extra_field = std::variant<
+      tx_extra_pub_key,
+      tx_extra_service_node_winner,
+      tx_extra_additional_pub_keys,
+      tx_extra_nonce,
+      tx_extra_service_node_register,
+      tx_extra_service_node_deregister_old,
+      tx_extra_service_node_state_change,
+      tx_extra_service_node_contributor,
+      tx_extra_service_node_pubkey,
+      tx_extra_tx_secret_key,
+      tx_extra_sispop_name_system,
+      tx_extra_tx_key_image_proofs,
+      tx_extra_tx_key_image_unlock,
+      tx_extra_burn,
+      tx_extra_merge_mining_tag,
+      tx_extra_mysterious_minergate,
+      tx_extra_padding
+      >;
 }
 
 BLOB_SERIALIZER(cryptonote::tx_extra_service_node_deregister_old::vote);
 BLOB_SERIALIZER(cryptonote::tx_extra_tx_key_image_proofs::proof);
 
-VARIANT_TAG(binary_archive, cryptonote::tx_extra_padding,                     TX_EXTRA_TAG_PADDING);
-VARIANT_TAG(binary_archive, cryptonote::tx_extra_pub_key,                     TX_EXTRA_TAG_PUBKEY);
-VARIANT_TAG(binary_archive, cryptonote::tx_extra_nonce,                       TX_EXTRA_NONCE);
-VARIANT_TAG(binary_archive, cryptonote::tx_extra_merge_mining_tag,            TX_EXTRA_MERGE_MINING_TAG);
-VARIANT_TAG(binary_archive, cryptonote::tx_extra_additional_pub_keys,         TX_EXTRA_TAG_ADDITIONAL_PUBKEYS);
-VARIANT_TAG(binary_archive, cryptonote::tx_extra_mysterious_minergate,        TX_EXTRA_MYSTERIOUS_MINERGATE_TAG);
-VARIANT_TAG(binary_archive, cryptonote::tx_extra_service_node_register,       TX_EXTRA_TAG_SERVICE_NODE_REGISTER);
-VARIANT_TAG(binary_archive, cryptonote::tx_extra_service_node_state_change,   TX_EXTRA_TAG_SERVICE_NODE_STATE_CHANGE);
-VARIANT_TAG(binary_archive, cryptonote::tx_extra_service_node_deregister_old, TX_EXTRA_TAG_SERVICE_NODE_DEREG_OLD);
-VARIANT_TAG(binary_archive, cryptonote::tx_extra_service_node_contributor,    TX_EXTRA_TAG_SERVICE_NODE_CONTRIBUTOR);
-VARIANT_TAG(binary_archive, cryptonote::tx_extra_service_node_winner,         TX_EXTRA_TAG_SERVICE_NODE_WINNER);
-VARIANT_TAG(binary_archive, cryptonote::tx_extra_service_node_pubkey,         TX_EXTRA_TAG_SERVICE_NODE_PUBKEY);
-VARIANT_TAG(binary_archive, cryptonote::tx_extra_tx_secret_key,               TX_EXTRA_TAG_TX_SECRET_KEY);
-VARIANT_TAG(binary_archive, cryptonote::tx_extra_tx_key_image_proofs,         TX_EXTRA_TAG_TX_KEY_IMAGE_PROOFS);
-VARIANT_TAG(binary_archive, cryptonote::tx_extra_tx_key_image_unlock,         TX_EXTRA_TAG_TX_KEY_IMAGE_UNLOCK);
-VARIANT_TAG(binary_archive, cryptonote::tx_extra_burn,                        TX_EXTRA_TAG_BURN);
-VARIANT_TAG(binary_archive, cryptonote::tx_extra_sispop_name_system,            TX_EXTRA_TAG_SISPOP_NAME_SYSTEM);
+BINARY_VARIANT_TAG(cryptonote::tx_extra_padding,                     cryptonote::TX_EXTRA_TAG_PADDING);
+BINARY_VARIANT_TAG(cryptonote::tx_extra_pub_key,                     cryptonote::TX_EXTRA_TAG_PUBKEY);
+BINARY_VARIANT_TAG(cryptonote::tx_extra_nonce,                       cryptonote::TX_EXTRA_NONCE);
+BINARY_VARIANT_TAG(cryptonote::tx_extra_merge_mining_tag,            cryptonote::TX_EXTRA_MERGE_MINING_TAG);
+BINARY_VARIANT_TAG(cryptonote::tx_extra_additional_pub_keys,         cryptonote::TX_EXTRA_TAG_ADDITIONAL_PUBKEYS);
+BINARY_VARIANT_TAG(cryptonote::tx_extra_mysterious_minergate,        cryptonote::TX_EXTRA_MYSTERIOUS_MINERGATE_TAG);
+BINARY_VARIANT_TAG(cryptonote::tx_extra_service_node_register,       cryptonote::TX_EXTRA_TAG_SERVICE_NODE_REGISTER);
+BINARY_VARIANT_TAG(cryptonote::tx_extra_service_node_state_change,   cryptonote::TX_EXTRA_TAG_SERVICE_NODE_STATE_CHANGE);
+BINARY_VARIANT_TAG(cryptonote::tx_extra_service_node_deregister_old, cryptonote::TX_EXTRA_TAG_SERVICE_NODE_DEREG_OLD);
+BINARY_VARIANT_TAG(cryptonote::tx_extra_service_node_contributor,    cryptonote::TX_EXTRA_TAG_SERVICE_NODE_CONTRIBUTOR);
+BINARY_VARIANT_TAG(cryptonote::tx_extra_service_node_winner,         cryptonote::TX_EXTRA_TAG_SERVICE_NODE_WINNER);
+BINARY_VARIANT_TAG(cryptonote::tx_extra_service_node_pubkey,         cryptonote::TX_EXTRA_TAG_SERVICE_NODE_PUBKEY);
+BINARY_VARIANT_TAG(cryptonote::tx_extra_tx_secret_key,               cryptonote::TX_EXTRA_TAG_TX_SECRET_KEY);
+BINARY_VARIANT_TAG(cryptonote::tx_extra_tx_key_image_proofs,         cryptonote::TX_EXTRA_TAG_TX_KEY_IMAGE_PROOFS);
+BINARY_VARIANT_TAG(cryptonote::tx_extra_tx_key_image_unlock,         cryptonote::TX_EXTRA_TAG_TX_KEY_IMAGE_UNLOCK);
+BINARY_VARIANT_TAG(cryptonote::tx_extra_burn,                        cryptonote::TX_EXTRA_TAG_BURN);
+BINARY_VARIANT_TAG(cryptonote::tx_extra_sispop_name_system,            cryptonote::TX_EXTRA_TAG_SISPOP_NAME_SYSTEM);

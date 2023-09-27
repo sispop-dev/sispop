@@ -107,7 +107,6 @@ struct checkpoint_t;
 /** a pair of <transaction hash, output index>, typedef for convenience */
 typedef std::pair<crypto::hash, uint64_t> tx_out_index;
 
-extern const command_line::arg_descriptor<std::string> arg_db_type;
 extern const command_line::arg_descriptor<std::string> arg_db_sync_mode;
 extern const command_line::arg_descriptor<bool, false> arg_db_salvage;
 
@@ -694,37 +693,34 @@ public:
   virtual std::string get_db_name() const = 0;
 
 
-  // FIXME: these are just for functionality mocking, need to implement
-  // RAII-friendly and multi-read one-write friendly locking mechanism
-  //
-  // acquire db lock
   /**
    * @brief acquires the BlockchainDB lock
    *
-   * This function is a stub until such a time as locking is implemented at
-   * this level.
+   * This lock ensures that there is only one database reader or writer, and is
+   * intended only for critical operations such as flushing the database to
+   * disk.
    *
-   * The subclass implementation should return true unless implementing a
-   * locking scheme of some sort, in which case it should return true upon
-   * acquisition of the lock and block until then.
+   * The subclass implementation should do a blocking acquire of some lock, if
+   * appropriate.
    *
-   * If any of this cannot be done, the subclass should throw the corresponding
-   * subclass of DB_EXCEPTION
-   *
-   * @return true, unless at a future time false makes sense (timeout, etc)
+   * Callers should generally prefer to use a RAII wrapper rather than calling
+   * this directly:
+   * 
+   *    {
+   *      std::lock_guard db_lock{db};
+   *      // do some critical db operation
+   *    }
    */
-  virtual bool lock() = 0;
+  virtual void lock() = 0;
 
-  // release db lock
+  /**
+   * @brief tries to acquire the BlockchainDB lock without blocking; returns
+   * true if the lock was acquired, false if acquiring it would block.
+   */
+  virtual bool try_lock() = 0;
+
   /**
    * @brief This function releases the BlockchainDB lock
-   *
-   * The subclass, should it have implemented lock(), will release any lock
-   * held by the calling thread.  In the case of recursive locking, it should
-   * release one instance of a lock.
-   *
-   * If any of this cannot be done, the subclass should throw the corresponding
-   * subclass of DB_EXCEPTION
    */
   virtual void unlock() = 0;
 
@@ -1281,6 +1277,22 @@ public:
   virtual bool get_pruned_tx_blob(const crypto::hash& h, cryptonote::blobdata &tx) const = 0;
 
   /**
+   * @brief fetches a number of pruned transaction blob from the given hash, in canonical blockchain order
+   *
+   * The subclass should return the pruned transactions stored from the one with the given
+   * hash.
+   *
+   * If the first transaction does not exist, the subclass should return false.
+   * If the first transaction exists, but there are fewer transactions starting with it
+   * than requested, the subclass should return false.
+   *
+   * @param h the hash to look for
+   *
+   * @return true iff the transactions were found
+   */
+  virtual bool get_pruned_tx_blobs_from(const crypto::hash& h, size_t count, std::vector<cryptonote::blobdata> &bd) const = 0;
+
+  /**
    * @brief fetches the prunable transaction blob with the given hash
    *
    * The subclass should return the prunable transaction stored which has the given
@@ -1824,7 +1836,7 @@ public:
   };
   virtual void fixup(fixup_context const context = {});
 
-  virtual bool get_output_blacklist(std::vector<uint64_t> &blacklist) const   = 0;
+  virtual void get_output_blacklist(std::vector<uint64_t> &blacklist) const   = 0;
   virtual void add_output_blacklist(std::vector<uint64_t> const &blacklist)   = 0;
   virtual void set_service_node_data(const std::string& data, bool long_term) = 0;
   virtual bool get_service_node_data(std::string &data, bool long_term) const = 0;
@@ -1855,7 +1867,6 @@ public:
   void set_auto_remove_logs(bool auto_remove) { m_auto_remove_logs = auto_remove; }
 
   bool m_open;  //!< Whether or not the BlockchainDB is open/ready for use
-  mutable epee::critical_section m_synchronization_lock;  //!< A lock, currently for when BlockchainLMDB needs to resize the backing db file
 
 };  // class BlockchainDB
 
@@ -1914,7 +1925,7 @@ public:
   explicit db_wtxn_guard(BlockchainDB* db) : db_wtxn_guard{*db} {}
 };
 
-BlockchainDB *new_db(const std::string& db_type);
+BlockchainDB *new_db();
 
 }  // namespace cryptonote
 

@@ -33,9 +33,6 @@ extern "C" {
 #include "keccak.h"
 #include "jh.h"
 #include "skein.h"
-#if !defined(__clang__) && defined(HAS_INTEL_HW)
-#  include <x86intrin.h>
-#endif
 }
 
 

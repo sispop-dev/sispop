@@ -41,12 +41,11 @@ extern "C"
 }
 #include "cryptonote_basic_impl.h"
 #include "cryptonote_format_utils.h"
+#include "cryptonote_config.h"
+#include "common/meta.h"
 
 #undef SISPOP_DEFAULT_LOG_CATEGORY
 #define SISPOP_DEFAULT_LOG_CATEGORY "account"
-
-#define KEYS_ENCRYPTION_SALT 'k'
-
 
 using namespace std;
 
@@ -62,7 +61,7 @@ DISABLE_VS_WARNINGS(4244 4345)
   //-----------------------------------------------------------------
   void account_keys::set_device( hw::device &hwdev)  {
     m_device = &hwdev;
-    MCDEBUG("device", "account_keys::set_device device type: "<<typeid(hwdev).name());
+    MCDEBUG("device", "account_keys::set_device device type: " << tools::type_name(typeid(hwdev)));
   }
   //-----------------------------------------------------------------
   static void derive_key(const crypto::chacha_key &base_key, crypto::chacha_key &key)
@@ -70,7 +69,7 @@ DISABLE_VS_WARNINGS(4244 4345)
     static_assert(sizeof(base_key) == sizeof(crypto::hash), "chacha key and hash should be the same size");
     epee::mlocked<tools::scrubbed_arr<char, sizeof(base_key)+1>> data;
     memcpy(data.data(), &base_key, sizeof(base_key));
-    data[sizeof(base_key)] = KEYS_ENCRYPTION_SALT;
+    data[sizeof(base_key)] = config::HASH_KEY_MEMORY;
     crypto::generate_chacha_key(data.data(), sizeof(data), key, 1);
   }
   //-----------------------------------------------------------------
@@ -209,7 +208,7 @@ DISABLE_VS_WARNINGS(4244 4345)
   void account_base::create_from_device(hw::device &hwdev)
   {
     m_keys.set_device(hwdev);
-    MCDEBUG("device", "device type: "<<typeid(hwdev).name());
+    MCDEBUG("device", "device type: " << tools::type_name(typeid(hwdev)));
     CHECK_AND_ASSERT_THROW_MES(hwdev.init(), "Device init failed");
     CHECK_AND_ASSERT_THROW_MES(hwdev.connect(), "Device connect failed");
     try {

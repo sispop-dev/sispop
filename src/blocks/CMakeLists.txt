@@ -26,25 +26,11 @@
 # STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-add_library(blocks blocks.cpp)
-target_link_libraries(blocks PRIVATE Boost::boost)
-
-target_link_libraries(blocks PRIVATE extra)
-
-foreach(BLOB_NAME checkpoints testnet_blocks stagenet_blocks)
-    set(OUTPUT_C_SOURCE "generated_${BLOB_NAME}.c")
-    set(INPUT_DAT_FILE "${BLOB_NAME}.dat")
-    add_custom_command(
-        OUTPUT ${OUTPUT_C_SOURCE} 
-        MAIN_DEPENDENCY ${INPUT_DAT_FILE} 
-        COMMAND 
-            cd ${CMAKE_CURRENT_BINARY_DIR} && 
-            echo "'#include\t<stddef.h>'" > ${OUTPUT_C_SOURCE} &&
-            echo "'const\tunsigned\tchar\t${BLOB_NAME}[]={'" >> ${OUTPUT_C_SOURCE} &&
-            od -v -An -tx1 ${CMAKE_CURRENT_SOURCE_DIR}/${INPUT_DAT_FILE} | sed -e "'s/[0-9a-fA-F]\\{1,\\}/0x&,/g'" -e "'$$s/.$$//'" >> ${OUTPUT_C_SOURCE} &&
-            echo "'};'" >> ${OUTPUT_C_SOURCE} &&
-            echo "'const\tsize_t\t${BLOB_NAME}_len\t=\tsizeof(${BLOB_NAME});'" >> ${OUTPUT_C_SOURCE}
-    )
-    target_sources(blocks PRIVATE ${OUTPUT_C_SOURCE})
+foreach(NET mainnet stagenet testnet)
+    file(READ "${NET}_blocks.dat" ${NET}_blocks_data HEX)
+    string(REGEX REPLACE "([0-9a-f][0-9a-f])" "\\\\x\\1" ${NET}_blocks_data "${${NET}_blocks_data}")
 endforeach()
 
+configure_file(blocks.cpp.in blocks.cpp @ONLY)
+add_library(blocks "${CMAKE_CURRENT_BINARY_DIR}/blocks.cpp")
+target_link_libraries(blocks PRIVATE extra)

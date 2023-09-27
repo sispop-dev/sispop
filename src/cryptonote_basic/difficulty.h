@@ -31,9 +31,10 @@
 #pragma once
 
 #include <cstdint>
+#include <cstddef>
 #include <vector>
 
-#include "crypto/hash.h"
+namespace crypto { struct hash; }
 
 namespace cryptonote
 {

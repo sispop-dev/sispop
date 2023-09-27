@@ -107,18 +107,26 @@ blink_tx::signature_status blink_tx::get_signature_status(subquorum q, int posit
     return signatures_[static_cast<uint8_t>(q)][position].status;
 }
 
+static int sig_count(const std::array<blink_tx::quorum_signature, BLINK_SUBQUORUM_SIZE>& sigs, blink_tx::signature_status status) {
+    int count = 0;
+    for (auto& s : sigs)
+        if (s.status == status)
+            count++;
+    return count;
+}
+
 bool blink_tx::approved() const {
-    return std::all_of(signatures_.begin(), signatures_.end(), [](const auto &sigs) {
-        return std::count_if(sigs.begin(), sigs.end(), [](const quorum_signature &s) -> bool { return s.status == signature_status::approved; })
-                >= BLINK_MIN_VOTES;
-    });
+    for (auto& sigs : signatures_)
+        if (sig_count(sigs, signature_status::approved) < BLINK_MIN_VOTES)
+            return false;
+    return true;
 }
 
 bool blink_tx::rejected() const {
-    return std::any_of(signatures_.begin(), signatures_.end(), [](const auto &sigs) {
-        return std::count_if(sigs.begin(), sigs.end(), [](const quorum_signature &s) -> bool { return s.status == signature_status::rejected; })
-                > BLINK_SUBQUORUM_SIZE - BLINK_MIN_VOTES;
-    });
+    for (auto& sigs : signatures_)
+        if (sig_count(sigs, signature_status::rejected) > BLINK_SUBQUORUM_SIZE - BLINK_MIN_VOTES)
+            return true;
+    return false;
 }
 
 void blink_tx::fill_serialization_data(crypto::hash &tx_hash, uint64_t &height, std::vector<uint8_t> &quorum, std::vector<uint8_t> &position, std::vector<crypto::signature> &signature) const {

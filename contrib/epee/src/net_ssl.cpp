@@ -26,11 +26,15 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <string.h>
+#include <thread>
+#include <cstring>
 #include <boost/asio/ssl.hpp>
+extern "C" {
 #include <openssl/ssl.h>
 #include <openssl/pem.h>
+}
 #include "misc_log_ex.h"
+#include "net/net_helper.h"
 #include "net/net_ssl.h"
 
 #undef SISPOP_DEFAULT_LOG_CATEGORY
@@ -39,6 +43,10 @@
 // openssl genrsa -out /tmp/KEY 4096
 // openssl req -new -key /tmp/KEY -out /tmp/REQ
 // openssl x509 -req -days 999999 -sha256 -in /tmp/REQ -signkey /tmp/KEY -out /tmp/CERT
+
+#ifdef _WIN32
+static void add_windows_root_certs(SSL_CTX *ctx) noexcept;
+#endif
 
 namespace
 {
@@ -121,7 +129,7 @@ namespace net_utils
 // https://stackoverflow.com/questions/256405/programmatically-create-x509-certificate-using-openssl
 bool create_rsa_ssl_certificate(EVP_PKEY *&pkey, X509 *&cert)
 {
-  MGINFO("Generating SSL certificate");
+  MINFO("Generating SSL certificate");
   pkey = EVP_PKEY_new();
   if (!pkey)
   {
@@ -191,7 +199,7 @@ bool create_rsa_ssl_certificate(EVP_PKEY *&pkey, X509 *&cert)
 
 bool create_ec_ssl_certificate(EVP_PKEY *&pkey, X509 *&cert, int type)
 {
-  MGINFO("Generating SSL certificate");
+  MINFO("Generating SSL certificate");
   pkey = EVP_PKEY_new();
   if (!pkey)
   {
@@ -282,7 +290,7 @@ ssl_options_t::ssl_options_t(std::vector<std::vector<std::uint8_t>> fingerprints
 
 boost::asio::ssl::context ssl_options_t::create_context() const
 {
-  boost::asio::ssl::context ssl_context{boost::asio::ssl::context::tlsv12};
+  boost::asio::ssl::context ssl_context{boost::asio::ssl::context::tls};
   if (!bool(*this))
     return ssl_context;
 
@@ -321,7 +329,12 @@ boost::asio::ssl::context ssl_options_t::create_context() const
   switch (verification)
   {
     case ssl_verification_t::system_ca:
+#ifdef _WIN32
+      try { add_windows_root_certs(ssl_context.native_handle()); }
+      catch (const std::exception &e) { ssl_context.set_default_verify_paths(); }
+#else
       ssl_context.set_default_verify_paths();
+#endif
       break;
     case ssl_verification_t::user_certificates:
       ssl_context.set_verify_depth(0);
@@ -379,13 +392,13 @@ void ssl_authentication_t::use_ssl_certificate(boost::asio::ssl::context &ssl_co
   ssl_context.use_certificate_chain_file(certificate_path);
 }
 
-bool is_ssl(const unsigned char *data, size_t len)
+bool is_ssl(std::string_view data)
 {
-  if (len < get_ssl_magic_size())
+  if (data.size() < get_ssl_magic_size())
     return false;
 
   // https://security.stackexchange.com/questions/34780/checking-client-hello-for-https-classification
-  MDEBUG("SSL detection buffer, " << len << " bytes: "
+  MDEBUG("SSL detection buffer, " << data.size() << " bytes: "
     << (unsigned)(unsigned char)data[0] << " " << (unsigned)(unsigned char)data[1] << " "
     << (unsigned)(unsigned char)data[2] << " " << (unsigned)(unsigned char)data[3] << " "
     << (unsigned)(unsigned char)data[4] << " " << (unsigned)(unsigned char)data[5] << " "
@@ -399,11 +412,15 @@ bool is_ssl(const unsigned char *data, size_t len)
   return false;
 }
 
-bool ssl_options_t::has_strong_verification(boost::string_ref host) const noexcept
+static bool ends_with(std::string_view str, std::string_view suffix) {
+    return str.size() >= suffix.size() && str.substr(str.size() - suffix.size()) == suffix;
+}
+
+bool ssl_options_t::has_strong_verification(std::string_view host) const noexcept
 {
   // onion and i2p addresses contain information about the server cert
   // which both authenticates and encrypts
-  if (host.ends_with(".onion") || host.ends_with(".i2p"))
+  if (ends_with(host, ".onion"sv) || ends_with(host, ".i2p"sv))
     return true;
   switch (verification)
   {
@@ -456,7 +473,11 @@ bool ssl_options_t::has_fingerprint(boost::asio::ssl::verify_context &ctx) const
   return false;
 }
 
-bool ssl_options_t::handshake(boost::asio::ssl::stream<boost::asio::ip::tcp::socket> &socket, boost::asio::ssl::stream_base::handshake_type type, const std::string& host) const
+bool ssl_options_t::handshake(
+  boost::asio::ssl::stream<boost::asio::ip::tcp::socket> &socket,
+  boost::asio::ssl::stream_base::handshake_type type,
+  const std::string& host,
+  std::chrono::milliseconds timeout) const
 {
   socket.next_layer().set_option(boost::asio::ip::tcp::no_delay(true));
 
@@ -502,8 +523,30 @@ bool ssl_options_t::handshake(boost::asio::ssl::stream<boost::asio::ip::tcp::soc
     });
   }
 
-  boost::system::error_code ec;
-  socket.handshake(type, ec);
+  auto& io_service = GET_IO_SERVICE(socket);
+  boost::asio::steady_timer deadline(io_service, timeout);
+  deadline.async_wait([&socket](const boost::system::error_code& error) {
+    if (error != boost::asio::error::operation_aborted)
+    {
+      socket.next_layer().close();
+    }
+  });
+
+  boost::system::error_code ec = boost::asio::error::would_block;
+  socket.async_handshake(type, [&ec](const auto& val) { ec = val; });
+  if (io_service.stopped())
+  {
+    io_service.reset();
+  }
+  while (ec == boost::asio::error::would_block && !io_service.stopped())
+  {
+    // should poll_one(), can't run_one() because it can block if there is
+    // another worker thread executing io_service's tasks
+    // TODO: once we get Boost 1.66+, replace with run_one_for/run_until
+    std::this_thread::sleep_for(std::chrono::milliseconds(30));
+    io_service.poll_one();
+  }
+
   if (ec)
   {
     MERROR("SSL handshake failed, connection dropped: " << ec.message());
@@ -513,7 +556,7 @@ bool ssl_options_t::handshake(boost::asio::ssl::stream<boost::asio::ip::tcp::soc
   return true;
 }
 
-bool ssl_support_from_string(ssl_support_t &ssl, boost::string_ref s)
+bool ssl_support_from_string(ssl_support_t &ssl, std::string_view s)
 {
   if (s == "enabled")
     ssl = epee::net_utils::ssl_support_t::e_ssl_support_enabled;
@@ -528,4 +571,37 @@ bool ssl_support_from_string(ssl_support_t &ssl, boost::string_ref s)
 
 } // namespace
 } // namespace
+
+#ifdef _WIN32
+
+// https://stackoverflow.com/questions/40307541
+// Because Windows always has to do things wonkily
+#include <wincrypt.h>
+static void add_windows_root_certs(SSL_CTX *ctx) noexcept
+{
+    HCERTSTORE hStore = CertOpenSystemStore(0, "ROOT");
+    if (hStore == NULL) {
+        return;
+    }
+
+    X509_STORE *store = X509_STORE_new();
+    PCCERT_CONTEXT pContext = NULL;
+    while ((pContext = CertEnumCertificatesInStore(hStore, pContext)) != NULL) {
+        // convert from DER to internal format
+        X509 *x509 = d2i_X509(NULL,
+                              (const unsigned char **)&pContext->pbCertEncoded,
+                              pContext->cbCertEncoded);
+        if(x509 != NULL) {
+            X509_STORE_add_cert(store, x509);
+            X509_free(x509);
+        }
+    }
+
+    CertFreeCertificateContext(pContext);
+    CertCloseStore(hStore, 0);
+
+    // attach X509_STORE to boost ssl context
+    SSL_CTX_set_cert_store(ctx, store);
+}
+#endif
 

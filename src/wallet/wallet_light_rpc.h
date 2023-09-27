@@ -30,16 +30,19 @@
 
 #pragma once
 #include "cryptonote_basic/cryptonote_basic.h"
+#include "serialization/vector.h"
 #include "crypto/hash.h"
 
 namespace tools
 {
+namespace light_rpc
+{
   //-----------------------------------------------
   SISPOP_RPC_DOC_INTROSPECT
   // TODO: Undocumented light wallet RPC call
-  struct COMMAND_RPC_GET_ADDRESS_TXS
+  struct GET_ADDRESS_TXS
   {
-      struct request_t
+      struct request
       {
         std::string address;      // Address of wallet to receive tx information. 
         std::string view_key;     // View key of Address.
@@ -49,7 +52,6 @@ namespace tools
           KV_SERIALIZE(view_key)
         END_KV_SERIALIZE_MAP()
       };
-      typedef epee::misc_utils::struct_init<request_t> request;
 
       struct spent_output
       {
@@ -83,6 +85,8 @@ namespace tools
         bool mempool;                           // States if the transaction is sitting in the mempool. `true if the transaction is, `false` if not.
         uint32_t mixin;                         // The number of other signatures (aside from yours) in the ring signature that authorises the transaction.
 
+        // TODO(sispop): Also the pay type, is it a stake? But since this is undocumented and not used, not implemented yet
+
         BEGIN_KV_SERIALIZE_MAP()
           KV_SERIALIZE(id)
           KV_SERIALIZE(hash)
@@ -100,7 +104,7 @@ namespace tools
       };
       
       
-      struct response_t
+      struct response
       {
         //std::list<std::string> txs_as_json;
         uint64_t total_received;                 // Total Sispop received in atomic units.
@@ -121,15 +125,14 @@ namespace tools
           KV_SERIALIZE(status)
         END_KV_SERIALIZE_MAP()
       };
-      typedef epee::misc_utils::struct_init<response_t> response;
   };
 
 
   SISPOP_RPC_DOC_INTROSPECT
   // TODO: Undocumented light wallet RPC call
-  struct COMMAND_RPC_GET_ADDRESS_INFO
+  struct GET_ADDRESS_INFO
   {
-      struct request_t
+      struct request
       {
         std::string address;
         std::string view_key;
@@ -139,7 +142,6 @@ namespace tools
           KV_SERIALIZE(view_key)
         END_KV_SERIALIZE_MAP()
       };
-      typedef epee::misc_utils::struct_init<request_t> request;
       
       struct spent_output 
       {
@@ -158,7 +160,7 @@ namespace tools
         END_KV_SERIALIZE_MAP()
       };
  
-      struct response_t
+      struct response
       { 
         uint64_t locked_funds;
         uint64_t total_received;
@@ -182,15 +184,14 @@ namespace tools
           KV_SERIALIZE(spent_outputs)
         END_KV_SERIALIZE_MAP()
       };
-      typedef epee::misc_utils::struct_init<response_t> response;
   };
 
 
   SISPOP_RPC_DOC_INTROSPECT
   // TODO: Undocumented light wallet RPC call
-  struct COMMAND_RPC_GET_UNSPENT_OUTS
+  struct GET_UNSPENT_OUTS
   {
-      struct request_t
+      struct request
       {
         std::string amount;
         std::string address;
@@ -209,7 +210,6 @@ namespace tools
           KV_SERIALIZE(dust_threshold)
         END_KV_SERIALIZE_MAP()
       };
-      typedef epee::misc_utils::struct_init<request_t> request;
     
       
       struct output {
@@ -240,7 +240,7 @@ namespace tools
         END_KV_SERIALIZE_MAP()
       };
       
-      struct response_t
+      struct response
       {
         uint64_t amount;
         std::list<output> outputs;
@@ -256,15 +256,46 @@ namespace tools
           KV_SERIALIZE(reason)
         END_KV_SERIALIZE_MAP()
       };
-      typedef epee::misc_utils::struct_init<response_t> response;
   };
 
-  
-  //-----------------------------------------------
   SISPOP_RPC_DOC_INTROSPECT
-  struct COMMAND_RPC_LOGIN
+  // TODO: Undocumented light wallet RPC call
+  struct SUBMIT_RAW_TX
   {
-      struct request_t
+      struct request
+      {
+        std::string address;
+        std::string view_key;
+        std::string tx;
+        bool blink;
+
+        BEGIN_KV_SERIALIZE_MAP()
+          KV_SERIALIZE(address)
+          KV_SERIALIZE(view_key)
+          KV_SERIALIZE(tx)
+          KV_SERIALIZE_OPT(blink, false)
+        END_KV_SERIALIZE_MAP()
+      };
+
+
+      struct response
+      {
+        std::string status;
+        std::string error;
+
+        BEGIN_KV_SERIALIZE_MAP()
+          KV_SERIALIZE(status)
+          KV_SERIALIZE(error)
+        END_KV_SERIALIZE_MAP()
+
+      };
+  };
+
+  SISPOP_RPC_DOC_INTROSPECT
+  // TODO: Undocumented light wallet RPC call
+  struct LOGIN
+  {
+      struct request
       {
         std::string address;
         std::string view_key;
@@ -272,43 +303,43 @@ namespace tools
 
         BEGIN_KV_SERIALIZE_MAP()
           KV_SERIALIZE(address)
-          KV_SERIALIZE(view_key) 
-          KV_SERIALIZE(create_account) 
+          KV_SERIALIZE(view_key)
+          KV_SERIALIZE(create_account)
         END_KV_SERIALIZE_MAP()
-      };
-      typedef epee::misc_utils::struct_init<request_t> request;
 
-      struct response_t
+      };
+
+      struct response
       {
         std::string status;
         std::string reason;
         bool new_address;
-        
+
         BEGIN_KV_SERIALIZE_MAP()
           KV_SERIALIZE(status)
           KV_SERIALIZE(reason)
           KV_SERIALIZE(new_address)
         END_KV_SERIALIZE_MAP()
       };
-      typedef epee::misc_utils::struct_init<response_t> response;
   };
-  //-----------------------------------------------
+
   SISPOP_RPC_DOC_INTROSPECT
-  struct COMMAND_RPC_IMPORT_WALLET_REQUEST
+  // TODO: Undocumented light wallet RPC call
+  struct IMPORT_WALLET_REQUEST
   {
-      struct request_t
+      struct request
       {
         std::string address;
         std::string view_key;
-        
+
         BEGIN_KV_SERIALIZE_MAP()
           KV_SERIALIZE(address)
           KV_SERIALIZE(view_key)
         END_KV_SERIALIZE_MAP()
-      };
-      typedef epee::misc_utils::struct_init<request_t> request;
 
-      struct response_t
+      };
+
+      struct response
       {
         std::string payment_id;
         uint64_t import_fee;
@@ -316,17 +347,72 @@ namespace tools
         bool request_fulfilled;
         std::string payment_address;
         std::string status;
-        
+
         BEGIN_KV_SERIALIZE_MAP()
           KV_SERIALIZE(payment_id)
           KV_SERIALIZE(import_fee)
           KV_SERIALIZE(new_request)
           KV_SERIALIZE(request_fulfilled)
           KV_SERIALIZE(payment_address)
-          KV_SERIALIZE(status)            
+          KV_SERIALIZE(status)
         END_KV_SERIALIZE_MAP()
+
       };
-      typedef epee::misc_utils::struct_init<response_t> response;
   };
+
   //-----------------------------------------------
-}
+  SISPOP_RPC_DOC_INTROSPECT
+  // TODO: Undocumented light wallet RPC call
+  struct GET_RANDOM_OUTS
+  {
+    struct request
+    {
+      std::vector<std::string> amounts;
+      uint32_t count;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(amounts)
+        KV_SERIALIZE(count)
+      END_KV_SERIALIZE_MAP()
+    };
+
+
+    struct output {
+      std::string public_key;
+      uint64_t global_index;
+      std::string rct; // 64+64+64 characters long (<rct commit> + <encrypted mask> + <rct amount>)
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(public_key)
+        KV_SERIALIZE(global_index)
+        KV_SERIALIZE(rct)
+      END_KV_SERIALIZE_MAP()
+    };
+
+    struct amount_out
+    {
+      uint64_t amount;
+      std::vector<output> outputs;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(amount)
+        KV_SERIALIZE(outputs)
+      END_KV_SERIALIZE_MAP()
+
+    };
+
+    struct response
+    {
+      std::vector<amount_out> amount_outs;
+      std::string Error;
+
+      BEGIN_KV_SERIALIZE_MAP()
+        KV_SERIALIZE(amount_outs)
+        KV_SERIALIZE(Error)
+      END_KV_SERIALIZE_MAP()
+    };
+  };
+
+  //-----------------------------------------------
+} // light_rpc
+} // tools

@@ -28,7 +28,7 @@
 //
 #pragma once
 
-#include <boost/optional/optional.hpp>
+#include <optional>
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
 #include <string>
@@ -54,7 +54,7 @@ namespace cryptonote
       const command_line::arg_descriptor<std::string> rpc_bind_ip;
       const command_line::arg_descriptor<std::string> rpc_bind_ipv6_address;
       const command_line::arg_descriptor<bool> rpc_use_ipv6;
-      const command_line::arg_descriptor<bool> rpc_require_ipv4;
+      const command_line::arg_descriptor<bool> rpc_ignore_ipv4;
       const command_line::arg_descriptor<std::string> rpc_login;
       const command_line::arg_descriptor<bool> confirm_external_bind;
       const command_line::arg_descriptor<std::string> rpc_access_control_origins;
@@ -65,6 +65,9 @@ namespace cryptonote
       const command_line::arg_descriptor<std::vector<std::string>> rpc_ssl_allowed_fingerprints;
       const command_line::arg_descriptor<bool> rpc_ssl_allow_chained;
       const command_line::arg_descriptor<bool> rpc_ssl_allow_any_cert;
+      const command_line::arg_descriptor<bool> rpc_public_node;
+      const command_line::arg_descriptor<std::string> zmq_rpc_bind_ip;   // Deprecated & ignored
+      const command_line::arg_descriptor<std::string> zmq_rpc_bind_port; // Deprecated & ignored
     };
 
     // `allow_any_cert` bool toggles `--rpc-ssl-allow-any-cert` configuration
@@ -72,18 +75,18 @@ namespace cryptonote
     static const char* tr(const char* str);
     static void init_options(boost::program_options::options_description& desc, const bool any_cert_option = false);
 
-    //! \return Arguments specified by user, or `boost::none` if error
-    static boost::optional<rpc_args> process(const boost::program_options::variables_map& vm, const bool any_cert_option = false);
+    //! \return Arguments specified by user, or `std::nullopt` if error
+    static std::optional<rpc_args> process(const boost::program_options::variables_map& vm, const bool any_cert_option = false);
 
-    //! \return SSL arguments specified by user, or `boost::none` if error
-    static boost::optional<epee::net_utils::ssl_options_t> process_ssl(const boost::program_options::variables_map& vm, const bool any_cert_option = false);
+    //! \return SSL arguments specified by user, or `std::nullopt` if error
+    static std::optional<epee::net_utils::ssl_options_t> process_ssl(const boost::program_options::variables_map& vm, const bool any_cert_option = false);
 
     std::string bind_ip;
     std::string bind_ipv6_address;
     bool use_ipv6;
     bool require_ipv4;
     std::vector<std::string> access_control_origins;
-    boost::optional<tools::login> login; // currently `boost::none` if unspecified by user
+    std::optional<tools::login> login; // currently `std::nullopt` if unspecified by user
     epee::net_utils::ssl_options_t ssl_options = epee::net_utils::ssl_support_t::e_ssl_support_enabled;
   };
 }

@@ -1,14 +1,4 @@
-/**
-@file
-@details
-
-
-Passing RPC commands:
-
-@image html images/other/runtime-commands.png
-
-*/
-
+// Copyright (c) 2018-2020, The Loki Project
 // Copyright (c) 2014-2019, The Monero Project
 // 
 // All rights reserved.
@@ -39,7 +29,7 @@ Passing RPC commands:
 
 #pragma once
 
-#include <boost/optional/optional_fwd.hpp>
+#include <optional>
 #include "common/common_fwd.h"
 #include "console_handler.h"
 #include "daemon/command_parser_executor.h"
@@ -47,31 +37,33 @@ Passing RPC commands:
 
 namespace daemonize {
 
-class t_command_server {
+class command_server {
 private:
-  t_command_parser_executor m_parser;
+  bool m_is_rpc{true};
+  command_parser_executor m_parser;
   epee::console_handlers_binder m_command_lookup;
-  bool m_is_rpc;
 
 public:
-  t_command_server(
+  /// Remote HTTP RPC constructor
+  command_server(
       uint32_t ip
     , uint16_t port
-    , const boost::optional<tools::login>& login
+    , const std::optional<tools::login>& login
     , const epee::net_utils::ssl_options_t& ssl_options
-    , bool is_rpc = true
-    , cryptonote::core_rpc_server* rpc_server = NULL
     );
 
-  bool process_command_str(const std::string& cmd);
+  /// Non-remote constructor
+  command_server(cryptonote::rpc::core_rpc_server& rpc_server);
 
-  bool process_command_vec(const std::vector<std::string>& cmd);
+  template <typename... T>
+  bool process_command_and_log(T&&... args) { return m_command_lookup.process_command_and_log(std::forward<T>(args)...); }
 
-  bool start_handling(std::function<void(void)> exit_handler = NULL);
+  bool start_handling(std::function<void(void)> exit_handler = {});
 
   void stop_handling();
 
 private:
+  void init_commands(cryptonote::rpc::core_rpc_server* rpc_server = nullptr);
   bool help(const std::vector<std::string>& args);
 
   std::string get_commands_str();

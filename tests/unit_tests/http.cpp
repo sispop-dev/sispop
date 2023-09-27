@@ -151,10 +151,10 @@ bool is_unauthorized(const http::http_response_info& response)
 {
   EXPECT_EQ(401, response.m_response_code);
   EXPECT_STREQ(u8"Unauthorized", response.m_response_comment.c_str());
-  EXPECT_STREQ(u8"text/html", response.m_mime_tipe.c_str());
+  EXPECT_STREQ(u8"text/html", response.m_mime_type.c_str());
   return response.m_response_code == 401 &&
     response.m_response_comment == u8"Unauthorized" &&
-    response.m_mime_tipe == u8"text/html";
+    response.m_mime_type == u8"text/html";
 }
 
 fields parse_fields(const std::string& value)

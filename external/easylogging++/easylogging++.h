@@ -125,13 +125,18 @@
 #else
 #  define ELPP_OS_NETBSD 0
 #endif
+#if defined(__EMSCRIPTEN__)
+#  define ELPP_OS_EMSCRIPTEN 1
+#else
+#  define ELPP_OS_EMSCRIPTEN 0
+#endif
 #if (defined(__DragonFly__))
 #   define ELPP_OS_DRAGONFLY 1
 #else
 #   define ELPP_OS_DRAGONFLY 0
 #endif
 // Unix
-#if ((ELPP_OS_LINUX || ELPP_OS_MAC || ELPP_OS_FREEBSD || ELPP_OS_NETBSD || ELPP_OS_SOLARIS || ELPP_OS_AIX || ELPP_OS_DRAGONFLY || ELPP_OS_OPENBSD) && (!ELPP_OS_WINDOWS))
+#if ((ELPP_OS_LINUX || ELPP_OS_MAC || ELPP_OS_FREEBSD || ELPP_OS_NETBSD || ELPP_OS_SOLARIS || ELPP_OS_AIX || ELPP_OS_EMSCRIPTEN || ELPP_OS_DRAGONFLY || ELPP_OS_OPENBSD) && (!ELPP_OS_WINDOWS))
 #  define ELPP_OS_UNIX 1
 #else
 #  define ELPP_OS_UNIX 0
@@ -216,7 +221,7 @@ ELPP_INTERNAL_DEBUGGING_OUT_INFO << ELPP_INTERNAL_DEBUGGING_MSG(internalInfoStre
 #  define ELPP_INTERNAL_INFO(lvl, msg)
 #endif  // (defined(ELPP_DEBUG_INFO))
 #if (defined(ELPP_FEATURE_ALL)) || (defined(ELPP_FEATURE_CRASH_LOG))
-#  if (ELPP_COMPILER_GCC && !ELPP_MINGW && !ELPP_OS_OPENBSD && !ELPP_OS_NETBSD && !ELPP_OS_ANDROID)
+#  if (ELPP_COMPILER_GCC && !ELPP_MINGW && !ELPP_OS_OPENBSD && !ELPP_OS_NETBSD && !ELPP_OS_ANDROID && !ELPP_OS_EMSCRIPTEN)
 #    define ELPP_STACKTRACE 1
 #  else
 #    define ELPP_STACKTRACE 0
@@ -359,6 +364,7 @@ ELPP_INTERNAL_DEBUGGING_OUT_INFO << ELPP_INTERNAL_DEBUGGING_MSG(internalInfoStre
 #if defined(ELPP_SYSLOG)
 #   include <syslog.h>
 #endif  // defined(ELPP_SYSLOG)
+#include <climits>
 #include <ctime>
 #include <cstring>
 #include <cstdlib>
@@ -406,6 +412,7 @@ ELPP_INTERNAL_DEBUGGING_OUT_INFO << ELPP_INTERNAL_DEBUGGING_MSG(internalInfoStre
 #include <sstream>
 #include <memory>
 #include <type_traits>
+#include <atomic>
 #if ELPP_THREADING_ENABLED
 #  if ELPP_USE_STD_THREADING
 #      include <mutex>
@@ -2451,6 +2458,7 @@ class VRegistry : base::NoCopy, public base::threading::ThreadSafe {
     base::threading::ScopedLock scopedLock(lock());
     m_categories.clear();
     m_cached_allowed_categories.clear();
+    m_lowest_priority = INT_MAX;
   }
 
   inline void clearModules(void) {
@@ -2495,6 +2503,7 @@ class VRegistry : base::NoCopy, public base::threading::ThreadSafe {
   std::map<std::string, int> m_cached_allowed_categories;
   std::string m_categoriesString;
   std::string m_filenameCommonPrefix;
+  std::atomic<int> m_lowest_priority;
 };
 }  // namespace base
 class LogMessage {

@@ -31,174 +31,95 @@
 #include "pragma_comp_defs.h"
 #include "misc_language.h"
 #include "portable_storage_base.h"
+#include <boost/endian/conversion.hpp>
 
 namespace epee
 {
   namespace serialization
   {
 
-    template<class pack_value, class t_stream>
-    size_t pack_varint_t(t_stream& strm, uint8_t type_or, size_t& pv)
+    namespace detail
     {
-      pack_value v = (*((pack_value*)&pv)) << 2;
-      v |= type_or;
-      strm.write((const char*)&v, sizeof(pack_value));
-      return sizeof(pack_value);
+    template<class IntT>
+    void pack_varint(std::ostream& strm, uint8_t type_or, IntT v);
+    } // namespace detail
+
+    inline void pack_varint(std::ostream& strm, uint64_t val)
+    {
+      // the two least significant bits are used for size information
+      if (val < (1ULL << 6))
+        detail::pack_varint(strm, PORTABLE_RAW_SIZE_MARK_6BIT, static_cast<uint8_t>(val));
+      else if (val < (1ULL << 14))
+        detail::pack_varint(strm, PORTABLE_RAW_SIZE_MARK_14BIT, static_cast<uint16_t>(val));
+      else if (val < (1ULL << 30))
+        detail::pack_varint(strm, PORTABLE_RAW_SIZE_MARK_30BIT, static_cast<uint32_t>(val));
+      else if (val < (1ULL << 62))
+        detail::pack_varint(strm, PORTABLE_RAW_SIZE_MARK_62BIT, val);
+      else
+        ASSERT_MES_AND_THROW("failed to pack varint -- integer value too large: " << val << " >= 2^62");
     }
 
-    PRAGMA_WARNING_PUSH
-      PRAGMA_GCC("GCC diagnostic ignored \"-Wstrict-aliasing\"")
-#ifdef __clang__
-      PRAGMA_GCC("GCC diagnostic ignored \"-Wtautological-constant-out-of-range-compare\"")
-#endif
-      template<class t_stream>
-    size_t pack_varint(t_stream& strm, size_t val)
-    {   //the first two bits always reserved for size information
-
-      if(val <= 63)
-      {//mean enough one byte
-        return pack_varint_t<uint8_t>(strm, PORTABLE_RAW_SIZE_MARK_BYTE, val);
-      }
-      else if(val <= 16383)
-      {//mean need word
-        return pack_varint_t<uint16_t>(strm, PORTABLE_RAW_SIZE_MARK_WORD, val);
-      }else if(val <= 1073741823)
-      {//mean need dword
-        return pack_varint_t<uint32_t>(strm, PORTABLE_RAW_SIZE_MARK_DWORD, val);
-      }else
-      {
-        CHECK_AND_ASSERT_THROW_MES(val <= 4611686018427387903, "failed to pack varint - too big amount = " << val);
-        return pack_varint_t<uint64_t>(strm, PORTABLE_RAW_SIZE_MARK_INT64, val);
-      }
-    }
-    PRAGMA_WARNING_POP
-
-      template<class t_stream>
-    bool put_string(t_stream& strm, const std::string& v)
+    inline void pack_entry_to_buff(std::ostream& strm, const std::string& v)
     {
+      CHECK_AND_ASSERT_THROW_MES(v.size() < MAX_STRING_LEN_POSSIBLE, "string to store is too large: " << v.size());
       pack_varint(strm, v.size());
-      if(v.size())
-        strm.write((const char*)v.data(), v.size());        
-      return true;
+      if (!v.empty())
+        strm.write(v.data(), v.size());
     }
 
-    template<class t_stream>
-    struct array_entry_store_visitor: public boost::static_visitor<bool>
+    template <typename T, std::enable_if_t<std::is_integral_v<T>, int> = 0>
+    void pack_entry_to_buff(std::ostream& strm, T v)
     {
-      t_stream& m_strm;
-
-      template<class t_pod_type>
-      bool pack_pod_array_type(uint8_t contained_type, const array_entry_t<t_pod_type>& arr_pod)
-      {
-        uint8_t type = contained_type|SERIALIZE_FLAG_ARRAY;
-        m_strm.write((const char*)&type, 1);
-        pack_varint(m_strm, arr_pod.m_array.size());
-        for(const t_pod_type& x: arr_pod.m_array)
-          m_strm.write((const char*)&x, sizeof(t_pod_type));
-        return true;
-      }
-
-      array_entry_store_visitor(t_stream& strm):m_strm(strm){}
-      bool operator()(const array_entry_t<uint64_t>& v){ return pack_pod_array_type(SERIALIZE_TYPE_UINT64, v);}
-      bool operator()(const array_entry_t<uint32_t>& v){ return pack_pod_array_type(SERIALIZE_TYPE_UINT32, v);}
-      bool operator()(const array_entry_t<uint16_t>& v){ return pack_pod_array_type(SERIALIZE_TYPE_UINT16, v);}
-      bool operator()(const array_entry_t<uint8_t>& v) { return pack_pod_array_type(SERIALIZE_TYPE_UINT8, v);}
-      bool operator()(const array_entry_t<int64_t>& v) { return pack_pod_array_type(SERIALIZE_TYPE_INT64, v);}
-      bool operator()(const array_entry_t<int32_t>& v) { return pack_pod_array_type(SERIALIZE_TYPE_INT32, v);}
-      bool operator()(const array_entry_t<int16_t>& v) { return pack_pod_array_type(SERIALIZE_TYPE_INT16, v);}
-      bool operator()(const array_entry_t<int8_t>& v)  { return pack_pod_array_type(SERIALIZE_TYPE_INT8, v);}
-      bool operator()(const array_entry_t<double>& v)  { return pack_pod_array_type(SERIALIZE_TYPE_DUOBLE, v);}
-      bool operator()(const array_entry_t<bool>& v)    { return pack_pod_array_type(SERIALIZE_TYPE_BOOL, v);}
-      bool operator()(const array_entry_t<std::string>& arr_str)
-      {
-        uint8_t type = SERIALIZE_TYPE_STRING|SERIALIZE_FLAG_ARRAY;
-        m_strm.write((const char*)&type, 1);
-        pack_varint(m_strm, arr_str.m_array.size());
-        for(const std::string& s: arr_str.m_array)
-          put_string(m_strm, s);
-        return true;
-      }
-      bool operator()(const array_entry_t<section>& arr_sec)    
-      {
-        uint8_t type = SERIALIZE_TYPE_OBJECT|SERIALIZE_FLAG_ARRAY;
-        m_strm.write((const char*)&type, 1);
-        pack_varint(m_strm, arr_sec.m_array.size());
-        for(const section& s: arr_sec.m_array)
-          pack_entry_to_buff(m_strm, s);
-        return true;
-      }
-      bool operator()(const array_entry_t<array_entry>& arra_ar)    
-      {
-        uint8_t type = SERIALIZE_TYPE_ARRAY|SERIALIZE_FLAG_ARRAY;
-        m_strm.write((const char*)&type, 1);
-        pack_varint(m_strm, arra_ar.m_array.size());
-        for(const array_entry& s: arra_ar.m_array)
-          pack_entry_to_buff(m_strm, s);
-        return true;
-      }
-    };
-
-    template<class t_stream>
-    struct storage_entry_store_visitor: public boost::static_visitor<bool>
-    {
-      t_stream& m_strm;
-      storage_entry_store_visitor(t_stream& strm):m_strm(strm){}
-      template<class pod_type>
-      bool pack_pod_type(uint8_t type, const pod_type& v)
-      {
-        m_strm.write((const char*)&type, 1);
-        m_strm.write((const char*)&v, sizeof(pod_type));
-        return true;
-      }
-      //section, array_entry
-      bool operator()(const uint64_t& v){ return pack_pod_type(SERIALIZE_TYPE_UINT64, v);}
-      bool operator()(const uint32_t& v){ return pack_pod_type(SERIALIZE_TYPE_UINT32, v);}
-      bool operator()(const uint16_t& v){ return pack_pod_type(SERIALIZE_TYPE_UINT16, v);}
-      bool operator()(const uint8_t& v) { return pack_pod_type(SERIALIZE_TYPE_UINT8, v);}
-      bool operator()(const int64_t& v) { return pack_pod_type(SERIALIZE_TYPE_INT64, v);}
-      bool operator()(const int32_t& v) { return pack_pod_type(SERIALIZE_TYPE_INT32, v);}
-      bool operator()(const int16_t& v) { return pack_pod_type(SERIALIZE_TYPE_INT16, v);}
-      bool operator()(const int8_t& v)  { return pack_pod_type(SERIALIZE_TYPE_INT8, v);}
-      bool operator()(const double& v)  { return pack_pod_type(SERIALIZE_TYPE_DUOBLE, v);}
-      bool operator()(const bool& v)  { return pack_pod_type(SERIALIZE_TYPE_BOOL, v);}
-      bool operator()(const std::string& v)
-      {
-        uint8_t type = SERIALIZE_TYPE_STRING;
-        m_strm.write((const char*)&type, 1);
-        put_string(m_strm, v);
-        return true;
-      }
-      bool operator()(const section& v)  
-      {
-        uint8_t type = SERIALIZE_TYPE_OBJECT;
-        m_strm.write((const char*)&type, 1);
-        return pack_entry_to_buff(m_strm, v);
-      }
-
-      bool operator()(const array_entry& v)  
-      {
-        //uint8_t type = SERIALIZE_TYPE_ARRAY;
-        //m_strm.write((const char*)&type, 1);
-        return pack_entry_to_buff(m_strm, v);
-      }
-    };
-
-    template<class t_stream>
-    bool pack_entry_to_buff(t_stream& strm, const array_entry& ae)
-    {
-      array_entry_store_visitor<t_stream> aesv(strm);
-      return boost::apply_visitor(aesv, ae);
+      if constexpr (sizeof(T) > 1)
+        boost::endian::native_to_little_inplace(v);
+      strm.write(reinterpret_cast<const char*>(&v), sizeof(v));
     }
 
-    template<class t_stream>
-    bool pack_entry_to_buff(t_stream& strm, const storage_entry& se)
+    inline void pack_entry_to_buff(std::ostream& strm, double v)
     {
-      storage_entry_store_visitor<t_stream> sv(strm);
-      return boost::apply_visitor(sv, se);
+      static_assert(std::numeric_limits<double>::is_iec559 && sizeof(double) == 8 &&
+          (boost::endian::order::native == boost::endian::order::big || boost::endian::order::native == boost::endian::order::little));
+      char* buff = reinterpret_cast<char*>(&v);
+      if constexpr (boost::endian::order::native == boost::endian::order::big) {
+        size_t i = 8;
+        while (i) strm.put(buff[--i]);
+      } else {
+        strm.write(buff, 8);
+      }
     }
 
-    template<class t_stream>
-    bool pack_entry_to_buff(t_stream& strm, const section& sec)
+    void pack_entry_to_buff(std::ostream& strm, const storage_entry& se);
+    void pack_entry_to_buff(std::ostream& strm, const section& se);
+
+    inline void pack_entry_to_buff(std::ostream& strm, const array_entry& ae)
+    {
+      std::visit([&strm](const auto& arr) {
+          using T = typename std::remove_const_t<std::remove_reference_t<decltype(arr)>>::value_type;
+
+          constexpr uint8_t tag = SERIALIZE_FLAG_ARRAY | SERIALIZE_TYPE_TAG<T>;
+          strm.write(reinterpret_cast<const char*>(&tag), 1);
+          pack_varint(strm, arr.size());
+
+          for (auto& v : arr)
+            pack_entry_to_buff(strm, v);
+
+        }, ae);
+    }
+
+    inline void pack_entry_to_buff(std::ostream& strm, const storage_entry& se)
+    {
+      std::visit([&strm](const auto& v) {
+          using T = std::remove_const_t<std::remove_reference_t<decltype(v)>>;
+
+          if constexpr (!std::is_same_v<T, array_entry>) // array_entries get a combined flag+value instead.
+            strm.write(reinterpret_cast<const char*>(&SERIALIZE_TYPE_TAG<T>), 1);
+
+          pack_entry_to_buff(strm, v);
+
+        }, se);
+    }
+
+    inline void pack_entry_to_buff(std::ostream& strm, const section& sec)
     {
       typedef std::map<std::string, storage_entry>::value_type section_pair;
       pack_varint(strm, sec.m_entries.size());
@@ -210,7 +131,22 @@ namespace epee
         strm.write(se.first.data(), size_t(len));
         pack_entry_to_buff(strm, se.second);
       }
-      return true;
     }
+
+    namespace detail
+    {
+
+    template<class IntT>
+    void pack_varint(std::ostream& strm, uint8_t type_or, IntT v)
+    {
+      // Left shift it and store the size tag in the bottom two bits.  We're always guaranteed
+      // (below) to have enough space for the shift to not drop significant bits.
+      v <<= 2;
+      v |= type_or;
+      pack_entry_to_buff(strm, v);
+    }
+
+    } // namespace detail
+
   }
 }

@@ -38,8 +38,8 @@ namespace epee
   namespace serialization
   {
     //-----------------------------------------------------------------------------------------------------------
-    template<class t_struct>
-    bool load_t_from_json(t_struct& out, std::string_view json_buff)
+    template <typename T>
+    bool load_t_from_json(T& out, std::string_view json_buff)
     {
       portable_storage ps;
       bool rs = ps.load_from_json(json_buff);

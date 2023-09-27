@@ -394,8 +394,8 @@ struct WalletListener
     /**
      * @brief called by device when passphrase entry is needed
      */
-    virtual optional<std::string> onDevicePassphraseRequest(bool on_device) {
-        if (!on_device) throw std::runtime_error("Not supported");
+    virtual optional<std::string> onDevicePassphraseRequest(bool & on_device) {
+        on_device = true;
         return optional<std::string>();
     }
 
@@ -808,6 +808,26 @@ struct Wallet
      * @return PendingTransaction
      */
     virtual PendingTransaction*  restoreMultisigTransaction(const std::string& signData) = 0;
+
+    /*!
+     * \brief createTransactionMultDest creates transaction with multiple destinations. if dst_addr is an integrated address, payment_id is ignored
+     * \param dst_addr                  vector of destination address as string
+     * \param payment_id                optional payment_id, can be empty string
+     * \param amount                    vector of amounts
+     * \param mixin_count               mixin count. if 0 passed, wallet will use default value
+     * \param subaddr_account           subaddress account from which the input funds are taken
+     * \param subaddr_indices           set of subaddress indices to use for transfer or sweeping. if set empty, all are chosen when sweeping, and one or more are automatically chosen when transferring. after execution, returns the set of actually used indices
+     * \param priority
+     * \return                          PendingTransaction object. caller is responsible to check PendingTransaction::status()
+     *                                  after object returned
+     */
+
+    virtual PendingTransaction * createTransactionMultDest(const std::vector<std::string> &dst_addr, const std::string &payment_id,
+                                                   optional<std::vector<uint64_t>> amount, uint32_t mixin_count,
+                                                   uint32_t priority = 0,
+                                                   uint32_t subaddr_account = 0,
+                                                   std::set<uint32_t> subaddr_indices = {}) = 0;
+
     /*!
      * \brief createTransaction creates transaction. if dst_addr is an integrated address, payment_id is ignored
      * \param dst_addr          destination address as string
@@ -857,6 +877,17 @@ struct Wallet
      */
     virtual void disposeTransaction(PendingTransaction * t) = 0;
 
+    /*!
+     * \brief Estimates transaction fee.
+     * \param destinations Vector consisting of <address, amount> pairs.
+     * \return Estimated fee.
+     */
+    // TODO(loki): Implement
+#if 0
+    virtual uint64_t estimateTransactionFee(const std::vector<std::pair<std::string, uint64_t>> &destinations,
+                                            uint32_t priority) const = 0;
+#endif
+
    /*!
     * \brief exportKeyImages - exports key images to file
     * \param filename
@@ -878,6 +909,19 @@ struct Wallet
     virtual SubaddressAccount * subaddressAccount() = 0;
     virtual void setListener(WalletListener *) = 0;
 
+    /*!
+     * \brief setCacheAttribute - attach an arbitrary string to a wallet cache attribute
+     * \param key - the key
+     * \param val - the value
+     * \return true if successful, false otherwise
+     */
+    virtual bool setCacheAttribute(const std::string &key, const std::string &val) = 0;
+    /*!
+     * \brief getCacheAttribute - return an arbitrary string attached to a wallet cache attribute
+     * \param key - the key
+     * \return the attached string, or empty string if there is none
+     */
+    virtual std::string getCacheAttribute(const std::string &key) const = 0;
     /*!
      * \brief setUserNote - attach an arbitrary string note to a txid
      * \param txid - the transaction id to attach the note to
@@ -994,6 +1038,9 @@ struct Wallet
 
     //! cold-device protocol key image sync
     virtual uint64_t coldKeyImageSync(uint64_t &spent, uint64_t &unspent) = 0;
+
+    //! shows address on device display
+    virtual void deviceShowAddress(uint32_t accountIndex, uint32_t addressIndex, const std::string &paymentId) = 0;
 };
 
 /**
@@ -1040,10 +1087,12 @@ struct WalletManagerBase
      * \param  nettype        Network type
      * \param  restoreHeight  restore from start height
      * \param  kdf_rounds     Number of rounds for key derivation function
+     * \param  seed_offset    Seed offset passphrase (optional)
      * \return                Wallet instance (Wallet::status() needs to be called to check if recovered successfully)
      */
     virtual Wallet * recoveryWallet(const std::string &path, const std::string &password, const std::string &mnemonic,
-                                    NetworkType nettype = MAINNET, uint64_t restoreHeight = 0, uint64_t kdf_rounds = 1) = 0;
+                                    NetworkType nettype = MAINNET, uint64_t restoreHeight = 0, uint64_t kdf_rounds = 1,
+                                    const std::string &seed_offset = {}) = 0;
     Wallet * recoveryWallet(const std::string &path, const std::string &password, const std::string &mnemonic,
                                     bool testnet = false, uint64_t restoreHeight = 0)           // deprecated
     {
@@ -1229,7 +1278,7 @@ struct WalletManagerBase
     virtual bool isMining() = 0;
 
     //! starts mining with the set number of threads
-    virtual bool startMining(const std::string &address, uint32_t threads = 1, bool background_mining = false, bool ignore_battery = true) = 0;
+    virtual bool startMining(const std::string &address, uint32_t threads = 1) = 0;
 
     //! stops mining
     virtual bool stopMining() = 0;
@@ -1238,7 +1287,11 @@ struct WalletManagerBase
     virtual std::string resolveOpenAlias(const std::string &address, bool &dnssec_valid) const = 0;
 
     //! checks for an update and returns version, hash and url
-    static std::tuple<bool, std::string, std::string, std::string, std::string> checkUpdates(const std::string &software, std::string subdir);
+    static std::tuple<bool, std::string, std::string, std::string, std::string> checkUpdates(
+        const std::string &software,
+        std::string subdir,
+        const char *buildtag = nullptr,
+        const char *current_version = nullptr);
 };
 
 struct WalletManagerFactory

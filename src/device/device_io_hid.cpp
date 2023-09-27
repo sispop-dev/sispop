@@ -44,7 +44,20 @@ namespace hw {
     
     static std::string safe_hid_error(hid_device *hwdev) {
       if (hwdev) {
-        return  std::string((char*)hid_error(hwdev));
+        const wchar_t* error_wstr = hid_error(hwdev);
+        if (error_wstr == nullptr)
+        {
+          return "Unknown error";
+        }
+        std::mbstate_t state{};
+        const size_t len_symbols = std::wcsrtombs(nullptr, &error_wstr, 0, &state);
+        if (len_symbols == static_cast<std::size_t>(-1))
+        {
+          return "Failed to convert wide char error";
+        }
+        std::string error_str(len_symbols + 1, 0);
+        std::wcsrtombs(&error_str[0], &error_wstr, error_str.size(), &state);
+        return error_str;
       }
       return std::string("NULL device");
     }
@@ -99,7 +112,7 @@ namespace hw {
       ASSERT_X(false, "No device found");
     }
 
-    hid_device_info *device_io_hid::find_device(hid_device_info *devices_list, boost::optional<int> interface_number, boost::optional<unsigned short> usage_page) {
+    hid_device_info *device_io_hid::find_device(hid_device_info *devices_list, std::optional<int> interface_number, std::optional<unsigned short> usage_page) {
       bool select_any = !interface_number && !usage_page;
 
       MDEBUG( "Looking for " <<
@@ -135,7 +148,7 @@ namespace hw {
       return result;
     }
 
-    hid_device  *device_io_hid::connect(unsigned int vid, unsigned  int pid, boost::optional<int> interface_number, boost::optional<unsigned short> usage_page) {
+    hid_device  *device_io_hid::connect(unsigned int vid, unsigned  int pid, std::optional<int> interface_number, std::optional<unsigned short> usage_page) {
       hid_device_info *hwdev_info_list;
       hid_device      *hwdev;
 

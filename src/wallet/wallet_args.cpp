@@ -33,6 +33,7 @@
 #include <boost/format.hpp>
 #include "common/i18n.h"
 #include "common/util.h"
+#include "common/file.h"
 #include "misc_log_ex.h"
 #include "string_tools.h"
 #include "version.h"
@@ -85,11 +86,12 @@ namespace wallet_args
     return i18n_translate(str, "wallet_args");
   }
 
-  std::pair<boost::optional<boost::program_options::variables_map>, bool> main(
+  std::pair<std::optional<boost::program_options::variables_map>, bool> main(
     int argc, char** argv,
     const char* const usage,
     const char* const notice,
     boost::program_options::options_description desc_params,
+    boost::program_options::options_description hidden_params,
     const boost::program_options::positional_options_description& positional_options,
     const std::function<void(const std::string&, bool)> &print,
     const char *default_log_name,
@@ -135,11 +137,12 @@ namespace wallet_args
 
     i18n_set_language("translations", "sispop", lang);
 
-    po::options_description desc_all;
-    desc_all.add(desc_general).add(desc_params);
+    po::options_description desc_all, desc_visible;
+    desc_visible.add(desc_general).add(desc_params);
+    desc_all.add(desc_visible).add(hidden_params);
     po::variables_map vm;
     bool should_terminate = false;
-    bool r = command_line::handle_error_helper(desc_all, [&]()
+    bool r = command_line::handle_error_helper(desc_visible, [&]()
     {
       auto parser = po::command_line_parser(argc, argv).options(desc_all).positional(positional_options);
       po::store(parser.run(), vm);
@@ -153,11 +156,11 @@ namespace wallet_args
 
       if (command_line::get_arg(vm, command_line::arg_help))
       {
-        Print(print) << "Sispop '" << SISPOP_RELEASE_NAME << "' (v" << SISPOP_VERSION_FULL << ")" << ENDL;
+        Print(print) << "Sispop '" << SISPOP_RELEASE_NAME << "' (v" << SISPOP_VERSION_FULL << ")\n";
         Print(print) << wallet_args::tr("This is the command line sispop wallet. It needs to connect to a sispop\n"
-												  "daemon to work correctly.") << ENDL;
-        Print(print) << wallet_args::tr("Usage:") << ENDL << "  " << usage;
-        Print(print) << desc_all;
+												  "daemon to work correctly.") << "\n";
+        Print(print) << wallet_args::tr("Usage:") << "\n  " << usage;
+        Print(print) << desc_visible;
         should_terminate = true;
         return true;
       }
@@ -188,7 +191,7 @@ namespace wallet_args
       return true;
     });
     if (!r)
-      return {boost::none, true};
+      return {std::nullopt, true};
 
     if (should_terminate)
       return {std::move(vm), should_terminate};
@@ -209,7 +212,7 @@ namespace wallet_args
     }
 
     if (notice)
-      Print(print) << notice << ENDL;
+      Print(print) << notice << "\n";
 
     if (!command_line::is_arg_defaulted(vm, arg_max_concurrency))
       tools::set_max_concurrency(command_line::get_arg(vm, arg_max_concurrency));
@@ -219,7 +222,10 @@ namespace wallet_args
     if (!command_line::is_arg_defaulted(vm, arg_log_level))
       MINFO("Setting log level = " << command_line::get_arg(vm, arg_log_level));
     else
-      MINFO("Setting log levels = " << getenv("SISPOP_LOGS"));
+    {
+      const char *logs = getenv("SISPOP_LOGS");
+      MINFO("Setting log levels = " << (logs ? logs : "<default>"));
+    }
     MINFO(wallet_args::tr("Logging to: ") << log_path);
 
     Print(print) << boost::format(wallet_args::tr("Logging to %s")) % log_path;

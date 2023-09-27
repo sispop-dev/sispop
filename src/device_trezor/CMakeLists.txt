@@ -55,9 +55,7 @@ if(DEVICE_TREZOR_READY)
             ringct_basic
             cryptonote_core
             common
-            sodium
-            Boost::chrono
-            Boost::regex
+            sodiumxy
             libusb
             protobuf
             extra)

@@ -65,13 +65,15 @@
 #include <limits>
 #include <tuple>
 #include <type_traits>
+#include <optional>
+#include <string_view>
 
 #include "hex.h"
 #include "md5_l.h"
 #include "string_coding.h"
 
-/* This file uses the `u8` prefix and specifies all chars by ASCII numeric
-value. This is for maximum portability - C++ does not actually specify ASCII
+/* This file uses the `u8` prefix for (a paranoid attempt at) maximum portability:
+C++ does not actually specify ASCII
 as the encoding type for unprefixed string literals, etc. Although rare, the
 effort required to support rare compiler encoding types is low.
 
@@ -80,57 +82,49 @@ non-ASCII characters will cause undefined behavior in the table lookup until
 boost 1.60. The expression `&qi::ascii::char_` will fail on non-ASCII
 characters without "consuming" the input character. */
 
+using namespace std::literals;
+
 namespace
 {
   namespace http = epee::net_utils::http;
 
-  // string_ref is only constexpr if length is given
-  template<std::size_t N>
-  constexpr boost::string_ref ceref(const char (&arg)[N])
-  {
-    return boost::string_ref(arg, N - 1);
-  }
+  constexpr auto client_auth_field = u8"Authorization";
+  constexpr auto server_auth_field = u8"WWW-authenticate";
+  constexpr auto auth_realm = u8"monero-rpc";
+  constexpr auto sess_algo = u8"-sess"sv;
 
-  constexpr const auto client_auth_field = ceref(u8"Authorization");
-  constexpr const auto server_auth_field = ceref(u8"WWW-authenticate");
-  constexpr const auto auth_realm = ceref(u8"monero-rpc");
-  constexpr const char comma = 44;
-  constexpr const char equal_sign = 61;
-  constexpr const char quote = 34;
-  constexpr const char zero = 48;
-  constexpr const auto sess_algo = ceref(u8"-sess");
-
-  constexpr const unsigned client_reserve_size = 512; //!< std::string::reserve size for clients
+  constexpr unsigned client_reserve_size = 512; //!< std::string::reserve size for clients
 
   //// Digest Algorithms
 
   struct md5_
   {
-    static constexpr const boost::string_ref name = ceref(u8"MD5");
+    static constexpr auto name = u8"MD5"sv;
 
     struct update
     {
-      template<typename T>
-      void operator()(const T& arg) const
-      {
-        const boost::iterator_range<const char*> data(boost::as_literal(arg));
-        md5::MD5Update(
-          std::addressof(ctx),
-          reinterpret_cast<const std::uint8_t*>(data.begin()),
-          data.size()
-        );
-      }
-      void operator()(const std::string& arg) const
-      {
-        (*this)(boost::string_ref(arg));
-      }
-      void operator()(const epee::wipeable_string& arg) const
+      void operator()(const std::string_view arg) const
       {
         md5::MD5Update(
           std::addressof(ctx),
           reinterpret_cast<const std::uint8_t*>(arg.data()),
           arg.size()
         );
+      }
+      void operator()(const boost::iterator_range<const char*> arg) const
+      {
+        operator()(std::string_view{arg.begin(), arg.size()});
+      }
+      template <size_t N>
+      void operator()(const std::array<char, N>& arg) const
+      {
+        operator()(std::string_view{arg.data(), arg.size()});
+      }
+      // Template indirection for wipeable_string to prevent implicit conversion from std::string/char.
+      template <typename T, std::enable_if_t<std::is_same_v<T, epee::wipeable_string>, int> = 0>
+      void operator()(const T& arg) const
+      {
+        operator()(std::string_view{arg.data(), arg.size()});
       }
 
       md5::MD5_CTX& ctx;
@@ -141,14 +135,14 @@ namespace
     {      
       md5::MD5_CTX ctx{};
       md5::MD5Init(std::addressof(ctx));
-      boost::fusion::for_each(std::tie(args...), update{ctx});
+      update updater{ctx};
+      (updater(args), ...);
 
       std::array<std::uint8_t, 16> digest{{}};
       md5::MD5Final(digest.data(), std::addressof(ctx));
       return epee::to_hex::array(digest);
     }
   };
-  constexpr const boost::string_ref md5_::name;
 
   //! Digest Algorithms available for HTTP Digest Auth. Sort better algos to the left
   constexpr const std::tuple<md5_> digest_algorithms{};
@@ -161,7 +155,7 @@ namespace
     constexpr Char operator()(Char value) const noexcept
     {
       static_assert(std::is_integral<Char>::value, "only integral types supported");
-      return (65 <= value && value <= 90) ? (value + 32) : value;
+      return (u8'A' <= value && value <= u8'Z') ? (value + (u8'a' - u8'A')) : value;
     }
   };
   constexpr const ascii_tolower_ ascii_tolower{};
@@ -183,7 +177,7 @@ namespace
     {
       static_assert(std::is_integral<Char>::value, "only integral types supported");
       return boost::spirit::char_encoding::ascii::isascii_(value) &&
-        (value == comma || boost::spirit::char_encoding::ascii::isspace(value));
+        (value == u8',' || boost::spirit::char_encoding::ascii::isspace(value));
     }
   };
   constexpr const http_list_separator_ http_list_separator{};
@@ -193,43 +187,38 @@ namespace
     return {source.begin(), source.size()};
   }
 
-  template<typename T>
-  void add_first_field(std::string& str, const char* const name, const T& value)
+  void add_first_field(std::string& str, const std::string_view name, const std::string_view value, bool add_quotes = false)
   {
     str.append(name);
-    str.push_back(equal_sign);
+    str.push_back(u8'=');
+    if (add_quotes) str.push_back(u8'"');
     boost::copy(value, std::back_inserter(str));
+    if (add_quotes) str.push_back(u8'"');
   }
 
-  template<typename T>
-  void add_field(std::string& str, const char* const name, const T& value)
+  void add_field(std::string& str, const std::string_view name, const std::string_view value, bool add_quotes = false)
   {
-    str.push_back(comma);
-    add_first_field(str, name, value);
+    str.push_back(u8',');
+    add_first_field(str, name, value, add_quotes);
   }
 
-  template<typename T>
-  using quoted_result = boost::joined_range<
-    const boost::joined_range<const boost::string_ref, const T>, const boost::string_ref
-  >;
-
-  template<typename T>
-  quoted_result<T> add_quotes(const T& arg)
+  template <size_t N>
+  void add_field(std::string& str, const std::string_view name, const std::array<char, N>& value, bool add_quotes = false)
   {
-    return boost::range::join(boost::range::join(ceref(u8"\""), arg), ceref(u8"\""));
+    add_field(str, name, std::string_view{value.data(), N}, add_quotes);
   }
 
   //// Digest Authentication
 
   template<typename Digest>
-  typename std::result_of<Digest()>::type generate_a1(
-    Digest digest, const http::login& creds, const boost::string_ref realm)
+  std::result_of_t<Digest()> generate_a1(
+    Digest digest, const http::login& creds, const std::string_view realm)
   {
     return digest(creds.username, u8":", realm, u8":", creds.password);
   }
 
   template<typename Digest>
-  typename std::result_of<Digest()>::type generate_a1(
+  std::result_of_t<Digest()> generate_a1(
     Digest digest, const http::http_client_auth::session& user)
   {
     return generate_a1(std::move(digest), user.credentials, user.server.realm);
@@ -237,18 +226,19 @@ namespace
 
   template<typename T>
   void init_client_value(std::string& str,
-    const boost::string_ref algorithm, const http::http_client_auth::session& user,
-    const boost::string_ref uri, const T& response)
+    const std::string_view algorithm, const http::http_client_auth::session& user,
+    const std::string_view uri, const T& response)
   {
     str.append(u8"Digest ");
+    constexpr bool add_quotes = true;
     add_first_field(str, u8"algorithm", algorithm);
-    add_field(str, u8"nonce", add_quotes(user.server.nonce));
-    add_field(str, u8"realm", add_quotes(user.server.realm));
-    add_field(str, u8"response", add_quotes(response));
-    add_field(str, u8"uri", add_quotes(uri));
-    add_field(str, u8"username", add_quotes(user.credentials.username));
+    add_field(str, u8"nonce", user.server.nonce, add_quotes);
+    add_field(str, u8"realm", user.server.realm, add_quotes);
+    add_field(str, u8"response", response, add_quotes);
+    add_field(str, u8"uri", uri, add_quotes);
+    add_field(str, u8"username", user.credentials.username, add_quotes);
     if (!user.server.opaque.empty())
-      add_field(str, u8"opaque", add_quotes(user.server.opaque));
+      add_field(str, u8"opaque", user.server.opaque, add_quotes);
   }
 
   //! Implements superseded algorithm specified in RFC 2069
@@ -258,7 +248,7 @@ namespace
     explicit old_algorithm(Digest digest_) : digest(std::move(digest_)) {}
 
     std::string operator()(const http::http_client_auth::session& user,
-      const boost::string_ref method, const boost::string_ref uri) const
+      const std::string_view method, const std::string_view uri) const
     {
       const auto response = digest(
         generate_a1(digest, user), u8":", user.server.nonce, u8":", digest(method, u8":", uri)
@@ -279,7 +269,7 @@ namespace
     explicit auth_algorithm(Digest digest_) : digest(std::move(digest_)) {}
 
     std::string operator()(const http::http_client_auth::session& user,
-      const boost::string_ref method, const boost::string_ref uri) const
+      const std::string_view method, const std::string_view uri) const
     {
       namespace karma = boost::spirit::karma;
       using counter_type = decltype(user.counter);
@@ -295,7 +285,7 @@ namespace
       out.reserve(client_reserve_size);
 
       karma::generate(std::back_inserter(out), karma::hex(user.counter));
-      out.insert(out.begin(), 8 - out.size(), zero); // zero left pad
+      out.insert(out.begin(), 8 - out.size(), u8'0'); // zero left pad
       if (out.size() != 8)
         return {};
 
@@ -306,7 +296,7 @@ namespace
       );
       out.clear();
       init_client_value(out, Digest::name, user, uri, response);
-      add_field(out, u8"qop", ceref(u8"auth"));
+      add_field(out, u8"qop", u8"auth"sv);
       add_field(out, u8"nc", nc);
       return out;
     }
@@ -322,7 +312,7 @@ namespace
     enum status{ kFail = 0, kStale, kPass };
 
     //! \return Status of the `response` field from the client
-    static status verify(const boost::string_ref method, const boost::string_ref request,
+    static status verify(const std::string_view method, const std::string_view request,
       const http::http_server_auth::session& user)
     {
       const auto parsed = parse(request);
@@ -374,7 +364,7 @@ namespace
         }
         ++current;
       }
-      if (is_first || boost::equals(best.stale, ceref(u8"true"), ascii_iequal))
+      if (is_first || boost::equals(best.stale, u8"true"sv, ascii_iequal))
         return best.take();
       return {}; // authentication failed with bad user/pass
     }
@@ -393,7 +383,7 @@ namespace
       , username() {
     }
 
-    static boost::optional<auth_message> parse(const boost::string_ref request)
+    static std::optional<auth_message> parse(const std::string_view request)
     {
       struct parser
       {
@@ -441,7 +431,7 @@ namespace
               using byte = qi::uint_parser<std::uint8_t, 16, 2, 2>;
               return qi::parse(
                 current, end,
-                (qi::lit(quote) >> qi::raw[+(byte{})] >> qi::lit(quote)),
+                (qi::lit(u8'"') >> qi::raw[+(byte{})] >> qi::lit(u8'"')),
                 result.response
               );
             }
@@ -463,14 +453,14 @@ namespace
 
           skip_whitespace = *(&qi::ascii::char_ >> qi::ascii::space);
           header = skip_whitespace >> qi::ascii::no_case[u8"digest"] >> skip_whitespace;
-          quoted_string = (qi::lit(quote) >> qi::raw[+(u8"\\\"" | (qi::ascii::char_ - quote))] >> qi::lit(quote));
+          quoted_string = (qi::lit(u8'"') >> qi::raw[+(u8"\\\"" | (qi::ascii::char_ - u8'"'))] >> qi::lit(u8'"'));
           token =
-            (!qi::lit(quote) >> qi::raw[+(&qi::ascii::char_ >> (qi::ascii::graph - qi::ascii::char_(u8"()<>@,;:\\\"/[]?={}")))]) |
+            (!qi::lit(u8'"') >> qi::raw[+(&qi::ascii::char_ >> (qi::ascii::graph - qi::ascii::char_(u8"()<>@,;:\\\"/[]?={}")))]) |
             quoted_string;
-          fields = field_table >> skip_whitespace >> equal_sign >> skip_whitespace;
+          fields = field_table >> skip_whitespace >> u8'=' >> skip_whitespace;
         }
 
-        boost::optional<auth_message> operator()(const boost::string_ref request) const
+        std::optional<auth_message> operator()(const std::string_view request) const
         { 
           namespace qi = boost::spirit::qi;
            
@@ -479,7 +469,7 @@ namespace
 
           if (!qi::parse(current, end, header))
           {
-            return boost::none;
+            return std::nullopt;
           }
 
           auth_message info{};
@@ -490,11 +480,13 @@ namespace
           {
             if (!qi::parse(current, end, fields, field) || !field(*this, current, end, info))
             {
-              return boost::none;
+              return std::nullopt;
             }
             qi::parse(current, end, skip_whitespace);
-          } while (qi::parse(current, end, qi::char_(comma) >> skip_whitespace));
-          return boost::make_optional(current == end, info);
+          } while (qi::parse(current, end, qi::char_(u8',') >> skip_whitespace));
+          if (current == end)
+            return info;
+          return std::nullopt;
         }
 
       private:
@@ -551,7 +543,7 @@ namespace
           {
             return check(generate_old_response(std::move(digest), std::move(key), std::move(auth)));
           }
-          else if (boost::equals(ceref(u8"auth"), request.qop, ascii_iequal))
+          else if (boost::equals(u8"auth"sv, request.qop, ascii_iequal))
           {
             return check(generate_new_response(std::move(digest), std::move(key), std::move(auth)));
           }
@@ -561,16 +553,17 @@ namespace
 
       const auth_message& request;
       const http::http_server_auth::session& user;
-      const boost::string_ref method;
+      const std::string_view method;
     };
 
-    boost::optional<std::uint32_t> counter() const
+    std::optional<std::uint32_t> counter() const
     {
       namespace qi = boost::spirit::qi;
       using hex = qi::uint_parser<std::uint32_t, 16>;
       std::uint32_t value = 0;
       const bool converted = qi::parse(nc.begin(), nc.end(), hex{}, value);
-      return boost::make_optional(converted, value);
+      if (converted) return value;
+      return std::nullopt;
     }
 
     struct server_parameters
@@ -584,8 +577,8 @@ namespace
       explicit server_parameters(const auth_message& request, const DigestIter& digest)
         : nonce(request.nonce)
         , opaque(request.opaque)
-        , stale(request.stale)
         , realm(request.realm)
+        , stale(request.stale)
         , value_generator()
         , index(boost::fusion::distance(boost::fusion::begin(digest_algorithms), digest))
       {
@@ -604,7 +597,7 @@ namespace
                !elem.eof();
                ++elem)
           {
-            if (boost::equals(ceref(u8"auth"), *elem, ascii_iequal))
+            if (boost::equals(u8"auth"sv, *elem, ascii_iequal))
             {
               value_generator = auth_algorithm<digest_type>{*digest};
               break;
@@ -664,35 +657,36 @@ namespace
     template<typename Digest>
     void operator()(const Digest& digest) const
     {
-      static constexpr const auto fvalue = ceref(u8"Digest qop=\"auth\"");
+      static constexpr auto fvalue = u8"Digest qop=\"auth\""sv;
 
       for (unsigned i = 0; i < 2; ++i)
       {
         std::string out(fvalue);
 
-        const auto algorithm = boost::range::join(
-          Digest::name, (i == 0 ? boost::string_ref{} : sess_algo)
-        );
+        std::string algorithm{Digest::name};
+        if (i > 0) algorithm += sess_algo;
+
         add_field(out, u8"algorithm", algorithm);
-        add_field(out, u8"realm", add_quotes(auth_realm));
-        add_field(out, u8"nonce", add_quotes(nonce));
-        add_field(out, u8"stale", is_stale ? ceref("true") : ceref("false"));
+        constexpr bool add_quotes = true;
+        add_field(out, u8"realm", auth_realm, add_quotes);
+        add_field(out, u8"nonce", nonce, add_quotes);
+        add_field(out, u8"stale", is_stale ? "true"sv : "false"sv);
         
         fields.push_back(std::make_pair(std::string(server_auth_field), std::move(out)));
       }
     }
 
-    const boost::string_ref nonce;
+    const std::string_view nonce;
     std::list<std::pair<std::string, std::string>>& fields;
     const bool is_stale;
   };
 
-  http::http_response_info create_digest_response(const boost::string_ref nonce, const bool is_stale)
+  http::http_response_info create_digest_response(const std::string_view nonce, const bool is_stale)
   {
     epee::net_utils::http::http_response_info rc{};
     rc.m_response_code = 401;
     rc.m_response_comment = u8"Unauthorized";
-    rc.m_mime_tipe = u8"text/html";
+    rc.m_mime_type = u8"text/html";
     rc.m_body = 
       u8"<html><head><title>Unauthorized Access</title></head><body><h1>401 Unauthorized</h1></body></html>";
 
@@ -714,7 +708,7 @@ namespace epee
         : user(session{std::move(credentials)}), rng(std::move(r)) {
       }
 
-      boost::optional<http_response_info> http_server_auth::do_get_response(const http_request_info& request)
+      std::optional<http_response_info> http_server_auth::do_get_response(const http_request_info& request)
       {
         assert(user);
         using field = std::pair<std::string, std::string>;
@@ -731,7 +725,7 @@ namespace epee
           switch (auth_message::verify(request.m_http_method_str, auth->second, *user))
           {
           case auth_message::kPass:
-            return boost::none;
+            return std::nullopt;
 
           case auth_message::kStale:
             is_stale = true;
@@ -768,8 +762,8 @@ namespace epee
         return first_auth ? kParseFailure : kBadPassword;
       }
 
-      boost::optional<std::pair<std::string, std::string>> http_client_auth::do_get_auth_field(
-        const boost::string_ref method, const boost::string_ref uri)
+      std::optional<std::pair<std::string, std::string>> http_client_auth::do_get_auth_field(
+        const std::string_view method, const std::string_view uri)
       {
         assert(user);
         if (user->server.generator)
@@ -777,7 +771,7 @@ namespace epee
           ++(user->counter);
           return std::make_pair(std::string(client_auth_field), user->server.generator(*user, method, uri));
         }
-        return boost::none;
+        return std::nullopt;
       }
     }
   }

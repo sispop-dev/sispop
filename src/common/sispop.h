@@ -30,24 +30,12 @@
 #define SISPOP_H
 
 #include <cstddef>
-#include <cstdint>
-#include <string>
-#include <iterator>
-#include <cassert>
 
 #define SISPOP_RPC_DOC_INTROSPECT
 namespace sispop
 {
 double      round           (double);
 double      exp2            (double);
-
-constexpr uint64_t clamp_u64(uint64_t val, uint64_t min, uint64_t max)
-{
-  assert(min <= max);
-  if (val < min) val = min;
-  else if (val > max) val = max;
-  return val;
-}
 
 template <typename lambda_t>
 struct deferred
@@ -57,7 +45,8 @@ private:
   bool cancelled = false;
 public:
   deferred(lambda_t lambda) : lambda(lambda) {}
-  void cancel() { cancelled = true; }
+  void invoke() { lambda(); cancelled = true; } // Invoke early instead of at destruction
+  void cancel() { cancelled = true; } // Cancel invocation at destruction
   ~deferred() { if (!cancelled) lambda(); }
 };
 

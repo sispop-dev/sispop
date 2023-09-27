@@ -7,6 +7,7 @@
 #include "cryptonote_basic/tx_extra.h"
 #include <sispopmq/hex.h>
 
+#include <cassert>
 #include <string>
 
 struct sqlite3;

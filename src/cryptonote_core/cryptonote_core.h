@@ -33,9 +33,11 @@
 #include <ctime>
 #include <future>
 #include <chrono>
+#include <mutex>
 
 #include <boost/program_options/options_description.hpp>
 #include <boost/program_options/variables_map.hpp>
+#include <sispopmq/sispopmq.h>
 
 #include "cryptonote_protocol/cryptonote_protocol_handler_common.h"
 #include "storages/portable_storage_template_helper.h"
@@ -46,9 +48,8 @@
 #include "service_node_voting.h"
 #include "service_node_list.h"
 #include "service_node_quorum_cop.h"
-#include "cryptonote_core/miner.h"
+#include "cryptonote_basic/miner.h"
 #include "cryptonote_basic/connection_context.h"
-#include "cryptonote_basic/cryptonote_stat_info.h"
 #include "warnings.h"
 #include "crypto/hash.h"
 PUSH_WARNINGS
@@ -78,20 +79,19 @@ namespace cryptonote
   // cryptonote_protocol/quorumnet.cpp's quorumnet::init_core_callbacks().  This indirection is here
   // so that core doesn't need to link against cryptonote_protocol (plus everything it depends on).
 
-  // Starts the quorumnet listener.  Return an opaque pointer (void *) that gets passed into all the
-  // other callbacks below so that the callbacks can recast it into whatever it should be.  `bind`
-  // will be null if the quorumnet object is started in remote-only (non-listening) mode, which only
-  // happens on-demand when running in non-SN mode.
-  extern void *(*quorumnet_new)(core &core, const std::string &bind);
-  // Stops the quorumnet listener; is expected to delete the object and reset the pointer to nullptr.
-  extern void (*quorumnet_delete)(void *&self);
-  // Called when a block is added to let SispopMQ update the active set of SNs
-  extern void (*quorumnet_refresh_sns)(void* self);
+  // Initializes quorumnet state (for service nodes only).  This is called after the SispopMQ object
+  // has been set up but before it starts listening.  Return an opaque pointer (void *) that gets
+  // passed into all the other callbacks below so that the callbacks can recast it into whatever it
+  // should be.
+  extern void* (*quorumnet_new)(core& core);
+  // Destroys the quorumnet state; called on shutdown *after* the SispopMQ object has been destroyed.
+  // Should destroy the state object and set the pointer reference to nullptr.
+  extern void (*quorumnet_delete)(void*& self);
   // Relays votes via quorumnet.
   extern void (*quorumnet_relay_obligation_votes)(void *self, const std::vector<service_nodes::quorum_vote_t> &votes);
   // Sends a blink tx to the current blink quorum, returns a future that can be used to wait for the
   // result.
-  extern std::future<std::pair<blink_result, std::string>> (*quorumnet_send_blink)(void *self, const std::string &tx_blob);
+  extern std::future<std::pair<blink_result, std::string>> (*quorumnet_send_blink)(core& core, const std::string& tx_blob);
   extern bool init_core_callback_complete;
 
 
@@ -117,11 +117,14 @@ namespace cryptonote
        *
        * @param pprotocol pre-constructed protocol object to store and use
        */
-     explicit core(i_cryptonote_protocol* pprotocol);
+     core();
 
      // Non-copyable:
      core(const core &) = delete;
      core &operator=(const core &) = delete;
+
+     // Default virtual destructor
+     virtual ~core() = default;
 
      /**
       * @brief calls various idle routines
@@ -172,7 +175,7 @@ namespace cryptonote
      };
 
      /// Returns an RAII unique lock holding the incoming tx mutex.
-     auto incoming_tx_lock() { return std::unique_lock<boost::recursive_mutex>{m_incoming_tx_lock}; }
+     auto incoming_tx_lock() { return std::unique_lock{m_incoming_tx_lock}; }
 
      /**
       * @brief parses a list of incoming transactions
@@ -410,11 +413,9 @@ namespace cryptonote
      /**
       * @brief performs safe shutdown steps for core and core components
       *
-      * Uninitializes the miner instance, transaction pool, and Blockchain
-      *
-      * @return true
+      * Uninitializes the miner instance, sispopmq, transaction pool, and Blockchain
       */
-     bool deinit();
+     void deinit();
 
      /**
       * @brief sets to drop blocks downloaded (for testing)
@@ -542,6 +543,12 @@ namespace cryptonote
      size_t get_alternative_blocks_count() const;
 
      /**
+      * Returns a short daemon status summary string.  Used when built with systemd support and
+      * running as a Type=notify daemon.
+      */
+     std::string get_status_string() const;
+
+     /**
       * @brief set the pointer to the cryptonote protocol object to use
       *
       * @param pprotocol the pointer to set ours as
@@ -578,15 +585,6 @@ namespace cryptonote
      bool find_blockchain_supplement(const uint64_t req_start_block, const std::list<crypto::hash>& qblock_ids, std::vector<std::pair<std::pair<cryptonote::blobdata, crypto::hash>, std::vector<std::pair<crypto::hash, cryptonote::blobdata> > > >& blocks, uint64_t& total_height, uint64_t& start_height, bool pruned, bool get_miner_tx_hash, size_t max_count) const;
 
      /**
-      * @brief gets some stats about the daemon
-      *
-      * @param st_inf return-by-reference container for the stats requested
-      *
-      * @return true
-      */
-     bool get_stat_info(core_stat_info& st_inf) const;
-
-     /**
       * @copydoc Blockchain::get_tx_outputs_gindexs
       *
       * @note see Blockchain::get_tx_outputs_gindexs
@@ -613,7 +611,7 @@ namespace cryptonote
       *
       * @note see Blockchain::get_outs
       */
-     bool get_outs(const COMMAND_RPC_GET_OUTPUTS_BIN::request& req, COMMAND_RPC_GET_OUTPUTS_BIN::response& res) const;
+     bool get_outs(const rpc::GET_OUTPUTS_BIN::request& req, rpc::GET_OUTPUTS_BIN::response& res) const;
 
      /**
       * @copydoc Blockchain::get_output_distribution
@@ -622,7 +620,7 @@ namespace cryptonote
       */
      bool get_output_distribution(uint64_t amount, uint64_t from_height, uint64_t to_height, uint64_t &start_height, std::vector<uint64_t> &distribution, uint64_t &base) const;
 
-     bool get_output_blacklist(std::vector<uint64_t> &blacklist) const;
+     void get_output_blacklist(std::vector<uint64_t> &blacklist) const;
 
      /**
       * @copydoc miner::pause
@@ -661,6 +659,10 @@ namespace cryptonote
      const tx_memory_pool &get_pool() const { return m_mempool; }
      /// @brief return a reference to the service node list
      tx_memory_pool &get_pool() { return m_mempool; }
+
+     /// Returns a reference to the SispopMQ object.  Must not be called before init(), and should not
+     /// be used for any lmq communication until after start_sispopmq() has been called.
+     sispopmq::SispopMQ& get_lmq() { return *m_lmq; }
 
      /**
       * @copydoc miner::on_synchronized
@@ -880,14 +882,25 @@ namespace cryptonote
       */
      bool add_service_node_vote(const service_nodes::quorum_vote_t& vote, vote_verification_context &vvc);
 
-     using service_node_keys = service_nodes::service_node_keys;
+     using service_keys = service_nodes::service_node_keys;
 
      /**
-      * @brief Get the keys for this service node.
+      * @brief Returns true if this node is operating in service node mode.
       *
-      * @return pointer to service node keys, or nullptr if this node is not running as a service node.
+      * Note that this does not mean the node is currently a registered service node, only that it
+      * is capable of performing service node duties if a registration hits the network.
       */
-     const service_node_keys* get_service_node_keys() const;
+     bool service_node() const { return m_service_node; }
+
+     /**
+      * @brief Get the service keys for this node.
+      *
+      * Note that these exists even if the node is not currently operating as a service node as they
+      * can be used for services other than service nodes (e.g. authenticated public RPC).
+      *
+      * @return reference to service keys.
+      */
+     const service_keys& get_service_keys() const { return m_service_keys; }
 
      /**
       * @brief attempts to submit an uptime proof to the network, if this is running in service node mode
@@ -945,6 +958,18 @@ namespace cryptonote
       */
      void set_service_node_votes_relayed(const std::vector<service_nodes::quorum_vote_t> &votes);
 
+     bool has_block_weights(uint64_t height, uint64_t nblocks) const;
+
+     /**
+      * @brief flushes the bad txs cache
+      */
+     void flush_bad_txs_cache();
+
+     /**
+      * @brief flushes the invalid block cache
+      */
+     void flush_invalid_blocks();
+
      /**
       * @brief Record if the service node has checkpointed at this point in time
       */
@@ -980,13 +1005,6 @@ namespace cryptonote
       * @note see Blockchain::add_new_block
       */
      bool add_new_block(const block& b, block_verification_context& bvc, checkpoint_t const *checkpoint);
-
-     /**
-      * @copydoc parse_tx_from_blob(transaction&, crypto::hash&, crypto::hash&, const blobdata&) const
-      *
-      * @note see parse_tx_from_blob(transaction&, crypto::hash&, crypto::hash&, const blobdata&) const
-      */
-     bool parse_tx_from_blob(transaction& tx, crypto::hash& tx_hash, const blobdata& blob) const;
 
      /**
       * @brief validates some simple properties of a transaction
@@ -1074,7 +1092,10 @@ namespace cryptonote
      bool check_disk_space();
 
      /**
-      * @brief Initializes service node key by loading or creating.
+      * @brief Initializes service keys by loading or creating.  An Ed25519 key (from which we also
+      * get an x25519 key) is always created; the Monero SN keypair is only created when running in
+      * Service Node mode (as it is only used to sign registrations and uptime proofs); otherwise
+      * the pair will be set to the null keys.
       *
       * @return true on success, false otherwise
       */
@@ -1087,7 +1108,7 @@ namespace cryptonote
      sispopmq::AuthLevel lmq_check_access(const crypto::x25519_public_key& pubkey) const;
 
      /**
-      * @brief Initializes sispopmq object, called during init().
+      * @brief Initializes SispopMQ object, called during init().
       *
       * Does not start it: this gets called to initialize it, then it gets configured with endpoints
       * and listening addresses, then finally a call to `start_sispopmq()` should happen to actually
@@ -1097,9 +1118,9 @@ namespace cryptonote
 
  public:
      /**
-      * @brief Starts sispopmq listening.
+      * @brief Starts SispopMQ listening.
       *
-      * Called after all sispopmq initialization is done.
+      * Called after all SispopMQ initialization is done.
       */
      void start_sispopmq();
 
@@ -1111,7 +1132,7 @@ namespace cryptonote
      /**
       * @brief Internal use only!
       *
-      * This returns a mutable reference to the internal auth level map that sispopmq uses, for
+      * This returns a mutable reference to the internal auth level map that SispopMQ uses, for
       * internal use only.
       */
      std::unordered_map<crypto::x25519_public_key, sispopmq::AuthLevel>& _lmq_auth_level_map() { return m_lmq_auth; }
@@ -1141,29 +1162,25 @@ namespace cryptonote
      service_nodes::quorum_cop        m_quorum_cop;
 
      i_cryptonote_protocol* m_pprotocol; //!< cryptonote protocol instance
+     cryptonote_protocol_stub m_protocol_stub; //!< cryptonote protocol stub instance
 
-     boost::recursive_mutex m_incoming_tx_lock; //!< incoming transaction lock
+     std::recursive_mutex m_incoming_tx_lock; //!< incoming transaction lock
 
      //m_miner and m_miner_addres are probably temporary here
      miner m_miner; //!< miner instance
-     account_public_address m_miner_address; //!< address to mine to (for miner instance)
 
      std::string m_config_folder; //!< folder to look in for configs and other files
-
-     cryptonote_protocol_stub m_protocol_stub; //!< cryptonote protocol stub instance
-
-     epee::math_helper::periodic_task m_store_blockchain_interval{12h, false}; //!< interval for manual storing of Blockchain, if enabled
-     epee::math_helper::periodic_task m_fork_moaner{2h}; //!< interval for checking HardFork status
-     epee::math_helper::periodic_task m_txpool_auto_relayer{2min, false}; //!< interval for checking re-relaying txpool transactions
-     epee::math_helper::periodic_task m_check_updates_interval{12h}; //!< interval for checking for new versions
-     epee::math_helper::periodic_task m_check_disk_space_interval{10min}; //!< interval for checking for disk space
-     epee::math_helper::periodic_task m_check_uptime_proof_interval{get_net_config().UPTIME_PROOF_CHECK_INTERVAL};
-     epee::math_helper::periodic_task m_block_rate_interval{90s, false}; //!< interval for checking block rate
-     epee::math_helper::periodic_task m_check_uptime_proof_interval{30s};
-     epee::math_helper::periodic_task m_blockchain_pruning_interval{5h}; //!< interval for incremental blockchain pruning
-     epee::math_helper::periodic_task m_service_node_vote_relayer{2min, false};
-     epee::math_helper::periodic_task m_sn_proof_cleanup_interval{1h, false};
-     epee::math_helper::periodic_task m_systemd_notify_interval{10s};
+     tools::periodic_task m_store_blockchain_interval{12h, false}; //!< interval for manual storing of Blockchain, if enabled
+     tools::periodic_task m_fork_moaner{2h}; //!< interval for checking HardFork status
+     tools::periodic_task m_txpool_auto_relayer{2min, false}; //!< interval for checking re-relaying txpool transactions
+     tools::periodic_task m_check_updates_interval{12h}; //!< interval for checking for new versions
+     tools::periodic_task m_check_disk_space_interval{10min}; //!< interval for checking for disk space
+     tools::periodic_task m_check_uptime_proof_interval{std::chrono::seconds{UPTIME_PROOF_TIMER_SECONDS}}; //!< interval for checking our own uptime proof
+     tools::periodic_task m_block_rate_interval{90s, false}; //!< interval for checking block rate
+     tools::periodic_task m_blockchain_pruning_interval{5h}; //!< interval for incremental blockchain pruning
+     tools::periodic_task m_service_node_vote_relayer{2min, false};
+     tools::periodic_task m_sn_proof_cleanup_interval{1h, false};
+     tools::periodic_task m_systemd_notify_interval{10s};
 
      std::atomic<bool> m_starter_message_showed; //!< has the "daemon will sync now" message been shown?
 
@@ -1178,23 +1195,31 @@ namespace cryptonote
 
      std::atomic_flag m_checkpoints_updating; //!< set if checkpoints are currently updating to avoid multiple threads attempting to update at once
 
-     std::unique_ptr<service_node_keys> m_service_node_keys;
+     bool m_service_node; // True if running in service node mode
+     service_keys m_service_keys; // Always set, even for non-SN mode -- these can be used for public sispopmq rpc
 
      /// Service Node's public IP and storage server port (http and sispopmq)
      uint32_t m_sn_public_ip;
      uint16_t m_storage_port;
      uint16_t m_quorumnet_port;
 
-     std::string m_quorumnet_bind_ip; // Currently just copied from p2p-bind-ip
-     void *m_quorumnet_obj = nullptr;
-     std::mutex m_quorumnet_init_mutex;
+     /// SispopMQ main object.  Gets created during init().
+     std::unique_ptr<sispopmq::SispopMQ> m_lmq;
+
+     // Internal opaque data object managed by cryptonote_protocol/quorumnet.cpp.  void pointer to
+     // avoid linking issues (protocol does not link against core).
+     void* m_quorumnet_state = nullptr;
+
+     /// Stores x25519 -> access level for LMQ authentication.
+     /// Not to be modified after the LMQ listener starts.
+     std::unordered_map<crypto::x25519_public_key, sispopmq::AuthLevel> m_lmq_auth;
 
      size_t block_sync_size;
 
      time_t start_time;
 
      std::unordered_set<crypto::hash> bad_semantics_txes[2];
-     boost::mutex bad_semantics_txes_lock;
+     std::mutex bad_semantics_txes_lock;
 
      enum {
        UPDATES_DISABLED,
@@ -1205,7 +1230,7 @@ namespace cryptonote
 
      tools::download_async_handle m_update_download;
      size_t m_last_update_length;
-     boost::mutex m_update_mutex;
+     std::mutex m_update_mutex;
 
      bool m_offline;
      bool m_pad_transactions;

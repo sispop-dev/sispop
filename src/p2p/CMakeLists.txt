@@ -43,7 +43,6 @@ target_link_libraries(p2p
     version
     net
     miniupnpc
-    Boost::chrono
     Boost::program_options
     Boost::filesystem
     Boost::serialization
