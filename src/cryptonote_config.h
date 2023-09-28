@@ -296,7 +296,7 @@ namespace cryptonote
     STAGENET,
     FAKECHAIN,
     UNDEFINED = 255
-  };
+   };
   struct config_t
   {
     uint64_t CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX;
@@ -310,109 +310,7 @@ namespace cryptonote
     std::string GENESIS_TX;
     uint32_t GENESIS_NONCE;
     uint64_t GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS;
-    std::array<std::string_view, 2> GOVERNANCE_WALLET_ADDRESS;
-
-    std::chrono::seconds UPTIME_PROOF_TOLERANCE;
-    std::chrono::seconds UPTIME_PROOF_STARTUP_DELAY;
-    std::chrono::seconds UPTIME_PROOF_CHECK_INTERVAL;
-    std::chrono::seconds UPTIME_PROOF_FREQUENCY;
-    std::chrono::seconds UPTIME_PROOF_VALIDITY;
-
-    inline constexpr std::string_view governance_wallet_address(int hard_fork_version) const {
-      const auto wallet_switch =
-        (NETWORK_TYPE == MAINNET || NETWORK_TYPE == FAKECHAIN)
-        ? network_version_11_infinite_staking
-        : network_version_10_bulletproofs;
-      return GOVERNANCE_WALLET_ADDRESS[hard_fork_version >= wallet_switch ? 1 : 0];
-    }
-  };
-  inline constexpr network_config mainnet_config{
-    MAINNET,
-    ::config::HEIGHT_ESTIMATE_HEIGHT,
-    ::config::HEIGHT_ESTIMATE_TIMESTAMP,
-    ::config::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
-    ::config::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
-    ::config::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX,
-    ::config::P2P_DEFAULT_PORT,
-    ::config::RPC_DEFAULT_PORT,
-    ::config::ZMQ_RPC_DEFAULT_PORT,
-    ::config::QNET_DEFAULT_PORT,
-    ::config::NETWORK_ID,
-    ::config::GENESIS_TX,
-    ::config::GENESIS_NONCE,
-    ::config::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
-    ::config::GOVERNANCE_WALLET_ADDRESS,
-    config::UPTIME_PROOF_TOLERANCE,
-    config::UPTIME_PROOF_STARTUP_DELAY,
-    config::UPTIME_PROOF_CHECK_INTERVAL,
-    config::UPTIME_PROOF_FREQUENCY,
-    config::UPTIME_PROOF_VALIDITY,
-  };
-  inline constexpr network_config testnet_config{
-    TESTNET,
-    ::config::testnet::HEIGHT_ESTIMATE_HEIGHT,
-    ::config::testnet::HEIGHT_ESTIMATE_TIMESTAMP,
-    ::config::testnet::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
-    ::config::testnet::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
-    ::config::testnet::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX,
-    ::config::testnet::P2P_DEFAULT_PORT,
-    ::config::testnet::RPC_DEFAULT_PORT,
-    ::config::testnet::ZMQ_RPC_DEFAULT_PORT,
-    ::config::testnet::QNET_DEFAULT_PORT,
-    ::config::testnet::NETWORK_ID,
-    ::config::testnet::GENESIS_TX,
-    ::config::testnet::GENESIS_NONCE,
-    ::config::testnet::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
-    ::config::testnet::GOVERNANCE_WALLET_ADDRESS,
-    config::UPTIME_PROOF_TOLERANCE,
-    config::UPTIME_PROOF_STARTUP_DELAY,
-    config::UPTIME_PROOF_CHECK_INTERVAL,
-    config::testnet::UPTIME_PROOF_FREQUENCY,
-    config::testnet::UPTIME_PROOF_VALIDITY,
-  };
-  inline constexpr network_config devnet_config{
-    DEVNET,
-    ::config::devnet::HEIGHT_ESTIMATE_HEIGHT,
-    ::config::devnet::HEIGHT_ESTIMATE_TIMESTAMP,
-    ::config::devnet::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
-    ::config::devnet::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
-    ::config::devnet::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX,
-    ::config::devnet::P2P_DEFAULT_PORT,
-    ::config::devnet::RPC_DEFAULT_PORT,
-    ::config::devnet::ZMQ_RPC_DEFAULT_PORT,
-    ::config::devnet::QNET_DEFAULT_PORT,
-    ::config::devnet::NETWORK_ID,
-    ::config::devnet::GENESIS_TX,
-    ::config::devnet::GENESIS_NONCE,
-    ::config::devnet::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
-    ::config::devnet::GOVERNANCE_WALLET_ADDRESS,
-    config::UPTIME_PROOF_TOLERANCE,
-    config::UPTIME_PROOF_STARTUP_DELAY,
-    config::UPTIME_PROOF_CHECK_INTERVAL,
-    config::testnet::UPTIME_PROOF_FREQUENCY,
-    config::testnet::UPTIME_PROOF_VALIDITY,
-  };
-  inline constexpr network_config fakenet_config{
-    FAKECHAIN,
-    ::config::HEIGHT_ESTIMATE_HEIGHT,
-    ::config::HEIGHT_ESTIMATE_TIMESTAMP,
-    ::config::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
-    ::config::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
-    ::config::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX,
-    ::config::P2P_DEFAULT_PORT,
-    ::config::RPC_DEFAULT_PORT,
-    ::config::ZMQ_RPC_DEFAULT_PORT,
-    ::config::QNET_DEFAULT_PORT,
-    ::config::NETWORK_ID,
-    ::config::GENESIS_TX,
-    ::config::GENESIS_NONCE,
-    100, //::config::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
-    ::config::GOVERNANCE_WALLET_ADDRESS,
-    config::UPTIME_PROOF_TOLERANCE,
-    config::fakechain::UPTIME_PROOF_STARTUP_DELAY,
-    config::fakechain::UPTIME_PROOF_CHECK_INTERVAL,
-    config::fakechain::UPTIME_PROOF_FREQUENCY,
-    config::fakechain::UPTIME_PROOF_VALIDITY,
+    std::string const *GOVERNANCE_WALLET_ADDRESS;
   };
   inline const config_t& get_config(network_type nettype, int hard_fork_version = 7)
   {

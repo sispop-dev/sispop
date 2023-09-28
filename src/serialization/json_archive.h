@@ -42,7 +42,7 @@
 #include <iostream>
 #include <iomanip>
 #include <exception>
-#include <lokimq/hex.h>
+#include <sispopmq/hex.h>
 
 namespace serialization {
 
@@ -114,7 +114,7 @@ struct json_archiver : public serializer
   void serialize_blob(void *buf, size_t len, std::string_view delimiter="\""sv) {
     stream_ << delimiter;
     auto* begin = static_cast<unsigned char*>(buf);
-    lokimq::to_hex(begin, begin + len, std::ostreambuf_iterator{stream_});
+    sispopmq::to_hex(begin, begin + len, std::ostreambuf_iterator{stream_});
     stream_ << delimiter;
   }
 

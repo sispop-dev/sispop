@@ -30,7 +30,7 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include <numeric>
-#include "lokimq/base64.h"
+#include "sispopmq/base64.h"
 #include "misc_language.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "misc_os_dependent.h"
@@ -42,8 +42,8 @@
 #include "string_tools.h"
 #include "storages/portable_storage_template_helper.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "miner"
+#undef SISPOP_DEFAULT_LOG_CATEGORY
+#define SISPOP_DEFAULT_LOG_CATEGORY "miner"
 
 #define AUTODETECT_WINDOW 10 // seconds
 #define AUTODETECT_GAIN_THRESHOLD 1.02f  // 2%
@@ -255,13 +255,13 @@ namespace cryptonote
         tools::trim(extra_vec[i]);
         if(!extra_vec[i].size())
           continue;
-        if (!lokimq::is_base64(extra_vec[i]))
+        if (!sispopmq::is_base64(extra_vec[i]))
         {
           MWARNING("Invalid (non-base64) extra message `" << extra_vec[i] << "'");
           continue;
         }
 
-        std::string buff = lokimq::from_base64(extra_vec[i]);
+        std::string buff = sispopmq::from_base64(extra_vec[i]);
         if(buff != "0")
           m_extra_messages[i] = buff;
       }
@@ -447,7 +447,7 @@ namespace cryptonote
     rx_slow_hash_allocate_state();
     ++m_threads_active;
     bool call_stop = false;
-#if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
+#if defined(SISPOP_ENABLE_INTEGRATION_TEST_HOOKS)
     call_stop = true;
 #endif
 
@@ -505,7 +505,7 @@ namespace cryptonote
             epee::serialization::store_t_to_json_file(m_config, m_config_folder_path + "/" + MINER_CONFIG_FILE_NAME);
         }
 
-#if defined(LOKI_ENABLE_INTEGRATION_TEST_HOOKS)
+#if defined(SISPOP_ENABLE_INTEGRATION_TEST_HOOKS)
         if (m_debug_mine_singular_block)
         {
           m_debug_mine_singular_block = false;

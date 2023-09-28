@@ -548,7 +548,7 @@ namespace cryptonote
     try {
       serialization::deserialize_all(ar, tx_extra_fields);
     } catch (const std::exception& e) {
-      MWARNING(__func__ << ": failed to deserialize extra field: " << e.what() << "; extra = " << sispopmq::to_hex(tx_extra.begin(), tx_extra.end()));
+//      MWARNING(__func__ << ": failed to deserialize extra field: " << e.what() << "; extra = " << sispopmq::to_hex(tx_extra.begin(), tx_extra.end()));
       return false;
     }
 
@@ -813,7 +813,7 @@ namespace cryptonote
           value(newar, field);
       } while (ar.remaining_bytes() > 0);
     } catch (const std::exception& e) {
-      LOG_PRINT_L1(__func__ << ": failed to deserialize extra field: " << e.what() << "; extra = " << sispopmq::to_hex(tx_extra.begin(), tx_extra.end()));
+//      LOG_PRINT_L1(__func__ << ": failed to deserialize extra field: " << e.what() << "; extra = " << sispopmq::to_hex(tx_extra.begin(), tx_extra.end()));
       return false;
     }
 

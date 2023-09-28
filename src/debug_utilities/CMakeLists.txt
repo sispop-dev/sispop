@@ -52,7 +52,7 @@ set(dns_checks_sources
   dns_checks.cpp
   )
 
-loki_add_executable(dns_checks "loki-utils-dns-checks" dns_checks.cpp)
+sispop_add_executable(dns_checks "sispop-utils-dns-checks" dns_checks.cpp)
 
 target_link_libraries(dns_checks
     PRIVATE

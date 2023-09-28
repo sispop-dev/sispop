@@ -84,7 +84,7 @@ namespace service_nodes
     END_KV_SERIALIZE_MAP()
   };
 
-  template <typename ValueType, size_t Count = QUORUM_VOTE_CHECK_COUNT>
+  template <typename ValueType, size_t Count = 3>
   struct participation_history {
     std::array<ValueType, Count> array;
     size_t write_index;

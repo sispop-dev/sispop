@@ -10,9 +10,6 @@
 [submodule "external/randomx"]
 	path = external/randomx
 	url = https://github.com/sispopplatform/RandomX
-[submodule "external/sispop-mq"]
-	path = external/sispop-mq
-	url = https://github.com/sispopplatform/sispop-mq-real.git
 [submodule "external/googletest"]
 	path = external/googletest
 	url = https://github.com/google/googletest.git
