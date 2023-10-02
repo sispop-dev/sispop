@@ -2039,13 +2039,13 @@ namespace cryptonote
   static bool check_external_ping(time_t last_ping, time_t lifetime, const char *what)
   {
     const auto elapsed = std::time(nullptr) - last_ping;
-    if (elapsed > lifetime)
+    /*if (elapsed > lifetime)
     {
       MWARNING("Have not heard from " << what << " " <<
               (!last_ping ? "since starting" :
                "for more than " + tools::get_human_readable_timespan(std::chrono::seconds(elapsed))));
       return false;
-    }
+    }*/
     return true;
   }
   void core::reset_proof_interval()
@@ -2086,23 +2086,6 @@ namespace cryptonote
               "Failed to submit uptime proof: have not heard from the storage server recently. Make sure that it "
               "is running! It is required to run alongside the Sispop daemon");
           return;
-        }
-        uint8_t hf_version = get_blockchain_storage().get_current_hard_fork_version();
-        if (!check_external_ping(m_last_sispopnet_ping, SISPOPNET_PING_LIFETIME, "Sispopnet"))
-        {
-          if (hf_version >= cryptonote::network_version_14_blink)
-          {
-            MGINFO_RED(
-                "Failed to submit uptime proof: have not heard from sispopnet recently. Make sure that it "
-                "is running! It is required to run alongside the Sispop daemon");
-            return;
-          }
-          else
-          {
-            MGINFO_RED(
-                "Have not heard from sispopnet recently. Make sure that it is running! "
-                "It is required to run alongside the Sispop daemon after hard fork 14");
-          }
         }
 
         submit_uptime_proof();
