@@ -57,9 +57,9 @@ cmake_minimum_required(VERSION 3.10)
 message(STATUS "CMake version ${CMAKE_VERSION}")
 
 project(sispop
-    VERSION 7.1.9
+    VERSION 10.0.2
     LANGUAGES CXX C)
-set(SISPOP_RELEASE_CODENAME "Valiant Vidar")
+set(SISPOP_RELEASE_CODENAME "Drink Water")
 
 # String value to append to the full version string; this is intended to easily identify whether a
 # binary was build from the release or development branches.  This should be permanently set to an
