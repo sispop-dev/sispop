@@ -496,4 +496,3 @@ sispop::round (double x)
     }
   return z;
 }
-

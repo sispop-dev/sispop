@@ -21,7 +21,6 @@ uint64_t get_staking_requirement(cryptonote::network_type m_nettype, uint64_t he
   uint64_t height_adjusted = height - hardfork_height;
   uint64_t base = 0, variable = 0;
   std::fesetround(FE_TONEAREST);
-
    if (height >= 133) {
     base     = 75000 * COIN;
     variable = (75000 * COIN) / sispop::exp2(height_adjusted/129600.0);
@@ -29,6 +28,7 @@ uint64_t get_staking_requirement(cryptonote::network_type m_nettype, uint64_t he
     base     = 1500 * COIN;
     variable = (1500 * COIN) / sispop::exp2(height_adjusted/129600.0);
     }
+
   uint64_t result = base + variable;
   return result;
 }

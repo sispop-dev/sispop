@@ -218,7 +218,6 @@ namespace cryptonote
         return std::nullopt;
       }
 
-      using namespace boost::placeholders;
       std::vector<std::string> access_control_origins;
       boost::split(access_control_origins, access_control_origins_input, boost::is_any_of(","));
       std::for_each(access_control_origins.begin(), access_control_origins.end(), [](auto& a) { boost::trim(a, std::locale::classic()); });

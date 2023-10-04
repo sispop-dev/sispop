@@ -1,5 +1,4 @@
-// Copyright (c) 2014-2019, The Monero Project
-// Copyright (c)      2018-2023, The Oxen Project
+// Copyright (c) 2020, The Loki Project
 // 
 // All rights reserved.
 // 
@@ -41,7 +40,7 @@ namespace cryptonote { namespace rpc {
 void init_lmq_options(boost::program_options::options_description& desc);
 
 /**
- * LMQ RPC server class.  This doesn't actually hold the sispopMQ instance--that's in
+ * LMQ RPC server class.  This doesn't actually hold the SispopMQ instance--that's in
  * cryptonote_core--but it works with it to add RPC endpoints, make it listen on RPC ports, and
  * handles RPC requests.
  */

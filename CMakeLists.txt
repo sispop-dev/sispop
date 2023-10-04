@@ -57,7 +57,7 @@ cmake_minimum_required(VERSION 3.10)
 message(STATUS "CMake version ${CMAKE_VERSION}")
 
 project(sispop
-    VERSION 7.1.9
+    VERSION 10.0.1
     LANGUAGES CXX C)
 set(SISPOP_RELEASE_CODENAME "Clean Water")
 
@@ -66,7 +66,7 @@ set(SISPOP_RELEASE_CODENAME "Clean Water")
 # empty string on `master`, "-dev" on the `dev` branch, and can be set externally (via cmake
 # arguments) where it makes sense to take some other branch release with an extra value.
 if(NOT DEFINED SISPOP_RELEASE_SUFFIX)
-  set(SISPOP_RELEASE_SUFFIX "-dev")
+  set(SISPOP_RELEASE_SUFFIX "-stable")
 endif()
 
 if(POLICY CMP0079)

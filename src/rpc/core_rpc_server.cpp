@@ -1,5 +1,5 @@
+// Copyright (c) 2018-2023, The Oxen Project
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c)      2018-2023, The Oxen Project
 //
 // All rights reserved.
 //
@@ -62,110 +62,6 @@
 
 #undef SISPOP_DEFAULT_LOG_CATEGORY
 #define SISPOP_DEFAULT_LOG_CATEGORY "daemon.rpc"
-
-
-namespace cryptonote { namespace rpc {
-
-  namespace {
-    // Helper loaders for RPC registration; this lets us reduce the amount of compiled code by
-    // avoiding the need to instantiate {JSON,binary} loading code for {binary,JSON} commands.
-    // This first one is for JSON, the specialization below is for binary.
-    template <typename RPC, typename JSON = void>
-    struct reg_helper {
-      using Request = typename RPC::request;
-
-      Request load(rpc_request& request) {
-        Request req{};
-        if (std::holds_alternative<std::string_view>(request.body)) {
-          if (!epee::serialization::load_t_from_json(req, std::get<std::string_view>(request.body)))
-            throw parse_error{"Failed to parse JSON parameters"};
-        } else {
-          // This is nasty.  TODO: get rid of epee's horrible serialization code.
-          auto& epee_stuff = std::get<jsonrpc_params>(request.body);
-          auto& storage_entry = epee_stuff.second;
-          // For some reason epee calls a json object a "section" instead of something common like
-          // dict, object, hash, map.  But okay, then it calls a pointer to a section a "hsection"
-          // because obfuscation is the epee way.  Then we have `array_entry` (and of course,
-          // `harray` to refer to an `array_entry*`), but array_entries are *only* allowed to be
-          // arrays of sections.  Meanwhile epee's author left comments telling us that XML is
-          // horrible.  Pot meet kettle.
-          if (storage_entry.type() == typeid(epee::serialization::section)) {
-            auto* section = &boost::get<epee::serialization::section>(storage_entry);
-            req.load(epee_stuff.first, section);
-          }
-          else if (storage_entry.type() == typeid(epee::serialization::array_entry)) {
-            throw std::runtime_error("FIXME 125157015");
-          }
-        }
-        return req;
-      }
-
-      // store_t_to_json can't store a string.  Go epee.
-      template <typename R = typename RPC::response, std::enable_if_t<std::is_same<R, std::string>::value, int> = 0>
-      std::string serialize(std::string&& res) {
-        std::ostringstream o;
-        epee::serialization::dump_as_json(o, std::move(res), 0 /*indent*/, false /*newlines*/);
-        return o.str();
-      }
-
-      template <typename R = typename RPC::response, std::enable_if_t<!std::is_same<R, std::string>::value, int> = 0>
-      std::string serialize(typename RPC::response&& res) {
-        std::string response;
-        epee::serialization::store_t_to_json(res, response, 0 /*indent*/, false /*newlines*/);
-        return response;
-      }
-    };
-
-    // binary command specialization
-    template <typename RPC>
-    struct reg_helper<RPC, std::enable_if_t<std::is_base_of<BINARY, RPC>::value>> {
-      using Request = typename RPC::request;
-      Request load(rpc_request& request) { 
-        Request req{};
-        if (!std::holds_alternative<std::string_view>(request.body))
-          throw std::runtime_error{"Internal error: can't load binary a RPC command with non-string body"};
-        auto data = std::get<std::string_view>(request.body);
-        if (!epee::serialization::load_t_from_binary(req, data))
-          throw parse_error{"Failed to parse binary data parameters"};
-        return req;
-      }
-
-      std::string serialize(typename RPC::response&& res) {
-        std::string response;
-        epee::serialization::store_t_to_binary(res, response);
-        return response;
-      }
-    };
-
-    template <typename RPC>
-    void register_rpc_command(std::unordered_map<std::string, std::shared_ptr<const rpc_command>>& regs)
-    {
-      using Request = typename RPC::request;
-      using Response = typename RPC::response;
-      /// check that core_rpc_server.invoke(Request, rpc_context) returns a Response; the code below
-      /// will fail anyway if this isn't satisfied, but that compilation failure might be more cryptic.
-      using invoke_return_type = decltype(std::declval<core_rpc_server>().invoke(std::declval<Request&&>(), rpc_context{}));
-      static_assert(std::is_same<Response, invoke_return_type>::value,
-          "Unable to register RPC command: core_rpc_server::invoke(Request) is not defined or does not return a Response");
-      auto cmd = std::make_shared<rpc_command>();
-      constexpr bool binary = std::is_base_of<BINARY, RPC>::value;
-      cmd->is_public = std::is_base_of<PUBLIC, RPC>::value;
-      cmd->is_binary = binary;
-      cmd->invoke = [](rpc_request&& request, core_rpc_server& server) {
-        reg_helper<RPC> helper;
-        Response res = server.invoke(helper.load(request), std::move(request.context));
-        return helper.serialize(std::move(res));
-      };
-
-      for (const auto& name : RPC::names())
-        regs.emplace(name, cmd);
-    }
-
-    template <typename... RPC>
-    std::unordered_map<std::string, std::shared_ptr<const rpc_command>> register_rpc_commands(rpc::type_list<RPC...>) {
-      std::unordered_map<std::string, std::shared_ptr<const rpc_command>> regs;
-
-      (register_rpc_command<RPC>(regs), ...);
 
 
 namespace cryptonote { namespace rpc {
@@ -1266,7 +1162,7 @@ namespace cryptonote { namespace rpc {
     const uint8_t major_version = m_core.get_blockchain_storage().get_current_hard_fork_version();
 
     res.pow_algorithm =
-        major_version >= network_version_12_checkpointing    ? "RandomX (SISPOP variant)"               :
+        major_version >= network_version_12_checkpointing    ? "RandomX Monero"               :
         major_version == network_version_11_infinite_staking ? "Cryptonight Turtle Light (Variant 2)" :
                                                                "Cryptonight Heavy (Variant 2)";
 
@@ -2750,6 +2646,7 @@ namespace cryptonote { namespace rpc {
     return res;
   }
 
+
   GET_QUORUM_STATE::response core_rpc_server::invoke(GET_QUORUM_STATE::request&& req, rpc_context context)
   {
     GET_QUORUM_STATE::response res{};
@@ -2825,32 +2722,8 @@ namespace cryptonote { namespace rpc {
 
             entry.quorum.validators.reserve(quorum->validators.size());
             entry.quorum.workers.reserve(quorum->workers.size());
-            auto const &service_node_list = m_core.get_service_node_list();
-            uint64_t const now = time(nullptr);
-
-            service_node_list.for_each_service_node_info_and_proof(
-             quorum->validators.begin(),
-             quorum->validators.end(),
-             [&](auto& pub_key, auto&, auto& proof) {
-               cryptonote::rpc::GET_QUORUM_STATE::quorum_validator validator;
-
-               validator.hash = sispopmq::to_hex(tools::view_guts(pub_key));
-               validator.uptime = now - proof.timestamp;
-
-               entry.quorum.validators.push_back(validator);
-             });
-
-            service_node_list.for_each_service_node_info_and_proof(
-              quorum->workers.begin(),
-              quorum->workers.end(),
-              [&](auto& pub_key, auto&, auto& proof) {
-                cryptonote::rpc::GET_QUORUM_STATE::quorum_worker worker;
-
-                worker.hash = sispopmq::to_hex(tools::view_guts(pub_key));
-                worker.uptime = now - proof.timestamp;
-
-                entry.quorum.workers.push_back(worker);
-            });
+            for (crypto::public_key const &key : quorum->validators) entry.quorum.validators.push_back(epee::string_tools::pod_to_hex(key));
+            for (crypto::public_key const &key : quorum->workers)    entry.quorum.workers.push_back(epee::string_tools::pod_to_hex(key));
 
             res.quorums.push_back(entry);
             at_least_one_succeeded = true;
@@ -2984,16 +2857,6 @@ namespace cryptonote { namespace rpc {
     res.status = STATUS_OK;
     return res;
   }
-
-  static time_t reachable_to_time_t(
-      std::chrono::steady_clock::time_point t,
-      std::chrono::system_clock::time_point system_now,
-      std::chrono::steady_clock::time_point steady_now) {
-    if (t == service_nodes::NEVER)
-      return 0;
-    return std::chrono::system_clock::to_time_t(system_now + (t - steady_now));
-  }
-
   //------------------------------------------------------------------------------------------------------------------------------
   void core_rpc_server::fill_sn_response_entry(GET_SERVICE_NODES::response::entry& entry, const service_nodes::service_node_pubkey_info &sn_info, uint64_t current_height) {
 
@@ -3010,34 +2873,24 @@ namespace cryptonote { namespace rpc {
     entry.earned_downtime_blocks        = service_nodes::quorum_cop::calculate_decommission_credit(info, current_height);
     entry.decommission_count            = info.decommission_count;
 
-    auto& netconf = m_core.get_net_config();
-    m_core.get_service_node_list().access_proof(sn_info.pubkey, [&entry, &netconf](const auto &proof) {
-        entry.service_node_version     = proof.proof->version;
-        entry.sispopnet_version          = proof.proof->sispopnet_version;
-        entry.storage_server_version   = proof.proof->storage_server_version;
-        entry.public_ip                = epee::string_tools::get_ip_string_from_int32(proof.proof->public_ip);
-        entry.storage_port             = proof.proof->storage_https_port;
-        entry.storage_lmq_port         = proof.proof->storage_omq_port;
-        entry.pubkey_ed25519           = proof.proof->pubkey_ed25519 ? tools::type_to_hex(proof.proof->pubkey_ed25519) : "";
-        entry.pubkey_x25519            = proof.pubkey_x25519 ? tools::type_to_hex(proof.pubkey_x25519) : "";
-        entry.quorumnet_port           = proof.proof->qnet_port;
+    m_core.get_service_node_list().access_proof(sn_info.pubkey, [&entry](const auto &proof) {
+        entry.service_node_version     = proof.version;
+        entry.public_ip                = string_tools::get_ip_string_from_int32(proof.public_ip);
+        entry.storage_port             = proof.storage_port;
+        entry.storage_lmq_port         = proof.storage_lmq_port;
+        entry.storage_server_reachable = proof.storage_server_reachable;
+        entry.pubkey_ed25519           = proof.pubkey_ed25519 ? string_tools::pod_to_hex(proof.pubkey_ed25519) : "";
+        entry.pubkey_x25519            = proof.pubkey_x25519 ? string_tools::pod_to_hex(proof.pubkey_x25519) : "";
+        entry.quorumnet_port           = proof.quorumnet_port;
 
         // NOTE: Service Node Testing
-        entry.last_uptime_proof                  = proof.proof->timestamp;
-        auto system_now = std::chrono::system_clock::now();
-        auto steady_now = std::chrono::steady_clock::now();
-        entry.storage_server_reachable = !proof.ss_unreachable_for(netconf.UPTIME_PROOF_VALIDITY - netconf.UPTIME_PROOF_FREQUENCY, steady_now);
-        entry.storage_server_first_unreachable = reachable_to_time_t(proof.ss_first_unreachable, system_now, steady_now);
-        entry.storage_server_last_unreachable = reachable_to_time_t(proof.ss_last_unreachable, system_now, steady_now);
-        entry.storage_server_last_reachable = reachable_to_time_t(proof.ss_last_reachable, system_now, steady_now);
-
-        service_nodes::participation_history<service_nodes::participation_entry> const &checkpoint_participation = proof.checkpoint_participation;
-        service_nodes::participation_history<service_nodes::participation_entry> const &pulse_participation      = proof.pulse_participation;
-        service_nodes::participation_history<service_nodes::timestamp_participation_entry> const &timestamp_participation      = proof.timestamp_participation;
-        service_nodes::participation_history<service_nodes::timesync_entry> const &timesync_status      = proof.timesync_status;
-        entry.checkpoint_participation = std::vector<service_nodes::participation_entry>(checkpoint_participation.begin(), checkpoint_participation.end());
-        entry.timestamp_participation  = std::vector<service_nodes::timestamp_participation_entry>(timestamp_participation.begin(),      timestamp_participation.end());
-        entry.timesync_status          = std::vector<service_nodes::timesync_entry>(timesync_status.begin(),      timesync_status.end());
+        entry.last_uptime_proof                  = proof.timestamp;
+        entry.storage_server_reachable           = proof.storage_server_reachable;
+        entry.storage_server_reachable_timestamp = proof.storage_server_reachable_timestamp;
+        entry.version_major                      = proof.version[0];
+        entry.version_minor                      = proof.version[1];
+        entry.version_patch                      = proof.version[2];
+        entry.votes = std::vector<service_nodes::checkpoint_vote_record>(proof.votes.begin(), proof.votes.end());
     });
 
     entry.contributors.reserve(info.contributors.size());
@@ -3291,7 +3144,7 @@ namespace cryptonote { namespace rpc {
   {
     return handle_ping<SISPOPNET_PING>(
         req.version, service_nodes::MIN_SISPOPNET_VERSION,
-        "Sispopnet", m_core.m_last_sispopnet_ping, SISPOPNET_PING_LIFETIME,
+        "sispopnet", m_core.m_last_sispopnet_ping, SISPOPNET_PING_LIFETIME,
         [this](bool significant) { if (significant) m_core.reset_proof_interval(); });
   }
   //------------------------------------------------------------------------------------------------------------------------------

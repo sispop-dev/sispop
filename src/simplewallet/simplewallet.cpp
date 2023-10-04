@@ -3202,7 +3202,7 @@ Pending or Failed: "failed"|"pending",  "out", Lock, Checkpointed, Time, Amount*
                            tr(USAGE_VERSION),
                            tr("Returns version information"));
   m_cmd_binder.set_handler("show_qr_code",
-                           boost::bind(&simple_wallet::show_qr_code, this, _1),
+                           [this](const auto& x) { return show_qr_code(x); },
                            tr(USAGE_SHOW_QR_CODE),
                            tr("Show address as QR code"));
   m_cmd_binder.set_handler("help",

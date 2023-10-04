@@ -1,30 +1,30 @@
 
 #include "lmq_server.h"
-#include "lokimq/lokimq.h"
+#include "sispopmq/sispopmq.h"
 
-#undef LOKI_DEFAULT_LOG_CATEGORY
-#define LOKI_DEFAULT_LOG_CATEGORY "daemon.rpc"
+#undef SISPOP_DEFAULT_LOG_CATEGORY
+#define SISPOP_DEFAULT_LOG_CATEGORY "daemon.rpc"
 
 namespace cryptonote { namespace rpc {
 
-using lokimq::AuthLevel;
+using sispopmq::AuthLevel;
 
 namespace {
 
 const command_line::arg_descriptor<std::vector<std::string>> arg_lmq_public{
   "lmq-public",
-  "Adds a public, unencrypted LokiMQ RPC listener (with restricted capabilities) at the given "
+  "Adds a public, unencrypted SispopMQ RPC listener (with restricted capabilities) at the given "
     "address; can be specified multiple times. Examples: tcp://0.0.0.0:5555 (listen on port 5555), "
     "tcp://198.51.100.42:5555 (port 5555 on specific IPv4 address), tcp://[::]:5555, "
     "tcp://[2001:db8::abc]:5555 (IPv6), or ipc:///path/to/socket to listen on a unix domain socket"};
 const command_line::arg_descriptor<std::vector<std::string>> arg_lmq_curve_public{
   "lmq-curve-public",
-  "Adds a curve-encrypted LokiMQ RPC listener at the given address that accepts (restricted) rpc "
+  "Adds a curve-encrypted SispopMQ RPC listener at the given address that accepts (restricted) rpc "
     "commands from any client. Clients must already know this server's public x25519 key to "
     "establish an encrypted connection."};
 const command_line::arg_descriptor<std::vector<std::string>> arg_lmq_curve{
   "lmq-curve",
-  "Adds a curve-encrypted LokiMQ RPC listener at the given address that only accepts client connections from whitelisted client x25519 pubkeys. "
+  "Adds a curve-encrypted SispopMQ RPC listener at the given address that only accepts client connections from whitelisted client x25519 pubkeys. "
     "Clients must already know this server's public x25519 key to establish an encrypted connection. When running in service node mode "
     "the quorumnet port is already listening as if specified with --lmq-curve."};
 const command_line::arg_descriptor<std::vector<std::string>> arg_lmq_admin{
@@ -35,9 +35,17 @@ const command_line::arg_descriptor<std::vector<std::string>> arg_lmq_user{
   "Specifies an x25519 pubkey of a client permitted to connect to the --lmq-curve or quorumnet address(es) with restricted capabilities"};
 const command_line::arg_descriptor<std::vector<std::string>> arg_lmq_local_control{
   "lmq-local-control",
-  "Adds an unencrypted LokiMQ RPC listener with full, unrestricted capabilities and no authentication at the given address. "
+  "Adds an unencrypted SispopMQ RPC listener with full, unrestricted capabilities and no authentication at the given address. "
+#ifndef _WIN32
+    "Listens at ipc://<data-dir>/sispopd.sock if not specified. Specify 'none' to disable the default. "
+#endif
     "WARNING: Do not use this on a publicly accessible address!"};
-
+#ifndef _WIN32
+const command_line::arg_descriptor<std::string> arg_lmq_umask{
+  "lmq-umask",
+  "Sets the umask to apply to any listening ipc:///path/to/sock LMQ sockets, in octal.",
+  "0007"};
+#endif
 
 void check_lmq_listen_addr(std::string_view addr) {
   // Crude check for basic validity; you can specify all sorts of invalid things, but at least
@@ -51,10 +59,10 @@ auto as_x_pubkeys(const std::vector<std::string>& pk_strings) {
   std::vector<crypto::x25519_public_key> pks;
   pks.reserve(pk_strings.size());
   for (const auto& pkstr : pk_strings) {
-    if (pkstr.size() != 64 || !lokimq::is_hex(pkstr))
+    if (pkstr.size() != 64 || !sispopmq::is_hex(pkstr))
       throw std::runtime_error("Invalid LMQ login pubkey: '" + pkstr + "'; expected 64-char hex pubkey");
     pks.emplace_back();
-    lokimq::to_hex(pkstr.begin(), pkstr.end(), reinterpret_cast<char *>(&pks.back()));
+    sispopmq::to_hex(pkstr.begin(), pkstr.end(), reinterpret_cast<char *>(&pks.back()));
   }
   return pks;
 }
@@ -78,6 +86,7 @@ void init_lmq_options(boost::program_options::options_description& desc)
   command_line::add_arg(desc, arg_lmq_admin);
   command_line::add_arg(desc, arg_lmq_user);
   command_line::add_arg(desc, arg_lmq_local_control);
+  command_line::add_arg(desc, arg_lmq_umask);
 }
 
 lmq_rpc::lmq_rpc(cryptonote::core& core, core_rpc_server& rpc, const boost::program_options::variables_map& vm)
@@ -109,13 +118,39 @@ lmq_rpc::lmq_rpc(cryptonote::core& core, core_rpc_server& rpc, const boost::prog
         [&core](std::string_view ip, std::string_view pk, bool /*sn*/) { return core.lmq_allow(ip, pk, AuthLevel::denied); });
   }
 
-  for (const auto &addr : command_line::get_arg(vm, arg_lmq_local_control)) {
+  auto locals = command_line::get_arg(vm, arg_lmq_local_control);
+  if (locals.empty()) {
+    // FIXME: this requires unix sockets and so probably won't work on older Windows 10 or pre-Win10
+    // windows.  In theory we could do some runtime detection to see if the Windows version is new
+    // enough to support unix domain sockets, but for now the Windows default is just "don't listen"
+#ifndef _WIN32
+    locals.push_back("ipc://" + command_line::get_arg(vm, cryptonote::arg_data_dir) + "/sispopd.sock");
+#endif
+  } else if (locals.size() == 1 && locals[0] == "none") {
+    locals.clear();
+  }
+  for (const auto &addr : locals) {
     check_lmq_listen_addr(addr);
     MGINFO("LMQ listening on " << addr << " (unauthenticated local admin)");
     lmq.listen_plain(addr,
         [&core](std::string_view ip, std::string_view pk, bool /*sn*/) { return core.lmq_allow(ip, pk, AuthLevel::admin); });
   }
 
+#ifndef _WIN32
+  auto umask_str = command_line::get_arg(vm, arg_lmq_umask);
+  try {
+    int umask = -1;
+    size_t len = 0;
+    umask = std::stoi(umask_str, &len, 8);
+    if (len != umask_str.size())
+      throw std::invalid_argument("not an octal value");
+    if (umask < 0 || umask > 0777)
+      throw std::invalid_argument("invalid umask value");
+    lmq.STARTUP_UMASK = umask;
+  } catch (const std::exception& e) {
+    throw std::invalid_argument("Invalid --lmq-umask value '" + umask_str + "': value must be an octal value between 0 and 0777");
+  }
+#endif
 
   // Insert our own pubkey so that, e.g., console commands from localhost automatically get full access
   {
@@ -141,7 +176,7 @@ lmq_rpc::lmq_rpc(cryptonote::core& core, core_rpc_server& rpc, const boost::prog
   lmq.add_category("admin", AuthLevel::admin, admin_reserved_threads);
   for (auto& cmd : rpc_commands) {
     lmq.add_request_command(cmd.second->is_public ? "rpc" : "admin", cmd.first,
-        [name=std::string_view{cmd.first}, &call=*cmd.second, this](lokimq::Message& m) {
+        [name=std::string_view{cmd.first}, &call=*cmd.second, this](sispopmq::Message& m) {
       if (m.data.size() > 1)
         m.send_reply(LMQ_BAD_REQUEST, "Bad request: RPC commands must have at most one data part "
             "(received " + std::to_string(m.data.size()) + ")");
@@ -201,7 +236,7 @@ lmq_rpc::lmq_rpc(cryptonote::core& core, core_rpc_server& rpc, const boost::prog
   // such as txes that came from an existing block during a rollback).  Note that both txhash and
   // txblob are binary: in particular, txhash is *not* hex-encoded.
   //
-  lmq.add_request_command("sub", "mempool", [this](lokimq::Message& m) {
+  lmq.add_request_command("sub", "mempool", [this](sispopmq::Message& m) {
 
     if (m.data.size() != 1) {
       m.send_reply("Invalid subscription request: no subscription type given");
@@ -247,7 +282,7 @@ lmq_rpc::lmq_rpc(cryptonote::core& core, core_rpc_server& rpc, const boost::prog
   // The block notification for new blocks consists of a message [notify.block, height, blockhash]
   // containing the latest height/hash.  (Note that blockhash is the hash in bytes, *not* the hex
   // encoded block hash).
-  lmq.add_request_command("sub", "block", [this](lokimq::Message& m) {
+  lmq.add_request_command("sub", "block", [this](sispopmq::Message& m) {
       std::unique_lock lock{subs_mutex_};
     auto expiry = std::chrono::steady_clock::now() + 30min;
     auto result = block_subs_.emplace(m.conn, block_sub{expiry});
@@ -269,7 +304,7 @@ lmq_rpc::lmq_rpc(cryptonote::core& core, core_rpc_server& rpc, const boost::prog
 
 template <typename Mutex, typename Subs, typename Call>
 static void send_notifies(Mutex& mutex, Subs& subs, const char* desc, Call call) {
-  std::vector<lokimq::ConnectionID> remove;
+  std::vector<sispopmq::ConnectionID> remove;
   {
     std::shared_lock lock{mutex};
 

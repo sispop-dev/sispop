@@ -48,6 +48,7 @@
 #if defined(SISPOP_ENABLE_INTEGRATION_TEST_HOOKS)
 #include "common/sispop_integration_test_hooks.h"
 #endif
+
 #undef SISPOP_DEFAULT_LOG_CATEGORY
 #define SISPOP_DEFAULT_LOG_CATEGORY "daemon.rpc"
 
@@ -74,11 +75,11 @@ namespace cryptonote { namespace rpc {
   /// For JSON RPC these become an error response with the code as the error.code value and the
   /// string as the error.message.
   /// For HTTP JSON these become a 500 Internal Server Error response with the message as the body.
-  /// For sispopMQ the code becomes the first part of the response and the message becomes the
+  /// For SISPOPMQ the code becomes the first part of the response and the message becomes the
   /// second part of the response.
   struct rpc_error {
     /// \param code - a signed, 16-bit numeric code.  0 must not be used (as it is used for a
-    /// success code in sispopMQ), and values in the -32xxx range are reserved by JSON-RPC.
+    /// success code in SISPOPMQ), and values in the -32xxx range are reserved by JSON-RPC.
     ///
     /// \param message - a message to send along with the error code (see general description above).
     rpc_error(int16_t code, std::string message)
@@ -90,45 +91,6 @@ namespace cryptonote { namespace rpc {
 
   /// Junk that epee makes us deal with to pass in a generically parsed json value
   using jsonrpc_params = std::pair<epee::serialization::portable_storage, epee::serialization::storage_entry>;
-
-// yes, epee doesn't properly use its full namespace when calling its
-// functions from macros.  *sigh*
-using namespace epee;
-
-  /// Contains the context of the invocation, which must be filled out by the glue code (e.g. HTTP
-  /// RPC server) with requester-specific context details.
-  struct rpc_context {
-    // Specifies that the requestor has admin permissions (e.g. is on an unrestricted RPC port, or
-    // is a local internal request).  This can be used to provide different results for an admin
-    // versus non-admin when invoking a public RPC command.  (Note that non-public RPC commands do
-    // not need to check this field for authentication: a non-public invoke() is not called in the
-    // first place if attempted by a public requestor).
-    bool admin = false;
-
-    // The RPC engine source of the request, i.e. internal, HTTP, LMQ
-    rpc_source source = rpc_source::internal;
-
-    // A free-form identifier identifiying the remote address of the request; this might be IP:PORT,
-    // or could contain a pubkey, or ...
-    std::string_view remote;
-  };
-
-  struct rpc_request {
-    // The request body; for a non-HTTP-JSON-RPC request the string will be populated with the
-    // unparsed request body (though may be empty, e.g. for GET requests).  For HTTP JSON-RPC
-    // request, if the request has a "params" value then the epee storage pair will be set to the
-    // portable_storage entry and the storage entry containing "params".  If "params" is omitted
-    // entirely (or, for LMQ, there is no data part) then the string will be set in the variant (and
-    // empty).
-    //
-    // The returned value in either case is the serialized value to return.
-    //
-    // If sometimes goes wrong, throw.
-    std::variant<std::string_view, jsonrpc_params> body;
-
-    // Values to pass through to the invoke() call
-    rpc_context context;
-  };
 
   enum struct rpc_source : uint8_t { internal, http, lmq };
 

@@ -1,4 +1,4 @@
-// Copyright (c)      2018-2023, The Oxen Project
+// Copyright (c)      2018, The Loki Project
 //
 // All rights reserved.
 //
@@ -80,21 +80,18 @@ namespace service_nodes
   // has submitted uptime proofs, participated in required quorums, etc.
   service_node_test_results quorum_cop::check_service_node(uint8_t hf_version, const crypto::public_key &pubkey, const service_node_info &info) const
   {
-    const auto& netconf = m_core.get_net_config();
-
     service_node_test_results result; // Defaults to true for individual tests
     bool ss_reachable = true;
     uint64_t timestamp = 0;
     decltype(std::declval<proof_info>().public_ips) ips{};
     decltype(std::declval<proof_info>().votes) votes;
     m_core.get_service_node_list().access_proof(pubkey, [&](const proof_info &proof) {
-      ss_reachable             = !proof.ss_unreachable_for(netconf.UPTIME_PROOF_VALIDITY - netconf.UPTIME_PROOF_FREQUENCY);
-      timestamp                = std::max(proof.proof->timestamp, proof.effective_timestamp);
-      ips                      = proof.public_ips;
-      checkpoint_participation = proof.checkpoint_participation;
-
+        ss_reachable = proof.storage_server_reachable;
+        timestamp = std::max(proof.timestamp, proof.effective_timestamp);
+        ips = proof.public_ips;
+        votes = proof.votes;
     });
-    std::chrono::seconds time_since_last_uptime_proof{std::time(nullptr) - timestamp};
+    uint64_t time_since_last_uptime_proof = std::time(nullptr) - timestamp;
 
     bool check_uptime_obligation     = true;
     bool check_checkpoint_obligation = true;
@@ -104,12 +101,12 @@ namespace service_nodes
     if (integration_test::state.disable_obligation_checkpointing) check_checkpoint_obligation = false;
 #endif
 
-    if (check_uptime_obligation && time_since_last_uptime_proof > netconf.UPTIME_PROOF_VALIDITY)
+    if (check_uptime_obligation && time_since_last_uptime_proof > UPTIME_PROOF_MAX_TIME_IN_SECONDS)
     {
       LOG_PRINT_L1(
-          "Service Node: " << pubkey << ", failed uptime proof obligation check: the last uptime proof (" <<
-          tools::get_human_readable_timespan(time_since_last_uptime_proof) << ") was older than max validity (" <<
-          tools::get_human_readable_timespan(netconf.UPTIME_PROOF_VALIDITY) << ")");
+          "Service Node: " << pubkey << ", failed uptime proof obligation check: the last uptime proof was older than: "
+                           << UPTIME_PROOF_MAX_TIME_IN_SECONDS << "s. Time since last uptime proof was: "
+                           << tools::get_human_readable_timespan(std::chrono::seconds(time_since_last_uptime_proof)));
       result.uptime_proved = false;
     }
 
@@ -127,8 +124,8 @@ namespace service_nodes
       std::vector<cryptonote::block> blocks;
       if (m_core.get_blocks(info.last_ip_change_height, 1, blocks)) {
         uint64_t find_ips_used_since = std::max(
-            uint64_t(std::time(nullptr)) - std::chrono::seconds{IP_CHANGE_WINDOW}.count(),
-            uint64_t(blocks[0].timestamp) + std::chrono::seconds{IP_CHANGE_BUFFER}.count());
+            uint64_t(std::time(nullptr)) - IP_CHANGE_WINDOW_IN_SECONDS,
+            uint64_t(blocks[0].timestamp) + IP_CHANGE_BUFFER_IN_SECONDS);
         if (ips[0].second > find_ips_used_since && ips[1].second > find_ips_used_since)
           result.single_ip = false;
       }
@@ -210,8 +207,6 @@ namespace service_nodes
     if (hf_version < cryptonote::network_version_9_service_nodes)
       return;
 
-    const auto& netconf = m_core.get_net_config();
-
     uint64_t const REORG_SAFETY_BUFFER_BLOCKS = (hf_version >= cryptonote::network_version_12_checkpointing)
                                                     ? REORG_SAFETY_BUFFER_BLOCKS_POST_HF12
                                                     : REORG_SAFETY_BUFFER_BLOCKS_PRE_HF12;
@@ -230,8 +225,9 @@ namespace service_nodes
     service_nodes::quorum_type const max_quorum_type = service_nodes::max_quorum_type_for_hf(hf_version);
     bool tested_myself_once_per_block                = false;
 
-    time_t start_time = m_core.get_start_time();
-    std::chrono::seconds live_time{time(nullptr) - start_time};
+    time_t start_time   = m_core.get_start_time();
+    time_t const now    = time(nullptr);
+    int const live_time = (now - start_time);
     for (int i = 0; i <= (int)max_quorum_type; i++)
     {
       quorum_type const type = static_cast<quorum_type>(i);
@@ -284,12 +280,10 @@ namespace service_nodes
               }
             }
 
-#ifndef OXEN_ENABLE_INTEGRATION_TEST_HOOKS
-            // NOTE: Wait at least 2 hours before we're allowed to vote so that we collect necessary
-            // voting information from people on the network
-            if (live_time < m_core.get_net_config().UPTIME_PROOF_VALIDITY)
+            // NOTE: Wait at least 2 hours before we're allowed to vote so that we collect necessary voting information from people on the network
+            bool alive_for_min_time = live_time >= MIN_TIME_IN_S_BEFORE_VOTING;
+            if (!alive_for_min_time)
               continue;
-#endif
 
             if (!m_core.service_node())
               continue;
@@ -409,8 +403,8 @@ namespace service_nodes
                       // NOTE: Don't warn uptime proofs if the daemon is just
                       // recently started and is candidate for testing (i.e.
                       // restarting the daemon)
-                      if (!my_test_results.uptime_proved && live_time < 1h)
-                        continue;
+                      if (!my_test_results.uptime_proved && live_time < SISPOP_HOUR(1))
+                          continue;
 
                       LOG_PRINT_L0("Service Node (yours) is active but is not passing tests for quorum: " << m_obligations_height);
                       LOG_PRINT_L0(my_test_results.why());

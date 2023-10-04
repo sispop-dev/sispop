@@ -41,7 +41,7 @@
 #define MAX_LOG_FILES 50
 
 #define CLOG_ENABLED(level, cat) ELPP->vRegistry()->allowed(el::Level::level, cat)
-#define LOG_ENABLED(level) CLOG_ENABLED(level, LOKI_DEFAULT_LOG_CATEGORY)
+#define LOG_ENABLED(level) CLOG_ENABLED(level, SISPOP_DEFAULT_LOG_CATEGORY)
 
 #define MCLOG_TYPE(level, cat, type, x) do { \
     if (ELPP->vRegistry()->allowed(level, cat)) { \

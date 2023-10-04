@@ -1,5 +1,5 @@
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c)      2018-2023, The Oxen Project
+// Copyright (c)      2018, The Loki Project
 //
 // All rights reserved.
 //
@@ -191,7 +191,7 @@ namespace cryptonote
   };
   static const command_line::arg_descriptor<std::string> arg_public_ip = {
     "service-node-public-ip"
-  , "Public IP address on which this service node's services (such as the Sispop "
+  , "Public IP address on which this service node's services (such as the sispop "
     "storage server) are accessible. This IP address will be advertised to the "
     "network via the service node uptime proofs. Required if operating as a "
     "service node."
@@ -200,7 +200,7 @@ namespace cryptonote
     "storage-server-port"
   , "The port on which this service node's storage server is accessible. A listening "
     "storage server is required for service nodes. (This option is specified "
-    "automatically when using Sispop Launcher.)"
+    "automatically when using sispop Launcher.)"
   , 0};
   static const command_line::arg_descriptor<uint16_t, false, true, 2> arg_quorumnet_port = {
     "quorumnet-port"
@@ -257,6 +257,10 @@ namespace cryptonote
   const command_line::arg_descriptor<uint64_t> arg_recalculate_difficulty = {
     "recalculate-difficulty",
     "Recalculate per-block difficulty starting from the height specified",
+    // This is now enabled by default because the network broke at 526483 because of divergent
+    // difficulty values (and the chain that kept going violated the correct difficulty, and got
+    // checkpointed multiple times because enough of the network followed it).
+    //
     // TODO: We can disable this post-pulse (since diff won't matter anymore), but until then there
     // is a subtle bug somewhere in difficulty calculations that can cause divergence; this seems
     // important enough to just rescan at every startup (and only takes a few seconds).
@@ -409,7 +413,6 @@ namespace cryptonote
       const bool stagenet = command_line::get_arg(vm, arg_stagenet_on);
       m_nettype = testnet ? TESTNET : stagenet ? STAGENET : MAINNET;
     }
-    m_check_uptime_proof_interval.interval(get_net_config().UPTIME_PROOF_CHECK_INTERVAL);
 
     m_config_folder = command_line::get_arg(vm, arg_data_dir);
 
@@ -1002,12 +1005,6 @@ namespace cryptonote
     CHECK_AND_ASSERT_MES(rc == 0, false, "failed to convert ed25519 pubkey to x25519");
     crypto_sign_ed25519_sk_to_curve25519(keys.key_x25519.data, keys.key_ed25519.data);
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-    MGINFO_YELLOW("Service node x25519 pubkey is " << epee::string_tools::pod_to_hex(keys.pub_x25519));
-
-    return true;
-  }
     if (m_service_node) {
       MGINFO_YELLOW("Service node public keys:");
       MGINFO_YELLOW("- primary: " << sispopmq::to_hex(tools::view_guts(keys.pub)));
@@ -1786,7 +1783,7 @@ namespace cryptonote
     std::vector<std::pair<crypto::hash, cryptonote::blobdata>> txs;
     if (m_mempool.get_relayable_transactions(txs) && !txs.empty())
     {
-      cryptonote_connection_context fake_context;
+      cryptonote_connection_context fake_context{};
       tx_verification_context tvc{};
       NOTIFY_NEW_TRANSACTIONS::request r{};
       for (auto it = txs.begin(); it != txs.end(); ++it)
@@ -2109,19 +2106,14 @@ namespace cryptonote
     return m_blockchain_storage.get_block_by_hash(h, blk, orphan);
   }
   //-----------------------------------------------------------------------------------------------
-  bool core::get_block_by_height(uint64_t height, block &blk) const
+  static bool check_external_ping(time_t last_ping, time_t lifetime, const char *what)
   {
-    return m_blockchain_storage.get_block_by_height(height, blk);
-  }
-  //-----------------------------------------------------------------------------------------------
-  static bool check_external_ping(time_t last_ping, std::chrono::seconds lifetime, std::string_view what)
-  {
-    const std::chrono::seconds elapsed{std::time(nullptr) - last_ping};
+    const auto elapsed = std::time(nullptr) - last_ping;
     if (elapsed > lifetime)
     {
       MWARNING("Have not heard from " << what << " " <<
               (!last_ping ? "since starting" :
-               "since more than " + tools::get_human_readable_timespan(elapsed) + " ago"));
+               "for more than " + tools::get_human_readable_timespan(std::chrono::seconds(elapsed))));
       return false;
     }
     return true;
@@ -2141,7 +2133,7 @@ namespace cryptonote
       m_check_uptime_proof_interval.do_call([this]() {
         // This timer is not perfectly precise and can leak seconds slightly, so send the uptime
         // proof if we are within half a tick of the target time.  (Essentially our target proof
-        // window becomes the first time this triggers in the 59.75-60.25 minute window).
+        // window becomes the first time this triggers in the 57.5-62.5 minute window).
         uint64_t next_proof_time = 0;
         m_service_node_list.access_proof(m_service_keys.pub, [&](auto &proof) { next_proof_time = proof.timestamp; });
         next_proof_time += UPTIME_PROOF_FREQUENCY_IN_SECONDS - UPTIME_PROOF_TIMER_SECONDS/2;
@@ -2158,28 +2150,47 @@ namespace cryptonote
           return;
         }
 
+        {
+          std::vector<crypto::public_key> sn_pks;
+          auto sns = m_service_node_list.get_service_node_list_state();
+          sn_pks.reserve(sns.size());
+          for (const auto& sni : sns)
+            sn_pks.push_back(sni.pubkey);
+
+          m_service_node_list.for_each_service_node_info_and_proof(sn_pks.begin(), sn_pks.end(), [&](auto& pk, auto& sni, auto& proof) {
+            if (pk != m_service_keys.pub && proof.public_ip == m_sn_public_ip &&
+                (proof.quorumnet_port == m_quorumnet_port || proof.storage_port == m_storage_port || proof.storage_port == m_storage_lmq_port))
+            MGINFO_RED(
+                "Another service node (" << pk << ") is broadcasting the same public IP and ports as this service node (" <<
+                epee::string_tools::get_ip_string_from_int32(m_sn_public_ip) << ":" << proof.quorumnet_port << "[qnet], :" <<
+                proof.storage_port << "[SS-HTTP], :" << proof.storage_lmq_port << "[SS-LMQ]). "
+                "This will lead to deregistration of one or both service nodes if not corrected. "
+                "(Do both service nodes have the correct IP for the service-node-public-ip setting?)");
+          });
+        }
+
         if (!check_external_ping(m_last_storage_server_ping, STORAGE_SERVER_PING_LIFETIME, "the storage server"))
         {
           MGINFO_RED(
               "Failed to submit uptime proof: have not heard from the storage server recently. Make sure that it "
-              "is running! It is required to run alongside the Sispop daemon");
+              "is running! It is required to run alongside the sispop daemon");
           return;
         }
         uint8_t hf_version = get_blockchain_storage().get_current_hard_fork_version();
         if (!check_external_ping(m_last_sispopnet_ping, SISPOPNET_PING_LIFETIME, "Sispopnet"))
         {
-          if (!check_external_ping(m_last_storage_server_ping, get_net_config().UPTIME_PROOF_FREQUENCY, "the storage server"))
+          if (hf_version >= cryptonote::network_version_14_blink)
           {
             MGINFO_RED(
                 "Failed to submit uptime proof: have not heard from sispopnet recently. Make sure that it "
-                "is running! It is required to run alongside the Sispop daemon");
+                "is running! It is required to run alongside the sispop daemon");
             return;
           }
-          if (!check_external_ping(m_last_sispopnet_ping, get_net_config().UPTIME_PROOF_FREQUENCY, "Sispopnet"))
+          else
           {
             MGINFO_RED(
                 "Have not heard from sispopnet recently. Make sure that it is running! "
-                "It is required to run alongside the Sispop daemon after hard fork 14");
+                "It is required to run alongside the sispop daemon after hard fork 14");
           }
         }
 
@@ -2199,7 +2210,7 @@ namespace cryptonote
     {
       std::string main_message;
       if (m_offline)
-        main_message = "The daemon is running offline and will not attempt to sync to the Sispop network.";
+        main_message = "The daemon is running offline and will not attempt to sync to the sispop network.";
       else
         main_message = "The daemon will start synchronizing with the network. This may take a long time to complete.";
       MGINFO_YELLOW("\n**********************************************************************\n"

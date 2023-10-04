@@ -1,4 +1,4 @@
-// Copyright (c) 2018-2023, The Oxen Project
+// Copyright (c) 2018, The Loki Project
 // 
 // All rights reserved.
 // 
@@ -28,6 +28,9 @@
 
 #ifndef SISPOP_H
 #define SISPOP_H
+
+#define SISPOP_HOUR(val) ((val) * SISPOP_MINUTES(60))
+#define SISPOP_MINUTES(val) val * 60
 
 #include <cstddef>
 
@@ -70,6 +73,6 @@ constexpr size_t array_count(T (&)[N]) { return N; }
 template <typename T, size_t N>
 constexpr size_t char_count(T (&)[N]) { return N - 1; }
 
-}; // namespace Sispop
+}; // namespace sispop
 
 #endif // SISPOP_H

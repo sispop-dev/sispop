@@ -1,4 +1,4 @@
-// Copyright (c)      2018-2023, The Oxen Project
+// Copyright (c)      2018, The Loki Project
 //
 // All rights reserved.
 //

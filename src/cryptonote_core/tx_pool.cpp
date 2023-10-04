@@ -211,7 +211,7 @@ namespace cryptonote
           continue;
 
         tx_extra_sispop_name_system pool_data;
-        if (!cryptonote::get_sispop_name_system_from_tx_extra(pool_tx.extra, pool_data))
+        if (!cryptonote::get_field_from_tx_extra(pool_tx.extra, pool_data))
         {
           LOG_PRINT_L1("Could not get acquire name service from tx: " << get_transaction_hash(tx) << ", possibly corrupt tx in the pool");
           return true;

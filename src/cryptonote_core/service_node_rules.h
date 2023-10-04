@@ -53,6 +53,7 @@ namespace service_nodes {
 #if defined(SISPOP_ENABLE_INTEGRATION_TEST_HOOKS)
   constexpr size_t STATE_CHANGE_QUORUM_SIZE               = 5;
   constexpr size_t STATE_CHANGE_MIN_VOTES_TO_CHANGE_STATE = 1;
+  constexpr int    MIN_TIME_IN_S_BEFORE_VOTING            = 0;
   constexpr size_t CHECKPOINT_QUORUM_SIZE                 = 5;
   constexpr size_t CHECKPOINT_MIN_VOTES                   = 1;
   constexpr int    BLINK_SUBQUORUM_SIZE                   = 5;
@@ -60,6 +61,7 @@ namespace service_nodes {
 #else
   constexpr size_t STATE_CHANGE_MIN_VOTES_TO_CHANGE_STATE = 7;
   constexpr size_t STATE_CHANGE_QUORUM_SIZE               = 10;
+  constexpr int    MIN_TIME_IN_S_BEFORE_VOTING            = UPTIME_PROOF_MAX_TIME_IN_SECONDS;
   constexpr size_t CHECKPOINT_QUORUM_SIZE                 = 20;
   constexpr size_t CHECKPOINT_MIN_VOTES                   = 13;
   constexpr int    BLINK_SUBQUORUM_SIZE                   = 10;
@@ -79,8 +81,8 @@ namespace service_nodes {
   static_assert(REORG_SAFETY_BUFFER_BLOCKS_POST_HF12 < VOTE_LIFETIME, "Safety buffer should always be less than the vote lifetime");
   static_assert(REORG_SAFETY_BUFFER_BLOCKS_PRE_HF12  < VOTE_LIFETIME, "Safety buffer should always be less than the vote lifetime");
 
-  constexpr auto IP_CHANGE_WINDOW = 24*60*60; // How far back an obligations quorum looks for multiple IPs (unless the following buffer is more recent)
-  constexpr auto IP_CHANGE_BUFFER = 2*60*60; // After we bump a SN for an IP change we don't bump again for changes within this time period
+  constexpr uint64_t  IP_CHANGE_WINDOW_IN_SECONDS     = 24*60*60; // How far back an obligations quorum looks for multiple IPs (unless the following buffer is more recent)
+  constexpr uint64_t  IP_CHANGE_BUFFER_IN_SECONDS     = 2*60*60; // After we bump a SN for an IP change we don't bump again for changes within this time period
 
   constexpr size_t   MAX_SWARM_SIZE                   = 10;
   // We never create a new swarm unless there are SWARM_BUFFER extra nodes

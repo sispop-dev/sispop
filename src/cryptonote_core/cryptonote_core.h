@@ -79,12 +79,12 @@ namespace cryptonote
   // cryptonote_protocol/quorumnet.cpp's quorumnet::init_core_callbacks().  This indirection is here
   // so that core doesn't need to link against cryptonote_protocol (plus everything it depends on).
 
-  // Initializes quorumnet state (for service nodes only).  This is called after the SispopMQ object
+  // Initializes quorumnet state (for service nodes only).  This is called after the sispopMQ object
   // has been set up but before it starts listening.  Return an opaque pointer (void *) that gets
   // passed into all the other callbacks below so that the callbacks can recast it into whatever it
   // should be.
   extern void* (*quorumnet_new)(core& core);
-  // Destroys the quorumnet state; called on shutdown *after* the SispopMQ object has been destroyed.
+  // Destroys the quorumnet state; called on shutdown *after* the sispopMQ object has been destroyed.
   // Should destroy the state object and set the pointer reference to nullptr.
   extern void (*quorumnet_delete)(void*& self);
   // Relays votes via quorumnet.
@@ -660,7 +660,7 @@ namespace cryptonote
      /// @brief return a reference to the service node list
      tx_memory_pool &get_pool() { return m_mempool; }
 
-     /// Returns a reference to the SispopMQ object.  Must not be called before init(), and should not
+     /// Returns a reference to the sispopMQ object.  Must not be called before init(), and should not
      /// be used for any lmq communication until after start_sispopmq() has been called.
      sispopmq::SispopMQ& get_lmq() { return *m_lmq; }
 
@@ -803,11 +803,15 @@ namespace cryptonote
       */
      network_type get_nettype() const { return m_nettype; };
 
-     bool is_update_available() const { return m_update_available; }
      /**
-      * Returns the config settings for the network we are on.
+      * @brief check whether an update is known to be available or not
+      *
+      * This does not actually trigger a check, but returns the result
+      * of the last check
+      *
+      * @return whether an update is known to be available or not
       */
-     constexpr const network_config& get_net_config() const { return get_config(m_nettype); }
+     bool is_update_available() const { return m_update_available; }
 
      /**
       * @brief get whether transaction relay should be padded
@@ -1108,7 +1112,7 @@ namespace cryptonote
      sispopmq::AuthLevel lmq_check_access(const crypto::x25519_public_key& pubkey) const;
 
      /**
-      * @brief Initializes SispopMQ object, called during init().
+      * @brief Initializes sispopMQ object, called during init().
       *
       * Does not start it: this gets called to initialize it, then it gets configured with endpoints
       * and listening addresses, then finally a call to `start_sispopmq()` should happen to actually
@@ -1118,9 +1122,9 @@ namespace cryptonote
 
  public:
      /**
-      * @brief Starts SispopMQ listening.
+      * @brief Starts sispopMQ listening.
       *
-      * Called after all SispopMQ initialization is done.
+      * Called after all sispopMQ initialization is done.
       */
      void start_sispopmq();
 
@@ -1132,7 +1136,7 @@ namespace cryptonote
      /**
       * @brief Internal use only!
       *
-      * This returns a mutable reference to the internal auth level map that SispopMQ uses, for
+      * This returns a mutable reference to the internal auth level map that sispopMQ uses, for
       * internal use only.
       */
      std::unordered_map<crypto::x25519_public_key, sispopmq::AuthLevel>& _lmq_auth_level_map() { return m_lmq_auth; }
@@ -1170,12 +1174,14 @@ namespace cryptonote
      miner m_miner; //!< miner instance
 
      std::string m_config_folder; //!< folder to look in for configs and other files
+
+
      tools::periodic_task m_store_blockchain_interval{12h, false}; //!< interval for manual storing of Blockchain, if enabled
      tools::periodic_task m_fork_moaner{2h}; //!< interval for checking HardFork status
      tools::periodic_task m_txpool_auto_relayer{2min, false}; //!< interval for checking re-relaying txpool transactions
      tools::periodic_task m_check_updates_interval{12h}; //!< interval for checking for new versions
      tools::periodic_task m_check_disk_space_interval{10min}; //!< interval for checking for disk space
-     tools::periodic_task m_check_uptime_proof_interval{std::chrono::seconds{UPTIME_PROOF_TIMER_SECONDS}}; //!< interval for checking our own uptime proof
+     tools::periodic_task m_check_uptime_proof_interval{std::chrono::seconds{10s}}; //!< interval for checking our own uptime proof
      tools::periodic_task m_block_rate_interval{90s, false}; //!< interval for checking block rate
      tools::periodic_task m_blockchain_pruning_interval{5h}; //!< interval for incremental blockchain pruning
      tools::periodic_task m_service_node_vote_relayer{2min, false};
@@ -1203,7 +1209,7 @@ namespace cryptonote
      uint16_t m_storage_port;
      uint16_t m_quorumnet_port;
 
-     /// SispopMQ main object.  Gets created during init().
+     /// sispopMQ main object.  Gets created during init().
      std::unique_ptr<sispopmq::SispopMQ> m_lmq;
 
      // Internal opaque data object managed by cryptonote_protocol/quorumnet.cpp.  void pointer to

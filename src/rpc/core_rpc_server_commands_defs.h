@@ -132,45 +132,6 @@ namespace rpc {
     KV_MAP_SERIALIZABLE
   };
 
-  /// Makes a version array from a packed 32-bit integer version
-  constexpr version_t make_version(uint32_t version)
-  {
-    return {static_cast<uint16_t>(version >> 16), static_cast<uint16_t>(version & 0xffff)};
-  }
-  /// Packs a version array into a packed 32-bit integer version
-  constexpr uint32_t pack_version(version_t version)
-  {
-    return (uint32_t(version.first) << 16) | version.second;
-  }
-
-  const static std::string
-    STATUS_OK = "OK",
-    STATUS_FAILED = "FAILED",
-    STATUS_BUSY = "BUSY",
-    STATUS_NOT_MINING = "NOT MINING",
-    STATUS_TX_LONG_POLL_TIMED_OUT = "Long polling client timed out before txpool had an update",
-    STATUS_TX_LONG_POLL_MAX_CONNECTIONS = "Daemon maxed out long polling connections";
-
-
-  namespace {
-    /// Returns a constexpr std::array of string_views from an arbitrary list of string literals
-    /// Used to specify RPC names as:
-    /// static constexpr auto names() { return NAMES("primary_name", "some_alias"); }
-    template <size_t... N>
-    constexpr std::array<std::string_view, sizeof...(N)> NAMES(const char (&...names)[N]) {
-      static_assert(sizeof...(N) > 0, "RPC command must have at least one name");
-      return {std::string_view{names, N-1}...};
-    }
-  }
-
-  /// Base command that all RPC commands must inherit from (either directly or via one or more of
-  /// the below tags).  Inheriting from this (and no others) gives you a private, json, non-legacy
-  /// RPC command.  For LMQ RPC the command will be available at `admin.whatever`; for HTTP RPC
-  /// it'll be at `whatever`.
-  struct RPC_COMMAND {};
-
-  /// Tag types that are used (via inheritance) to set rpc endpoint properties
-
   SISPOP_RPC_DOC_INTROSPECT
   // Get the node's current height.
   struct GET_HEIGHT : PUBLIC, LEGACY
@@ -416,7 +377,7 @@ namespace rpc {
   SISPOP_RPC_DOC_INTROSPECT
   struct get_outputs_out
   {
-    uint64_t amount; // Amount of sispop in TXID.
+    uint64_t amount; // Amount of Sispop in TXID.
     uint64_t index;
 
     KV_MAP_SERIALIZABLE
@@ -456,7 +417,6 @@ namespace rpc {
       KV_MAP_SERIALIZABLE
     };
   };
-
 
   SISPOP_RPC_DOC_INTROSPECT
   struct GET_OUTPUTS : PUBLIC, LEGACY
@@ -780,10 +740,10 @@ namespace rpc {
       uint64_t height;                        // The number of blocks preceding this block on the blockchain.
       uint64_t depth;                         // The number of blocks succeeding this block on the blockchain. A larger number means an older block.
       std::string hash;                       // The hash of this block.
-      difficulty_type difficulty;             // The strength of the sispop network based on mining power.
-      difficulty_type cumulative_difficulty;  // The cumulative strength of the sispop network based on mining power.
-      uint64_t reward;                        // The amount of new generated in this block and rewarded to the miner, foundation and service Nodes. Note: 1 sispop = 1e9 atomic units.
-      uint64_t miner_reward;                  // The amount of new generated in this block and rewarded to the miner. Note: 1 sispop = 1e9 atomic units.
+      difficulty_type difficulty;             // The strength of the Sispop network based on mining power.
+      difficulty_type cumulative_difficulty;  // The cumulative strength of the Sispop network based on mining power.
+      uint64_t reward;                        // The amount of new generated in this block and rewarded to the miner, foundation and service Nodes. Note: 1 SISPOP = 1e9 atomic units.
+      uint64_t miner_reward;                  // The amount of new generated in this block and rewarded to the miner. Note: 1 SISPOP = 1e9 atomic units.
       uint64_t block_size;                    // The block size in bytes.
       uint64_t block_weight;                  // The block weight in bytes.
       uint64_t num_txes;                      // Number of transactions in the block, not counting the coinbase tx.
@@ -868,7 +828,6 @@ namespace rpc {
     };
   };
 
-
   SISPOP_RPC_DOC_INTROSPECT
   // Full block information can be retrieved by either block height or hash, like with the above block header calls.
   // For full block information, both lookups use the same method, but with different input parameters.
@@ -945,7 +904,6 @@ namespace rpc {
     };
   };
 
-
   SISPOP_RPC_DOC_INTROSPECT
   struct public_node
   {
@@ -982,7 +940,6 @@ namespace rpc {
       KV_MAP_SERIALIZABLE
     };
   };
-
 
   SISPOP_RPC_DOC_INTROSPECT
   // Set the log hash rate display mode.
@@ -1148,7 +1105,7 @@ namespace rpc {
   struct tx_backlog_entry
   {
     uint64_t weight;       //
-    uint64_t fee;          // Fee in sispop measured in atomic units.
+    uint64_t fee;          // Fee in Sispop measured in atomic units.
     uint64_t time_in_pool;
   };
 
@@ -1235,7 +1192,6 @@ namespace rpc {
       KV_MAP_SERIALIZABLE
     };
   };
-
 
   SISPOP_RPC_DOC_INTROSPECT
   // Similar to get_block_header_by_height above, but for a range of blocks.
@@ -1790,7 +1746,6 @@ namespace rpc {
     };
   };
 
-
   SISPOP_RPC_DOC_INTROSPECT
   struct PRUNE_BLOCKCHAIN : RPC_COMMAND
   {
@@ -1832,40 +1787,10 @@ namespace rpc {
       KV_MAP_SERIALIZABLE
     };
 
-    struct quorum_worker
-    {
-      std::string hash; // Public key of the worker service node
-      uint64_t uptime = 0; // Uptime of the worker service node
-      BEGIN_KV_SERIALIZE_MAP()
-       KV_SERIALIZE(hash)
-       KV_SERIALIZE(uptime)
-      END_KV_SERIALIZE_MAP()
-
-      BEGIN_SERIALIZE() // NOTE: For store_t_to_json
-       FIELD(hash)
-       FIELD(uptime)
-      END_SERIALIZE()
-    };
-
-    struct quorum_validator
-    {
-      std::string hash; // Public key of the validator service node
-      uint64_t uptime = 0; // Uptime of the validator service node
-      BEGIN_KV_SERIALIZE_MAP()
-       KV_SERIALIZE(hash)
-       KV_SERIALIZE(uptime)
-      END_KV_SERIALIZE_MAP()
-
-      BEGIN_SERIALIZE() // NOTE: For store_t_to_json
-       FIELD(hash)
-       FIELD(uptime)
-      END_SERIALIZE()
-    };
-
     struct quorum_t
     {
-      std::vector<quorum_validator> validators;
-      std::vector<quorum_worker> workers;
+      std::vector<std::string> validators; // Public key of the service node
+      std::vector<std::string> workers; // Public key of the service node
 
       KV_MAP_SERIALIZABLE
 
@@ -2074,11 +1999,10 @@ namespace rpc {
       bool last_uptime_proof;
       bool storage_server_reachable;
       bool storage_server_reachable_timestamp;
-
-      bool storage_server_last_reachable;
-      bool storage_server_last_unreachable;
-      bool storage_server_first_unreachable;
-      bool checkpoint_participation;
+      bool version_major;
+      bool version_minor;
+      bool version_patch;
+      bool votes;
 
       bool block_hash;
       bool height;
@@ -2208,7 +2132,7 @@ namespace rpc {
 
     struct request
     {
-      std::array<int, 3> version; // sispopnet version
+      std::array<int, 3> version; // Sispopnet version
       KV_MAP_SERIALIZABLE
     };
 
@@ -2216,7 +2140,7 @@ namespace rpc {
   };
 
   SISPOP_RPC_DOC_INTROSPECT
-  // Get the required amount of sispop to become a Service Node at the queried height.
+  // Get the required amount of Sispop to become a Service Node at the queried height.
   // For stagenet and testnet values, ensure the daemon is started with the
   // `--stagenet` or `--testnet` flags respectively.
   struct GET_STAKING_REQUIREMENT : PUBLIC
@@ -2397,7 +2321,6 @@ namespace rpc {
   };
 
 
-
   SISPOP_RPC_DOC_INTROSPECT
   struct REPORT_PEER_SS_STATUS
   {
@@ -2484,8 +2407,7 @@ namespace rpc {
     static constexpr size_t MAX_REQUEST_ENTRIES = 256;
     struct request
     {
-
-      std::vector<std::string> entries; // The owner's public key to find all sispop Name Service entries for.
+      std::vector<std::string> entries; // The owner's public key to find all Sispop Name Service entries for.
 
       KV_MAP_SERIALIZABLE
     };

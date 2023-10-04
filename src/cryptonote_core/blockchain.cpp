@@ -5366,7 +5366,7 @@ void Blockchain::load_compiled_in_block_hashes(const GetCheckpointsCallback& get
         MERROR("Block hash data is too large");
         return;
       }
-      const size_t size_needed = 4 + nblocks * (sizeof(crypto::hash) * 2);
+      const size_t size_needed = 4 + (nblocks * sizeof(crypto::hash));
       if(checkpoints.size() != size_needed)
       {
         MERROR("Failed to load hashes - unexpected data size " << checkpoints.size() << ", expected " << size_needed);

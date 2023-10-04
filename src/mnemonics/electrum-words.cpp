@@ -44,7 +44,7 @@
 #include "misc_language.h"
 #include "int-util.h"
 #include "mnemonics/electrum-words.h"
-#include "common/loki.h"
+#include "common/sispop.h"
 #include <boost/crc.hpp>
 
 #include "chinese_simplified.h"
@@ -293,7 +293,7 @@ namespace crypto
       }
 
       std::vector<uint32_t> matched_indices;
-      LOKI_DEFER { memwipe(matched_indices.data(), matched_indices.size() * sizeof(matched_indices[0])); };
+      SISPOP_DEFER { memwipe(matched_indices.data(), matched_indices.size() * sizeof(matched_indices[0])); };
       Language::Base *language;
       if (!find_seed_language(seed, has_checksum, matched_indices, &language))
       {

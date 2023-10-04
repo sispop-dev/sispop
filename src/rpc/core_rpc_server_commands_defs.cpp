@@ -376,7 +376,6 @@ KV_SERIALIZE_MAP_CODE_BEGIN(block_header_response)
   KV_SERIALIZE(pow_hash)
   KV_SERIALIZE_OPT(long_term_weight, (uint64_t)0)
   KV_SERIALIZE(miner_tx_hash)
-  KV_SERIALIZE(tx_hashes)
   KV_SERIALIZE(service_node_winner)
 KV_SERIALIZE_MAP_CODE_END()
 
@@ -1023,7 +1022,6 @@ KV_SERIALIZE_MAP_CODE_BEGIN(PERFORM_BLOCKCHAIN_TEST::response)
   KV_SERIALIZE(status)
   KV_SERIALIZE(res_height)
 KV_SERIALIZE_MAP_CODE_END()
-
 
 
 KV_SERIALIZE_MAP_CODE_BEGIN(service_node_contribution)
