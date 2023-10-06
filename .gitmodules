@@ -13,3 +13,6 @@
 [submodule "external/sispop-mq"]
 	path = external/sispop-mq
 	url = https://github.com/sispopplatform/sispop-mq-real
+[submodule "external/miniupnp"]
+	path = external/miniupnp
+	url = https://github.com/miniupnp/miniupnp
