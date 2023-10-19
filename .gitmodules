@@ -25,3 +25,6 @@
 [submodule "external/randomx"]
 	path = external/randomx
 	url = https://github.com/sispopplatform/RandomX
+[submodule "external/loki-mq"]
+	path = external/loki-mq
+	url = https://github.com/sispopplatform/sispop-mq.git
