@@ -1,7 +1,0 @@
-{
-  "type": "ci",
-  "stages": [
-      {"name":"build"},
-      {"name":"run"}
-  ]
-}
