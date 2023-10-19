@@ -1,0 +1,27 @@
+FROM sispop-ubuntu:20.04
+
+RUN apt-get -y install sispopd sispop-wallet-cli
+
+ARG USER_ID
+ARG GROUP_ID
+
+# https://vsupalov.com/docker-shared-permissions/
+# removed due to "addgroup: The GID `100' is already in use"
+# RUN addgroup --gid $GROUP_ID sispop && 
+
+RUN adduser --system --disabled-password --uid $USER_ID --gid $GROUP_ID sispop && \
+    mkdir -p /wallet /home/sispop/.sispop && \
+    chown -R sispop:$GROUP_ID /home/sispop/.sispop && \
+    chown -R sispop:$GROUP_ID /wallet
+
+# Contains the blockchain
+VOLUME /home/sispop/.sispop
+
+EXPOSE 22022
+EXPOSE 22023
+
+# switch to user sispop
+USER sispop
+WORKDIR /home/sispop
+
+ENTRYPOINT ["sispopd", "--p2p-bind-ip=0.0.0.0", "--p2p-bind-port=22022", "--rpc-admin=0.0.0.0:22023", "--non-interactive"]

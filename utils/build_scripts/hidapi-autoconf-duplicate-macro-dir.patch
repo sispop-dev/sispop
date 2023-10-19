@@ -1,0 +1,22 @@
+From 363461494702dfd8f37943f670dd7315c4f4e364 Mon Sep 17 00:00:00 2001
+From: Jan Palus <atler@pld-linux.org>
+Date: Fri, 25 Dec 2020 13:51:30 +0100
+Subject: [PATCH] configure.ac: remove duplicate AC_CONFIG_MACRO_DIR
+
+fixes build with autoconf 2.70
+---
+ configure.ac | 1 -
+ 1 file changed, 1 deletion(-)
+
+diff --git a/configure.ac b/configure.ac
+index 220909a0..77da67af 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -13,7 +13,6 @@ LTLDFLAGS="-version-info ${lt_current}:${lt_revision}:${lt_age}"
+ 
+ AC_CONFIG_MACRO_DIR([m4])
+ AM_INIT_AUTOMAKE([foreign -Wall -Werror])
+-AC_CONFIG_MACRO_DIR([m4])
+ 
+ m4_ifdef([AM_PROG_AR], [AM_PROG_AR])
+ LT_INIT
