@@ -423,7 +423,7 @@ namespace cryptonote
     storage_server_unreachable = 1 << 3,
     timestamp_response_unreachable = 1 << 4,
     timesync_status_out_of_sync = 1 << 5,
-    lokinet_unreachable = 1 << 6,
+    sispopnet_unreachable = 1 << 6,
   };
 
   // Returns human-readable reason strings (e.g. "Missed Uptime Proofs") for the given reason bits
@@ -551,9 +551,9 @@ namespace cryptonote
     bool is_updating() const { return field_is_set(ons::extra_field::signature) && field_any_set(ons::extra_field::updatable_fields); }
     // True if this is buying a new ONS record
     bool is_buying()   const { return (fields == ons::extra_field::buy || fields == ons::extra_field::buy_no_backup); }
-    // True if this is renewing an existing ONS: has no fields at all, is a renewal registration (i.e. lokinet),
+    // True if this is renewing an existing ONS: has no fields at all, is a renewal registration (i.e. sispopnet),
     // and has a non-null txid set (which should point to the most recent registration or update).
-    bool is_renewing() const { return fields == ons::extra_field::none && prev_txid && is_lokinet_type(type); }
+    bool is_renewing() const { return fields == ons::extra_field::none && prev_txid && is_sispopnet_type(type); }
 
     static tx_extra_sispop_name_system make_buy(
         ons::generic_owner const& owner,

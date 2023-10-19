@@ -212,17 +212,17 @@ namespace service_nodes {
   constexpr uint64_t VOTE_OR_TX_VERIFY_HEIGHT_BUFFER    = 5;
 
   //  constexpr std::array<uint16_t, 3> MIN_STORAGE_SERVER_VERSION{{2, 2, 0}};
-  //  constexpr std::array<uint16_t, 3> MIN_LOKINET_VERSION{{0, 9, 5}};
+  //  constexpr std::array<uint16_t, 3> MIN_SISPOPNET_VERSION{{0, 9, 5}};
 
     constexpr std::array<uint16_t, 3> MIN_STORAGE_SERVER_VERSION{{2, 0, 0}};
-    constexpr std::array<uint16_t, 3> MIN_LOKINET_VERSION{{0, 8, 0}};
+    constexpr std::array<uint16_t, 3> MIN_SISPOPNET_VERSION{{0, 8, 0}};
 
   // The minimum accepted version number, broadcasted by Service Nodes via uptime proofs for each hardfork
   struct proof_version
   {
     std::pair<uint8_t, uint8_t> hardfork_revision;
     std::array<uint16_t, 3> sispopd;
-    std::array<uint16_t, 3> lokinet;
+    std::array<uint16_t, 3> sispopnet;
     std::array<uint16_t, 3> storage_server;
   };
 

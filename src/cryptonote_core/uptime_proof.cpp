@@ -20,7 +20,7 @@ Proof::Proof(
         uint16_t sn_storage_omq_port,
         const std::array<uint16_t, 3> ss_version,
         uint16_t quorumnet_port,
-        const std::array<uint16_t, 3> lokinet_version,
+        const std::array<uint16_t, 3> sispopnet_version,
         const service_nodes::service_node_keys& keys) :
     version{SISPOP_VERSION},
     pubkey{keys.pub},
@@ -31,7 +31,7 @@ Proof::Proof(
     storage_https_port{sn_storage_https_port},
     storage_omq_port{sn_storage_omq_port},
     storage_server_version{ss_version},
-    lokinet_version{lokinet_version}
+    sispopnet_version{sispopnet_version}
 {
   crypto::hash hash = hash_uptime_proof();
 
@@ -75,11 +75,11 @@ Proof::Proof(const std::string& serialized_proof)
     for (bt_value const &i: bt_storage_version){
       storage_server_version[k++] = static_cast<uint16_t>(get_int<unsigned>(i));
     }
-    //lokinet_version
-    const bt_list& bt_lokinet_version = var::get<bt_list>(bt_proof.at("lv"));
+    //sispopnet_version
+    const bt_list& bt_sispopnet_version = var::get<bt_list>(bt_proof.at("lv"));
     k = 0;
-    for (bt_value const &i: bt_lokinet_version){
-      lokinet_version[k++] = static_cast<uint16_t>(get_int<unsigned>(i));
+    for (bt_value const &i: bt_sispopnet_version){
+      sispopnet_version[k++] = static_cast<uint16_t>(get_int<unsigned>(i));
     }
   } catch (const std::exception& e) {
     MWARNING("deserialization failed: " <<  e.what());
@@ -117,8 +117,8 @@ sispopmq::bt_dict Proof::bt_encode_uptime_proof() const
     {"sop", storage_omq_port},
     //storage_version
     {"sv", sispopmq::bt_list{{storage_server_version[0], storage_server_version[1], storage_server_version[2]}}},
-    //lokinet_version
-    {"lv", sispopmq::bt_list{{lokinet_version[0], lokinet_version[1], lokinet_version[2]}}},
+    //sispopnet_version
+    {"lv", sispopmq::bt_list{{sispopnet_version[0], sispopnet_version[1], sispopnet_version[2]}}},
   };
 
   if (tools::view_guts(pubkey) != tools::view_guts(pubkey_ed25519)) {
@@ -155,7 +155,7 @@ bool operator==(const uptime_proof::Proof& lhs, const uptime_proof::Proof& rhs)
         (lhs.qnet_port != rhs.qnet_port) ||
         (lhs.version != rhs.version) ||
         (lhs.storage_server_version != rhs.storage_server_version) ||
-        (lhs.lokinet_version != rhs.lokinet_version))
+        (lhs.sispopnet_version != rhs.sispopnet_version))
        result = false;
 
    return result;

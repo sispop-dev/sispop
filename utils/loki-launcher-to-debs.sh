@@ -121,7 +121,7 @@ Extra options (for typical loki-launcher installs these are not needed):
     --overwrite             -- run the script even if /var/lib/loki already
                                exists.  ${RED}Use caution!$RESET
     --no-process-checks     -- allow the migration to run even if lokid/ss/
-                               lokinet processes are still running after
+                               sispopnet processes are still running after
                                stopping loki-launcher.
     --distro=<dist>         -- allows overriding the detected Ubuntu/Debian
                                distribution (default: $(lsb_release -sc))
@@ -192,8 +192,8 @@ START
 read
 
 existing=
-if systemctl is-active -q loki-node lokinet-router loki-storage-server; then
-    existing="systemd services ${BOLD}loki-node$RESET, ${BOLD}lokinet-router$RESET, and/or ${BOLD}loki-storage-server$RESET are
+if systemctl is-active -q loki-node sispopnet-router loki-storage-server; then
+    existing="systemd services ${BOLD}loki-node$RESET, ${BOLD}sispopnet-router$RESET, and/or ${BOLD}loki-storage-server$RESET are
 already running!'"
 elif [ -d /var/lib/loki ] && [ -z "$overwrite" ]; then
     existing="$BOLD/var/lib/loki$RESET already exists!"
@@ -205,7 +205,7 @@ if [ -n "$existing" ]; then
 If you intend to overwrite an existing deb installation then you must stop them
 using:
 
-    sudo systemctl disable --now loki-node lokinet-router loki-storage-server
+    sudo systemctl disable --now loki-node sispopnet-router loki-storage-server
 
 and then must rerun this script adding the ${BOLD}--overwrite$RESET option.  Be
 careful: this will overwrite any existing configuration and data (including
@@ -304,16 +304,16 @@ ss_data=$(jq -r .runningConfig.storage.data_dir <<<"$lljson")
 ss_http=$(jq -r .runningConfig.storage.port <<<"$lljson")
 ss_lmq=$(jq -r .runningConfig.storage.lmq_port <<<"$lljson")
 ss_listen=$(jq -r .runningConfig.storage.ip <<<"$lljson")
-lokinet_data=$(jq -r .runningConfig.network.data_dir <<<"$lljson")
-lokinet_ip=${ip_public} # Currently loki-launcher doesn't support specifying this separately
-lokinet_port=$(jq -r .runningConfig.network.public_port <<<"$lljson")
-lokinet_simple=
+sispopnet_data=$(jq -r .runningConfig.network.data_dir <<<"$lljson")
+sispopnet_ip=${ip_public} # Currently loki-launcher doesn't support specifying this separately
+sispopnet_port=$(jq -r .runningConfig.network.public_port <<<"$lljson")
+sispopnet_simple=
 
-if [ "$lokinet_ip" != "$ip_public" ]; then
-    die "Unsupported configuration anamoly detected: publicIPv4 ($ip_public) is not the same as lokinet's public IP ($lokinet_ip)"
+if [ "$sispopnet_ip" != "$ip_public" ]; then
+    die "Unsupported configuration anamoly detected: publicIPv4 ($ip_public) is not the same as sispopnet's public IP ($sispopnet_ip)"
 fi
 
-# Lokinet configuration: if the public IP is a local system IP then we can just produce:
+# Sispopnet configuration: if the public IP is a local system IP then we can just produce:
 #
 # [bind]
 # IP=port
@@ -328,11 +328,11 @@ fi
 #
 # which will listen on all interfaces, and use the public-ip value to advertise itself to the network.
 if [[ "$(ip -o route get ${ip_public})" =~ \ dev\ lo\  ]]; then
-    lokinet_simple=1
+    sispopnet_simple=1
 fi
 
 if [ "$ss_listen" != "0.0.0.0" ]; then
-    # Not listening on 0.0.0.0 is a bug (because it means SS isn't accessible over lokinet), unless you have
+    # Not listening on 0.0.0.0 is a bug (because it means SS isn't accessible over sispopnet), unless you have
     # some exotic packet forwarding set up locally.
     warn "WARNING: storage server listening IP will be changed from $ss_listen to 0.0.0.0 (all addresses)" >&2
 fi
@@ -365,16 +365,16 @@ loki-storage-server:
 - public IP: $BOLD$ip_public$RESET
 - HTTP/LokiMQ ports: $BOLD$ss_http/$ss_lmq$RESET
 
-lokinet:
-- data directory: $BOLD$lokinet_data$RESET (=> $BOLD/var/lib/lokinet$RESET)
+sispopnet:
+- data directory: $BOLD$sispopnet_data$RESET (=> $BOLD/var/lib/sispopnet$RESET)
 - public IP: $BOLD$ip_public$RESET
-- port: $BOLD$lokinet_port$RESET
+- port: $BOLD$sispopnet_port$RESET
 
 $custom_ll_warning
 After migration you can change configuration settings through the files:
     $BOLD/etc/loki/loki.conf$RESET
     $BOLD/etc/loki/storage.conf$RESET
-    $BOLD/etc/loki/lokinet-router.conf$RESET
+    $BOLD/etc/loki/sispopnet-router.conf$RESET
 
 DETAILS
 
@@ -394,17 +394,17 @@ if systemctl -q is-active "${service}"; then
     die "loki-launcher is still running!"
 fi
 
-if [ -z "$no_proc_check" ] && pidof -q lokid loki-storage lokinet; then
-    die $'Stopped storage server, but one or more of lokid/loki-storage/lokinet is still running.
+if [ -z "$no_proc_check" ] && pidof -q lokid loki-storage sispopnet; then
+    die $'Stopped storage server, but one or more of lokid/loki-storage/sispopnet is still running.
 
-(If you know that you have other lokid/ss/lokinets running on this machine then rerun this script with the --no-process-checks option)'
+(If you know that you have other lokid/ss/sispopnets running on this machine then rerun this script with the --no-process-checks option)'
 fi
 
 systemctl_verbose 'Disabling loki-launcher automatic startup' \
     systemctl disable "${service}"
 
 systemctl_verbose 'Temporarily masking loki services from startup until we are done migrating' \
-    systemctl mask loki-node.service lokinet-router.service loki-storage-server.service
+    systemctl mask loki-node.service sispopnet-router.service loki-storage-server.service
 
 if ! [ -f /etc/apt/sources.list.d/loki.list ]; then
     echo 'Adding deb repository to /etc/apt/sources.list.d/loki.list'
@@ -420,7 +420,7 @@ apt-get update
 
 echo 'Installing loki packages'
 
-apt-get -y install lokid loki-storage-server lokinet-router
+apt-get -y install lokid loki-storage-server sispopnet-router
 
 echo "${GREEN}Moving lokid data files to /var/lib/loki$RESET"
 echo "${GREEN}========================================$RESET"
@@ -461,55 +461,55 @@ echo -e "ip=0.0.0.0\nport=$ss_http\nlmq-port=$ss_lmq\ndata-dir=/var/lib/loki/sto
 
 
 
-echo "${GREEN}Moving lokinet files to /var/lib/lokinet/router${RESET}"
+echo "${GREEN}Moving sispopnet files to /var/lib/sispopnet/router${RESET}"
 echo "${GREEN}===============================================${RESET}"
-mv -vf "$lokinet_data"/{*.private,*.signed,netdb,profiles.dat} /var/lib/lokinet/router
-chown -v _lokinet:_loki /var/lib/lokinet/router/{*.private,*.signed,profiles.dat}
-chown -R _lokinet:_loki /var/lib/lokinet/router/netdb  # too much for -v
+mv -vf "$sispopnet_data"/{*.private,*.signed,netdb,profiles.dat} /var/lib/sispopnet/router
+chown -v _sispopnet:_loki /var/lib/sispopnet/router/{*.private,*.signed,profiles.dat}
+chown -R _sispopnet:_loki /var/lib/sispopnet/router/netdb  # too much for -v
 echo "${GREEN}Updating lokid configuration in /etc/loki/loki.conf${RESET}"
 echo "${GREEN}===================================================${RESET}"
-if [ -n "$lokinet_simple" ]; then
+if [ -n "$sispopnet_simple" ]; then
     perl -pi -e "
         if (/^\[lokid/ ... /^\[/) {
             s/jsonrpc=127\.0\.0\.1:22023/jsonrpc=127.0.0.1:${lokid_rpc}/;
         }
         if (/^\[bind/ ... /^\[/) {
-            s/^#?[\w:.{}-]+=\d+/$lokinet_ip=$lokinet_port/;
-        }" /etc/loki/lokinet-router.ini
+            s/^#?[\w:.{}-]+=\d+/$sispopnet_ip=$sispopnet_port/;
+        }" /etc/loki/sispopnet-router.ini
 else
     perl -pi -e "
         if (/^\[lokid/ ... /^\[/) {
             s/jsonrpc=127\.0\.0\.1:22023/jsonrpc=127.0.0.1:${lokid_rpc}/;
         }
         if (/^\[router\]/) {
-            \$_ .= qq{public-ip=$lokinet_ip\npublic-port=$lokinet_port\n};
+            \$_ .= qq{public-ip=$sispopnet_ip\npublic-port=$sispopnet_port\n};
         }
         if (/^\[router/ ... /^\[/) {
             s/^public-(?:ip|port)=.*//;
         }
 
         if (/^\[bind/ ... /^\[/) {
-            s/^#?[\w:.{}-]+=\d+/0.0.0.0=$lokinet_port/;
-        }" /etc/loki/lokinet-router.ini
+            s/^#?[\w:.{}-]+=\d+/0.0.0.0=$sispopnet_port/;
+        }" /etc/loki/sispopnet-router.ini
 fi
 
 
 echo "${GREEN}Done moving/copying files.  Starting loki services...${RESET}"
 systemctl_verbose 'Unmasking services' \
-    systemctl unmask loki-node.service lokinet-router.service loki-storage-server.service
+    systemctl unmask loki-node.service sispopnet-router.service loki-storage-server.service
 systemctl_verbose 'Enabling automatic startup of loki services' \
-    systemctl enable loki-node.service lokinet-router.service loki-storage-server.service
+    systemctl enable loki-node.service sispopnet-router.service loki-storage-server.service
 
-# Try to start a few times because lokinet deliberately dies (expecting to be restarted) if it can't
+# Try to start a few times because sispopnet deliberately dies (expecting to be restarted) if it can't
 # reach lokid on startup to get keys.
 for ((i = 0; i < 10; i++)); do
-    if systemctl start loki-node.service lokinet-router.service loki-storage-server.service 2>/dev/null; then
+    if systemctl start loki-node.service sispopnet-router.service loki-storage-server.service 2>/dev/null; then
         break
     fi
     sleep 1
 done
 
-for s in loki-node lokinet-router loki-storage-server; do
+for s in loki-node sispopnet-router loki-storage-server; do
     if ! systemctl is-active -q $s.service; then
         echo -e "${BYELLOW}$s.service failed to start.${RESET} Check its status using the commands below.\n"
     fi
@@ -522,7 +522,7 @@ You can check on and control your service using these commands:
     # Show general status of the process:
     sudo systemctl status loki-node
     sudo systemctl status loki-storage-server
-    sudo systemctl status lokinet-router
+    sudo systemctl status sispopnet-router
 
     # Start/stop/restart a service:
     sudo systemctl start loki-node

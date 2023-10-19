@@ -9,7 +9,7 @@ from base64 import b64encode, b32encode
 import sys
 
 name = "Blocks.loki"
-type = 2 # 2 == lokinet, 0 == session
+type = 2 # 2 == sispopnet, 0 == session
 
 # Calculate the blake2b hash of the lower-case full name (including the .loki):
 name_hash = nacl.hash.blake2b(name.lower().encode(), encoder=nacl.encoding.RawEncoder)
@@ -32,7 +32,7 @@ if 'result' in r:
 else:
     raise RuntimeError("LNS request failed: didn't get any result")
 
-# For lokinet addresses and HF16+ session addresses we'll always have an encrypted value and an
+# For sispopnet addresses and HF16+ session addresses we'll always have an encrypted value and an
 # encryption nonce.  (For HF15 Session addresses the nonce can be missing, in which case the
 # encryption involves a much more expensive argon2-based calculation; most external code isn't
 # expected to support them and existing registration owners should submit an update after HF16 to
@@ -52,8 +52,8 @@ val = nacl.secret.nacl.bindings.crypto_aead_xchacha20poly1305_ietf_decrypt(
         decrypt_key
         )
 
-# val will currently be the raw lokinet ed25519 pubkey (32 bytes).  We can convert it to the more
-# common lokinet address (which is the same value but encoded in z-base-32) and convert the bytes to
+# val will currently be the raw sispopnet ed25519 pubkey (32 bytes).  We can convert it to the more
+# common sispopnet address (which is the same value but encoded in z-base-32) and convert the bytes to
 # a string:
 val = b32encode(val).decode()
 

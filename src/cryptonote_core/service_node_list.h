@@ -155,7 +155,7 @@ namespace service_nodes
     uint64_t effective_timestamp = 0; // Typically the same, but on recommissions it is set to the recommission block time to fend off instant obligation checks
     std::array<std::pair<uint32_t, uint64_t>, 2> public_ips = {}; // (not serialized)
 
-    // See set_storage_server_peer_reachable(...) and set_lokinet_peer_reachable(...)
+    // See set_storage_server_peer_reachable(...) and set_sispopnet_peer_reachable(...)
     struct reachable_stats {
         std::chrono::steady_clock::time_point
             last_reachable = NEVER,
@@ -177,7 +177,7 @@ namespace service_nodes
 
     };
     reachable_stats ss_reachable;
-    reachable_stats lokinet_reachable;
+    reachable_stats sispopnet_reachable;
 
     // Unlike all of the above (except for timestamp), these values *do* get serialized
     std::unique_ptr<uptime_proof::Proof> proof;
@@ -557,7 +557,7 @@ namespace service_nodes
                                                                    uint16_t storage_omq_port,
                                                                    uint16_t quorumnet_port) const;
     
-    uptime_proof::Proof generate_uptime_proof(uint32_t public_ip, uint16_t storage_port, uint16_t storage_omq_port, std::array<uint16_t, 3> ss_version, uint16_t quorumnet_port, std::array<uint16_t, 3> lokinet_version) const;
+    uptime_proof::Proof generate_uptime_proof(uint32_t public_ip, uint16_t storage_port, uint16_t storage_omq_port, std::array<uint16_t, 3> ss_version, uint16_t quorumnet_port, std::array<uint16_t, 3> sispopnet_version) const;
 
     //TODO: remove after HF18
     bool handle_uptime_proof(cryptonote::NOTIFY_UPTIME_PROOF::request const &proof, bool &my_uptime_proof_confirmation, crypto::x25519_public_key &x25519_pkey);
@@ -569,8 +569,8 @@ namespace service_nodes
     // Called every hour to remove proofs for expired SNs from memory and the database.
     void cleanup_proofs();
 
-    // Called via RPC from storage server/lokinet to report a ping test result for a remote storage
-    // server/lokinet.
+    // Called via RPC from storage server/sispopnet to report a ping test result for a remote storage
+    // server/sispopnet.
     //
     // How this works:
     // - SS randomly picks probably-good nodes to test every 10s (with fuzz), and pings
@@ -586,8 +586,8 @@ namespace service_nodes
     // - otherwise we consider it good.  (Which means either it passed a reachability test at least
     //   once in the last 1h5min *or* SS stopped pinging it, perhaps because it restarted).
     //
-    // Lokinet works essentially the same, except that its concept of a "ping" is being able to
-    // successfully establish a session with the given remote lokinet snode.
+    // Sispopnet works essentially the same, except that its concept of a "ping" is being able to
+    // successfully establish a session with the given remote sispopnet snode.
     //
     // We do all this by tracking three values:
     // - last_reachable
@@ -610,7 +610,7 @@ namespace service_nodes
     // UPTIME_PROOF_VALIDITY-UPTIME_PROOF_FREQUENCY (which is actually 11min on testnet rather than
     // 1h5min)).
     bool set_storage_server_peer_reachable(crypto::public_key const &pubkey, bool value);
-    bool set_lokinet_peer_reachable(crypto::public_key const &pubkey, bool value);
+    bool set_sispopnet_peer_reachable(crypto::public_key const &pubkey, bool value);
   private:
     bool set_peer_reachable(bool storage_server, crypto::public_key const &pubkey, bool value);
   public:

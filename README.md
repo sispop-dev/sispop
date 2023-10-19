@@ -22,7 +22,7 @@ Portions Copyright (c) 2012-2013 The Cryptonote developers.
 
 ## Information
 
-Sispop is a private cryptocurrency based on Monero. Sispop currently offers an incentivised full node layer, over the coming months we will be looking to support a secondary p2p network (Lokinet) and a messenger that offers private communications based on the Signal protocol (Session).
+Sispop is a private cryptocurrency based on Monero. Sispop currently offers an incentivised full node layer, over the coming months we will be looking to support a secondary p2p network (Sispopnet) and a messenger that offers private communications based on the Signal protocol (Session).
 
 More information on the project can be found on the website and in the whitepaper.
 

@@ -143,7 +143,7 @@ class SNNetwork:
 
         self.print_wallet_balances()
 
-        vprint("Sending fake lokinet/ss pings")
+        vprint("Sending fake sispopnet/ss pings")
         for sn in self.sns:
             sn.ping()
 

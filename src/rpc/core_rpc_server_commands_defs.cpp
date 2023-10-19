@@ -321,7 +321,7 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_INFO::response)
   KV_SERIALIZE(start_time)
   KV_SERIALIZE(service_node)
   KV_SERIALIZE(last_storage_server_ping)
-  KV_SERIALIZE(last_lokinet_ping)
+  KV_SERIALIZE(last_sispopnet_ping)
   KV_SERIALIZE(free_space)
   KV_SERIALIZE(offline)
   KV_SERIALIZE(untrusted)
@@ -1094,7 +1094,7 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_SERVICE_NODES::requested_fields_t)
     KV_SERIALIZE(decommission_count)
     KV_SERIALIZE(earned_downtime_blocks)
     KV_SERIALIZE(service_node_version)
-    KV_SERIALIZE(lokinet_version)
+    KV_SERIALIZE(sispopnet_version)
     KV_SERIALIZE(storage_server_version)
     KV_SERIALIZE(contributors)
     KV_SERIALIZE(total_contributed)
@@ -1120,10 +1120,10 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_SERVICE_NODES::requested_fields_t)
     KV_SERIALIZE(storage_server_first_unreachable)
     KV_SERIALIZE(storage_server_last_unreachable)
     KV_SERIALIZE(storage_server_last_reachable)
-    KV_SERIALIZE(lokinet_reachable)
-    KV_SERIALIZE(lokinet_first_unreachable)
-    KV_SERIALIZE(lokinet_last_unreachable)
-    KV_SERIALIZE(lokinet_last_reachable)
+    KV_SERIALIZE(sispopnet_reachable)
+    KV_SERIALIZE(sispopnet_first_unreachable)
+    KV_SERIALIZE(sispopnet_last_unreachable)
+    KV_SERIALIZE(sispopnet_last_reachable)
     KV_SERIALIZE(checkpoint_participation)
     KV_SERIALIZE(pulse_participation)
     KV_SERIALIZE(timestamp_participation)
@@ -1160,7 +1160,7 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_SERVICE_NODES::response::entry)
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(decommission_count);
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(earned_downtime_blocks);
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(service_node_version);
-  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(lokinet_version)
+  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(sispopnet_version)
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(storage_server_version)
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(contributors);
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(total_contributed);
@@ -1180,10 +1180,10 @@ KV_SERIALIZE_MAP_CODE_BEGIN(GET_SERVICE_NODES::response::entry)
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(storage_server_first_unreachable)
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(storage_server_last_unreachable)
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(storage_server_last_reachable)
-  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(lokinet_reachable);
-  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(lokinet_first_unreachable)
-  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(lokinet_last_unreachable)
-  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(lokinet_last_reachable)
+  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(sispopnet_reachable);
+  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(sispopnet_first_unreachable)
+  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(sispopnet_last_unreachable)
+  KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(sispopnet_last_reachable)
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(checkpoint_participation);
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(pulse_participation);
   KV_SERIALIZE_ENTRY_FIELD_IF_REQUESTED(timestamp_participation);
@@ -1225,7 +1225,7 @@ KV_SERIALIZE_MAP_CODE_BEGIN(STORAGE_SERVER_PING::request)
 KV_SERIALIZE_MAP_CODE_END()
 
 
-KV_SERIALIZE_MAP_CODE_BEGIN(LOKINET_PING::request)
+KV_SERIALIZE_MAP_CODE_BEGIN(SISPOPNET_PING::request)
   KV_SERIALIZE(version);
 KV_SERIALIZE_MAP_CODE_END()
 

@@ -566,11 +566,11 @@ bool rpc_command_executor::show_status() {
         str << "NOT RECEIVED";
     str << " (storage), ";
 
-    if (*ires.last_lokinet_ping > 0)
-        str << get_human_time_ago(*ires.last_lokinet_ping, now, true /*abbreviate*/);
+    if (*ires.last_sispopnet_ping > 0)
+        str << get_human_time_ago(*ires.last_sispopnet_ping, now, true /*abbreviate*/);
     else
         str << "NOT RECEIVED";
-    str << " (lokinet)";
+    str << " (sispopnet)";
 
     tools::success_msg_writer() << str.str();
 
@@ -1663,7 +1663,7 @@ static void append_printable_service_node_list_entry(cryptonote::network_type ne
     if (detailed_view)
       stream << indent2 << "Auxiliary Public Keys:\n"
              << indent3 << (entry.pubkey_ed25519.empty() ? "(not yet received)" : entry.pubkey_ed25519) << " (Ed25519)\n"
-             << indent3 << (entry.pubkey_ed25519.empty() ? "(not yet received)" : sispopmq::to_base32z(sispopmq::from_hex(entry.pubkey_ed25519)) + ".snode") << " (Lokinet)\n"
+             << indent3 << (entry.pubkey_ed25519.empty() ? "(not yet received)" : sispopmq::to_base32z(sispopmq::from_hex(entry.pubkey_ed25519)) + ".snode") << " (Sispopnet)\n"
              << indent3 << (entry.pubkey_x25519.empty()  ? "(not yet received)" : entry.pubkey_x25519)  << " (X25519)\n";
 
     //
@@ -1693,14 +1693,14 @@ static void append_printable_service_node_list_entry(cryptonote::network_type ne
     };
     stream << indent2 << "Storage Server Reachable: ";
     print_reachable(entry.storage_server_reachable, entry.storage_server_first_unreachable, entry.storage_server_last_unreachable, entry.storage_server_last_reachable);
-    stream << indent2 << "Lokinet Reachable: ";
-    print_reachable(entry.lokinet_reachable, entry.lokinet_first_unreachable, entry.lokinet_last_unreachable, entry.lokinet_last_reachable);
+    stream << indent2 << "Sispopnet Reachable: ";
+    print_reachable(entry.sispopnet_reachable, entry.sispopnet_first_unreachable, entry.sispopnet_last_unreachable, entry.sispopnet_last_reachable);
 
     //
     // NOTE: Component Versions
     //
-    stream << indent2 << "Storage Server / Lokinet Router versions: "
-        << ((entry.storage_server_version[0] == 0 && entry.storage_server_version[1] == 0 && entry.storage_server_version[2] == 0) ? "(Storage server ping not yet received) " : tools::join(".", entry.storage_server_version)) << " / " << ((entry.lokinet_version[0] == 0 && entry.lokinet_version[1] == 0 && entry.lokinet_version[2] == 0) ? "(Lokinet ping not yet received)" : tools::join(".", entry.lokinet_version)) << "\n";
+    stream << indent2 << "Storage Server / Sispopnet Router versions: "
+        << ((entry.storage_server_version[0] == 0 && entry.storage_server_version[1] == 0 && entry.storage_server_version[2] == 0) ? "(Storage server ping not yet received) " : tools::join(".", entry.storage_server_version)) << " / " << ((entry.sispopnet_version[0] == 0 && entry.sispopnet_version[1] == 0 && entry.sispopnet_version[2] == 0) ? "(Sispopnet ping not yet received)" : tools::join(".", entry.sispopnet_version)) << "\n";
 
 
 
@@ -1979,11 +1979,11 @@ bool rpc_command_executor::prepare_registration(bool force_registration)
     tools::fail_msg_writer() << "Unable to prepare registration: this daemon is not running in --service-node mode";
     return false;
   }
-  else if (auto last_lokinet_ping = static_cast<std::time_t>(res.last_lokinet_ping.value_or(0));
-      last_lokinet_ping < (time(nullptr) - 60) && !force_registration)
+  else if (auto last_sispopnet_ping = static_cast<std::time_t>(res.last_sispopnet_ping.value_or(0));
+      last_sispopnet_ping < (time(nullptr) - 60) && !force_registration)
   {
-    tools::fail_msg_writer() << "Unable to prepare registration: this daemon has not received a ping from lokinet "
-                             << (res.last_lokinet_ping == 0 ? "yet" : "since " + get_human_time_ago(last_lokinet_ping, std::time(nullptr)));
+    tools::fail_msg_writer() << "Unable to prepare registration: this daemon has not received a ping from sispopnet "
+                             << (res.last_sispopnet_ping == 0 ? "yet" : "since " + get_human_time_ago(last_sispopnet_ping, std::time(nullptr)));
     return false;
   }
   else if (auto last_storage_server_ping = static_cast<std::time_t>(res.last_storage_server_ping.value_or(0));

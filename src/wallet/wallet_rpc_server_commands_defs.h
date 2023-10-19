@@ -2217,11 +2217,11 @@ namespace tools::wallet_rpc {
     static constexpr auto names() { return NAMES("ons_buy_mapping"); }
 
     static constexpr const char *description =
-R"(Buy a Loki Name System (ONS) mapping that maps a unique name to a Session ID or Lokinet address.
+R"(Buy a Loki Name System (ONS) mapping that maps a unique name to a Session ID or Sispopnet address.
 
-Currently supports Session, Lokinet and Wallet registrations. Lokinet registrations can be for 1, 2, 5, or 10 years by specifying a type value of "lokinet", "lokinet_2y", "lokinet_5y", "lokinet_10y". Session registrations do not expire.
+Currently supports Session, Sispopnet and Wallet registrations. Sispopnet registrations can be for 1, 2, 5, or 10 years by specifying a type value of "sispopnet", "sispopnet_2y", "sispopnet_5y", "sispopnet_10y". Session registrations do not expire.
 
-The owner of the ONS entry (by default, the purchasing wallet) will be permitted to submit ONS update transactions to the Loki blockchain (for example to update a Session pubkey or the target Lokinet address). You may change the primary owner or add a backup owner in the registration and can change them later with update transactions. Owner addresses can be either Loki wallets, or generic ed25519 pubkeys (for advanced uses).
+The owner of the ONS entry (by default, the purchasing wallet) will be permitted to submit ONS update transactions to the Loki blockchain (for example to update a Session pubkey or the target Sispopnet address). You may change the primary owner or add a backup owner in the registration and can change them later with update transactions. Owner addresses can be either Loki wallets, or generic ed25519 pubkeys (for advanced uses).
 
 For Session, the recommended owner or backup owner is the ed25519 public key of the user's Session ID.
 
@@ -2231,11 +2231,11 @@ For more information on updating and signing see the ONS_UPDATE_MAPPING document
 
     struct request
     {
-      std::string        type;            // The mapping type: "session", "lokinet", "lokinet_2y", "lokinet_5y", "lokinet_10y", "wallet".
+      std::string        type;            // The mapping type: "session", "sispopnet", "sispopnet_2y", "sispopnet_5y", "sispopnet_10y", "wallet".
       std::string        owner;           // (Optional): The ed25519 public key or wallet address that has authority to update the mapping.
       std::string        backup_owner;    // (Optional): The secondary, backup public key that has authority to update the mapping.
       std::string        name;            // The name to purchase via Sispop Name Service
-      std::string        value;           // The value that the name maps to via Sispop Name Service, (i.e. For Session: [display name->session public key],  for wallets: [name->wallet address], for Lokinet: [name->domain name]).
+      std::string        value;           // The value that the name maps to via Sispop Name Service, (i.e. For Session: [display name->session public key],  for wallets: [name->wallet address], for Sispopnet: [name->domain name]).
 
       uint32_t           account_index;   // (Optional) Transfer from this account index. (Defaults to 0)
       std::set<uint32_t> subaddr_indices; // (Optional) Transfer from this set of subaddresses. (Defaults to 0)
@@ -2264,19 +2264,19 @@ For more information on updating and signing see the ONS_UPDATE_MAPPING document
   };
 
   SISPOP_RPC_DOC_INTROSPECT
-  // Renew an active lokinet ONS registration
+  // Renew an active sispopnet ONS registration
   struct ONS_RENEW_MAPPING : RESTRICTED
   {
     static constexpr auto names() { return NAMES("ons_renew_mapping"); }
 
     static constexpr const char *description =
-R"(Renews a Loki Name System lokinet mapping by adding to the existing expiry time.
+R"(Renews a Loki Name System sispopnet mapping by adding to the existing expiry time.
 
-The renewal can be for 1, 2, 5, or 10 years by specifying a `type` value of "lokinet_2y", "lokinet_10y", etc.)";
+The renewal can be for 1, 2, 5, or 10 years by specifying a `type` value of "sispopnet_2y", "sispopnet_10y", etc.)";
 
     struct request
     {
-      std::string        type;      // The mapping type, "lokinet" (1-year), or "lokinet_2y", "lokinet_5y", "lokinet_10y" for multi-year registrations.
+      std::string        type;      // The mapping type, "sispopnet" (1-year), or "sispopnet_2y", "sispopnet_5y", "sispopnet_10y" for multi-year registrations.
       std::string        name;      // The name to update
 
       uint32_t           account_index;    // (Optional) Transfer from this account index. (Defaults to 0)
@@ -2310,7 +2310,7 @@ If signing is performed externally then you must first encrypt the `value` (if b
 
     struct request
     {
-      std::string        type;      // The mapping type, "session", "lokinet", or "wallet".
+      std::string        type;      // The mapping type, "session", "sispopnet", or "wallet".
       std::string        name;      // The name to update via Loki Name Service
       std::string        value;     // (Optional): The new value that the name maps to via Loki Name Service. If not specified or given the empty string "", then the mapping's value remains unchanged. If using a `signature` then this value (if non-empty) must be already encrypted.
       std::string        owner;     // (Optional): The new owner of the mapping. If not specified or given the empty string "", then the mapping's owner remains unchanged.
@@ -2356,7 +2356,7 @@ This command is only required if the open wallet is one of the owners of a ONS r
 
     struct request
     {
-      std::string type;  // The mapping type, currently we support "session", "lokinet" and "wallet" mappings.
+      std::string type;  // The mapping type, currently we support "session", "sispopnet" and "wallet" mappings.
       std::string name;  // The desired name to update via Sispop Name Service
       std::string encrypted_value; // (Optional): The new encrypted value that the name maps to via Sispop Name Service. If not specified or given the empty string "", then the mapping's value remains unchanged.
       std::string owner;     // (Optional): The new owner of the mapping. If not specified or given the empty string "", then the mapping's owner remains unchanged.
@@ -2382,7 +2382,7 @@ This command is only required if the open wallet is one of the owners of a ONS r
 
     struct request
     {
-      std::string type; // The mapping type, "session", "lokinet" or "wallet".
+      std::string type; // The mapping type, "session", "sispopnet" or "wallet".
       std::string name; // The desired name to hash
 
       KV_MAP_SERIALIZABLE
@@ -2406,7 +2406,7 @@ This command is only required if the open wallet is one of the owners of a ONS r
 
     struct known_record
     {
-      std::string type;                          // The mapping type, "session" or "lokinet".
+      std::string type;                          // The mapping type, "session" or "sispopnet".
       std::string hashed;                        // The hashed name (in base64)
       std::string name;                          // The plaintext name
       std::string owner;                         // The public key that purchased the Loki Name Service entry.
@@ -2444,7 +2444,7 @@ This command is only required if the open wallet is one of the owners of a ONS r
 
     struct record
     {
-      std::string type; // The ONS type (mandatory); currently support values are: "session", "lokinet"
+      std::string type; // The ONS type (mandatory); currently support values are: "session", "sispopnet"
       std::string name; // The (unhashed) name of the record
 
       KV_MAP_SERIALIZABLE
@@ -2469,7 +2469,7 @@ This command is only required if the open wallet is one of the owners of a ONS r
     struct request
     {
       std::string name;            // The ONS name with which to encrypt the value.
-      std::string type;            // The mapping type: "session" or "lokinet".
+      std::string type;            // The mapping type: "session" or "sispopnet".
       std::string value;           // The value to be encrypted.
 
       KV_MAP_SERIALIZABLE
@@ -2492,7 +2492,7 @@ This command is only required if the open wallet is one of the owners of a ONS r
     struct request
     {
       std::string name;            // The ONS name of the given encrypted value.
-      std::string type;            // The mapping type: "session" or "lokinet".
+      std::string type;            // The mapping type: "session" or "sispopnet".
       std::string encrypted_value; // The encrypted value represented in hex.
 
       KV_MAP_SERIALIZABLE

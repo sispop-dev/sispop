@@ -12,7 +12,7 @@ TEST(sispop_name_system, name_tests)
     bool allowed;
   };
 
-  name_test const lokinet_names[] = {
+  name_test const sispopnet_names[] = {
       {"a.loki", true},
       {"domain.loki", true},
       {"xn--tda.loki", true}, // ü
@@ -72,8 +72,8 @@ TEST(sispop_name_system, name_tests)
   {
     auto type = static_cast<ons::mapping_type>(type16);
     if (type == ons::mapping_type::wallet) continue; // Not yet supported
-    name_test const *names = ons::is_lokinet_type(type) ? lokinet_names : session_wallet_names;
-    size_t names_count     = ons::is_lokinet_type(type) ? sispop::char_count(lokinet_names) : sispop::char_count(session_wallet_names);
+    name_test const *names = ons::is_sispopnet_type(type) ? sispopnet_names : session_wallet_names;
+    size_t names_count     = ons::is_sispopnet_type(type) ? sispop::char_count(sispopnet_names) : sispop::char_count(session_wallet_names);
 
     for (size_t i = 0; i < names_count; i++)
     {
@@ -91,9 +91,9 @@ TEST(sispop_name_system, value_encrypt_and_decrypt)
   value.len                = 32;
   memset(&value.buffer[0], 'a', value.len);
 
-  // The type here is not hugely important for decryption except that lokinet (as opposed to
+  // The type here is not hugely important for decryption except that sispopnet (as opposed to
   // session) doesn't fall back to argon2 decryption if decryption fails.
-  constexpr auto type = ons::mapping_type::lokinet;
+  constexpr auto type = ons::mapping_type::sispopnet;
 
   // Encryption and Decryption success
   {

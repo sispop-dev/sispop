@@ -296,7 +296,7 @@ namespace rpc {
         uint64_t height;               // The voting block height for the changing service node and validators
         uint32_t index;                // The index of all tested nodes at the given height for which this state change applies
         std::vector<uint32_t> voters;  // The position of validators in the testing quorum who validated and voted for this state change. This typically contains just 7 required voter slots (of 10 eligible voters).
-        std::optional<std::vector<std::string>> reasons; // Reasons for the decommissioning/deregistration as reported by the voting quorum.  This contains any reasons that all voters agreed on, one or more of: "uptime" (missing uptime proofs), "checkpoints" (missed checkpoint votes), "pulse" (missing pulse votes), "storage" (storage server pings failed), "lokinet" (lokinet router unreachable), "timecheck" (time sync pings failed), "timesync" (time was out of sync)
+        std::optional<std::vector<std::string>> reasons; // Reasons for the decommissioning/deregistration as reported by the voting quorum.  This contains any reasons that all voters agreed on, one or more of: "uptime" (missing uptime proofs), "checkpoints" (missed checkpoint votes), "pulse" (missing pulse votes), "storage" (storage server pings failed), "sispopnet" (sispopnet router unreachable), "timecheck" (time sync pings failed), "timesync" (time was out of sync)
         std::optional<std::vector<std::string>> reasons_maybe; // If present, this contains any decomm/dereg reasons that were given by some but not all quorum voters
         KV_MAP_SERIALIZABLE
       };
@@ -305,8 +305,8 @@ namespace rpc {
         std::optional<bool> buy;                 // Provided and true iff this is an ONS buy record
         std::optional<bool> update;              // Provided and true iff this is an ONS record update
         std::optional<bool> renew;               // Provided and true iff this is an ONS record renewal
-        std::string type;                        // The ONS request type.  For registrations: "lokinet", "session", "wallet"; for a record update: "update"
-        std::optional<uint64_t> blocks;          // The registration length in blocks (only applies to lokinet registrations; session/wallet registrations do not expire)
+        std::string type;                        // The ONS request type.  For registrations: "sispopnet", "session", "wallet"; for a record update: "update"
+        std::optional<uint64_t> blocks;          // The registration length in blocks (only applies to sispopnet registrations; session/wallet registrations do not expire)
         std::string name_hash;                   // The hashed name of the record being purchased/updated, in hex (the actual name is not provided on the blockchain).
         std::optional<std::string> prev_txid;    // For an update, this points at the txid of the previous ons update transaction.
         std::optional<std::string> value;        // The encrypted value of the record, in hex.  Note that this is encrypted using the actual name itself (*not* the hashed name).
@@ -640,11 +640,11 @@ namespace rpc {
       uint64_t block_weight_limit;          // Maximum allowed block weight.
       uint64_t block_size_median;           // Median block size of latest 100 blocks.
       uint64_t block_weight_median;         // Median block weight of latest 100 blocks.
-      std::array<int, 3> ons_counts;        // ONS registration counts, [session, wallet, lokinet]
+      std::array<int, 3> ons_counts;        // ONS registration counts, [session, wallet, sispopnet]
       std::optional<bool> service_node;                    // Will be true if the node is running in --service-node mode.
       std::optional<uint64_t> start_time;                  // Start time of the daemon, as UNIX time.
       std::optional<uint64_t> last_storage_server_ping;    // Last ping time of the storage server (0 if never or not running as a service node)
-      std::optional<uint64_t> last_lokinet_ping;           // Last ping time of lokinet (0 if never or not running as a service node)
+      std::optional<uint64_t> last_sispopnet_ping;           // Last ping time of sispopnet (0 if never or not running as a service node)
       std::optional<uint64_t> free_space;                  // Available disk space on the node.
       bool offline;                         // States if the node is offline (`true`) or online (`false`).
       bool untrusted;                       // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
@@ -2031,7 +2031,7 @@ namespace rpc {
       bool earned_downtime_blocks;
 
       bool service_node_version;
-      bool lokinet_version;
+      bool sispopnet_version;
       bool storage_server_version;
       bool contributors;
       bool total_contributed;
@@ -2052,10 +2052,10 @@ namespace rpc {
       bool storage_server_last_reachable;
       bool storage_server_last_unreachable;
       bool storage_server_first_unreachable;
-      bool lokinet_reachable;
-      bool lokinet_last_reachable;
-      bool lokinet_last_unreachable;
-      bool lokinet_first_unreachable;
+      bool sispopnet_reachable;
+      bool sispopnet_last_reachable;
+      bool sispopnet_last_unreachable;
+      bool sispopnet_first_unreachable;
       bool checkpoint_participation;
       bool pulse_participation;
       bool timestamp_participation;
@@ -2100,7 +2100,7 @@ namespace rpc {
         uint16_t                              last_decommission_reason_consensus_any;      // The reason for the last decommission as voted by any SNs
         int64_t                               earned_downtime_blocks;        // The number of blocks earned towards decommissioning, or the number of blocks remaining until deregistration if currently decommissioned
         std::array<uint16_t, 3>               service_node_version;          // The major, minor, patch version of the Service Node respectively.
-        std::array<uint16_t, 3>               lokinet_version;               // The major, minor, patch version of the Service Node's lokinet router.
+        std::array<uint16_t, 3>               sispopnet_version;               // The major, minor, patch version of the Service Node's sispopnet router.
         std::array<uint16_t, 3>               storage_server_version;        // The major, minor, patch version of the Service Node's storage server.
         std::vector<service_node_contributor> contributors;                  // Array of contributors, contributing to this Service Node.
         uint64_t                              total_contributed;             // The total amount of Loki in atomic units contributed to this Service Node.
@@ -2122,10 +2122,10 @@ namespace rpc {
         uint64_t                                storage_server_first_unreachable;    // If the last test we received was a failure, this field contains the timestamp when failures started.  Will be 0 if the last result was a success or the node has not yet been tested.  (To disinguish between these cases check storage_server_last_reachable).
         uint64_t                                storage_server_last_unreachable;     // The last time this service node's storage server failed a ping test (regardless of whether or not it is currently failing); 0 if it never failed a test since startup.
         uint64_t                                storage_server_last_reachable;       // The last time we received a successful ping response for this storage server (whether or not it is currently failing); 0 if we have never received a success since startup.
-        bool                                    lokinet_reachable;                   // True if this lokinet is currently passing tests for the purposes of SN node testing: true if the last test passed, or if it has been unreachable for less than an hour; false if it has been failing tests for more than an hour (and thus is considered unreachable).
-        uint64_t                                lokinet_first_unreachable;           // If the last test we received was a failure, this field contains the timestamp when failures started.  Will be 0 if the last result was a success or the node has not yet been tested.  (To disinguish between these cases check lokinet_last_reachable).
-        uint64_t                                lokinet_last_unreachable;            // The last time this service node's lokinet failed a reachable test (regardless of whether or not it is currently failing); 0 if it never failed a test since startup.
-        uint64_t                                lokinet_last_reachable;              // The last time we received a successful test response for this service node's lokinet router (whether or not it is currently failing); 0 if we have never received a success since startup.
+        bool                                    sispopnet_reachable;                   // True if this sispopnet is currently passing tests for the purposes of SN node testing: true if the last test passed, or if it has been unreachable for less than an hour; false if it has been failing tests for more than an hour (and thus is considered unreachable).
+        uint64_t                                sispopnet_first_unreachable;           // If the last test we received was a failure, this field contains the timestamp when failures started.  Will be 0 if the last result was a success or the node has not yet been tested.  (To disinguish between these cases check sispopnet_last_reachable).
+        uint64_t                                sispopnet_last_unreachable;            // The last time this service node's sispopnet failed a reachable test (regardless of whether or not it is currently failing); 0 if it never failed a test since startup.
+        uint64_t                                sispopnet_last_reachable;              // The last time we received a successful test response for this service node's sispopnet router (whether or not it is currently failing); 0 if we have never received a success since startup.
 
         std::vector<service_nodes::participation_entry> checkpoint_participation;    // Of the last N checkpoints the Service Node is in a checkpointing quorum, record whether or not the Service Node voted to checkpoint a block
         std::vector<service_nodes::participation_entry> pulse_participation;         // Of the last N pulse blocks the Service Node is in a pulse quorum, record whether or not the Service Node voted (participated) in that block
@@ -2195,13 +2195,13 @@ namespace rpc {
   };
 
   SISPOP_RPC_DOC_INTROSPECT
-  struct LOKINET_PING : RPC_COMMAND
+  struct SISPOPNET_PING : RPC_COMMAND
   {
-    static constexpr auto names() { return NAMES("lokinet_ping"); }
+    static constexpr auto names() { return NAMES("sispopnet_ping"); }
 
     struct request
     {
-      std::array<uint16_t, 3> version; // Lokinet version
+      std::array<uint16_t, 3> version; // Sispopnet version
       KV_MAP_SERIALIZABLE
     };
 
@@ -2390,7 +2390,7 @@ namespace rpc {
 
 
   SISPOP_RPC_DOC_INTROSPECT
-  // Reports service node peer status (success/fail) from lokinet and storage server.
+  // Reports service node peer status (success/fail) from sispopnet and storage server.
   struct REPORT_PEER_STATUS : RPC_COMMAND
   {
     // TODO: remove the `report_peer_storage_server_status` once we require a storage server version
@@ -2399,7 +2399,7 @@ namespace rpc {
 
     struct request
     {
-      std::string type; // test type; currently supported are: "storage" and "lokinet" for storage server and lokinet tests, respectively.
+      std::string type; // test type; currently supported are: "storage" and "sispopnet" for storage server and sispopnet tests, respectively.
       std::string pubkey; // service node pubkey
       bool passed; // whether the node is passing the test
 
@@ -2428,7 +2428,7 @@ namespace rpc {
 
   SISPOP_RPC_DOC_INTROSPECT
   // Get the name mapping for a Loki Name Service entry. Loki currently supports mappings
-  // for Session and Lokinet.
+  // for Session and Sispopnet.
   struct ONS_NAMES_TO_OWNERS : PUBLIC
   {
     static constexpr auto names() { return NAMES("ons_names_to_owners", "lns_names_to_owners"); }
@@ -2438,7 +2438,7 @@ namespace rpc {
     struct request_entry
     {
       std::string name_hash; // The 32-byte BLAKE2b hash of the name to resolve to a public key via Loki Name Service. The value must be provided either in hex (64 hex digits) or base64 (44 characters with padding, or 43 characters without).
-      std::vector<uint16_t> types; // If empty, query all types. Currently supported types are 0 (session) and 2 (lokinet). In future updates more mapping types will be available.
+      std::vector<uint16_t> types; // If empty, query all types. Currently supported types are 0 (session) and 2 (sispopnet). In future updates more mapping types will be available.
 
       KV_MAP_SERIALIZABLE
     };
@@ -2454,7 +2454,7 @@ namespace rpc {
     struct response_entry
     {
       uint64_t entry_index;     // The index in request_entry's `entries` array that was resolved via Loki Name Service.
-      ons::mapping_type type;   // The type of Loki Name Service entry that the owner owns: currently supported values are 0 (session), 1 (wallet) and 2 (lokinet)
+      ons::mapping_type type;   // The type of Loki Name Service entry that the owner owns: currently supported values are 0 (session), 1 (wallet) and 2 (sispopnet)
       std::string name_hash;    // The hash of the name that was queried, in base64
       std::string owner;        // The public key that purchased the Loki Name Service entry.
       std::optional<std::string> backup_owner; // The backup public key that the owner specified when purchasing the Loki Name Service entry. Omitted if no backup owner.
@@ -2494,7 +2494,7 @@ namespace rpc {
     struct response_entry
     {
       uint64_t    request_index;   // (Deprecated) The index in request's `entries` array that was resolved via Loki Name Service.
-      ons::mapping_type type;      // The category the Loki Name Service entry belongs to; currently 0 for Session, 1 for Wallet and 2 for Lokinet.
+      ons::mapping_type type;      // The category the Loki Name Service entry belongs to; currently 0 for Session, 1 for Wallet and 2 for Sispopnet.
       std::string name_hash;       // The hash of the name that the owner purchased via Loki Name Service in base64
       std::string owner;           // The backup public key specified by the owner that purchased the Loki Name Service entry.
       std::optional<std::string> backup_owner; // The backup public key specified by the owner that purchased the Loki Name Service entry. Omitted if no backup owner.
@@ -2540,7 +2540,7 @@ namespace rpc {
 
     struct request
     {
-      uint16_t type;         // The ONS type (mandatory); currently supported values are: 0 = session, 1 = wallet, 2 = lokinet.
+      uint16_t type;         // The ONS type (mandatory); currently supported values are: 0 = session, 1 = wallet, 2 = sispopnet.
       std::string name_hash; // The 32-byte BLAKE2b hash of the name to look up, encoded as 64 hex digits or 44/43 base64 characters (with/without padding).
 
       KV_MAP_SERIALIZABLE
@@ -2644,7 +2644,7 @@ namespace rpc {
     GET_SERVICE_NODES,
     GET_SERVICE_NODE_STATUS,
     STORAGE_SERVER_PING,
-    LOKINET_PING,
+    SISPOPNET_PING,
     GET_STAKING_REQUIREMENT,
     GET_SERVICE_NODE_BLACKLISTED_KEY_IMAGES,
     GET_OUTPUT_BLACKLIST,

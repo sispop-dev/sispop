@@ -255,14 +255,14 @@ namespace
   const char* USAGE_REQUEST_STAKE_UNLOCK("request_stake_unlock <service_node_pubkey>");
   const char* USAGE_PRINT_LOCKED_STAKES("print_locked_stakes");
 
-  const char* USAGE_ONS_BUY_MAPPING("ons_buy_mapping [index=<N1>[,<N2>,...]] [<priority>] [type=session|lokinet|lokinet_2y|lokinet_5y|lokinet_10y] [owner=<value>] [backup_owner=<value>] <name> <value>");
-  const char* USAGE_ONS_RENEW_MAPPING("ons_renew_mapping [index=<N1>[,<N2>,...]] [<priority>] [type=lokinet|lokinet_2y|lokinet_5y|lokinet_10y] <name>");
-  const char* USAGE_ONS_UPDATE_MAPPING("ons_update_mapping [index=<N1>[,<N2>,...]] [<priority>] [type=session|lokinet] [owner=<value>] [backup_owner=<value>] [value=<ons_value>] [signature=<hex_signature>] <name>");
+  const char* USAGE_ONS_BUY_MAPPING("ons_buy_mapping [index=<N1>[,<N2>,...]] [<priority>] [type=session|sispopnet|sispopnet_2y|sispopnet_5y|sispopnet_10y] [owner=<value>] [backup_owner=<value>] <name> <value>");
+  const char* USAGE_ONS_RENEW_MAPPING("ons_renew_mapping [index=<N1>[,<N2>,...]] [<priority>] [type=sispopnet|sispopnet_2y|sispopnet_5y|sispopnet_10y] <name>");
+  const char* USAGE_ONS_UPDATE_MAPPING("ons_update_mapping [index=<N1>[,<N2>,...]] [<priority>] [type=session|sispopnet] [owner=<value>] [backup_owner=<value>] [value=<ons_value>] [signature=<hex_signature>] <name>");
 
-  const char* USAGE_ONS_ENCRYPT("ons_encrypt [type=session|lokinet] <name> <value>");
-  const char* USAGE_ONS_MAKE_UPDATE_MAPPING_SIGNATURE("ons_make_update_mapping_signature [type=session|lokinet] [owner=<value>] [backup_owner=<value>] [value=<encrypted_ons_value>] <name>");
+  const char* USAGE_ONS_ENCRYPT("ons_encrypt [type=session|sispopnet] <name> <value>");
+  const char* USAGE_ONS_MAKE_UPDATE_MAPPING_SIGNATURE("ons_make_update_mapping_signature [type=session|sispopnet] [owner=<value>] [backup_owner=<value>] [value=<encrypted_ons_value>] <name>");
   const char* USAGE_ONS_BY_OWNER("ons_by_owner [<owner> ...]");
-  const char* USAGE_ONS_LOOKUP("ons_lookup [type=session|wallet|lokinet] <name> [<name> ...]");
+  const char* USAGE_ONS_LOOKUP("ons_lookup [type=session|wallet|sispopnet] <name> [<name> ...]");
 
 #if defined (SISPOP_ENABLE_INTEGRATION_TEST_HOOKS)
   std::string input_line(const std::string &prompt, bool yesno = false)
@@ -6451,7 +6451,7 @@ static std::optional<ons::mapping_type> guess_ons_type(tools::wallet2& wallet, s
   if (typestr.empty())
   {
     if (tools::ends_with(name, ".loki") && (tools::ends_with(value, ".loki") || value.empty()))
-      return ons::mapping_type::lokinet;
+      return ons::mapping_type::sispopnet;
     if (!tools::ends_with(name, ".loki") && tools::starts_with(value, "05") && value.length() == 2*ons::SESSION_PUBLIC_KEY_BINARY_LENGTH)
       return ons::mapping_type::session;
     if (cryptonote::is_valid_address(std::string{value}, wallet.nettype()))
@@ -6538,13 +6538,13 @@ bool simple_wallet::ons_buy_mapping(std::vector<std::string> args)
       std::cout << boost::format(tr("Session Name: %s")) % name << std::endl;
     else if (*type == ons::mapping_type::wallet)
       std::cout << boost::format(tr("Wallet Name:  %s")) % name << std::endl;
-    else if (ons::is_lokinet_type(*type))
+    else if (ons::is_sispopnet_type(*type))
     {
-      std::cout << boost::format(tr("Lokinet Name: %s")) % name << std::endl;
+      std::cout << boost::format(tr("Sispopnet Name: %s")) % name << std::endl;
       int years =
-          *type == ons::mapping_type::lokinet_10years ? 10 :
-          *type == ons::mapping_type::lokinet_5years ? 5 :
-          *type == ons::mapping_type::lokinet_2years ? 2 :
+          *type == ons::mapping_type::sispopnet_10years ? 10 :
+          *type == ons::mapping_type::sispopnet_5years ? 5 :
+          *type == ons::mapping_type::sispopnet_2years ? 2 :
           1;
       int blocks = BLOCKS_EXPECTED_IN_DAYS(years * ons::REGISTRATION_YEAR_DAYS);
       std::cout << boost::format(tr("Registration: %d years (%d blocks)")) % years % blocks << "\n";
@@ -6632,15 +6632,15 @@ bool simple_wallet::ons_renew_mapping(std::vector<std::string> args)
     dsts.push_back(info);
 
     std::cout << "\n" << tr("Renew Sispop Name System Record") << "\n\n";
-    if (ons::is_lokinet_type(type))
-      std::cout << boost::format(tr("Lokinet Name:  %s")) % name << "\n";
+    if (ons::is_sispopnet_type(type))
+      std::cout << boost::format(tr("Sispopnet Name:  %s")) % name << "\n";
     else
       std::cout << boost::format(tr("Name:          %s")) % name << "\n";
 
     int years = 1;
-    if (type == ons::mapping_type::lokinet_2years) years = 2;
-    else if (type == ons::mapping_type::lokinet_5years) years = 5;
-    else if (type == ons::mapping_type::lokinet_10years) years = 10;
+    if (type == ons::mapping_type::sispopnet_2years) years = 2;
+    else if (type == ons::mapping_type::sispopnet_5years) years = 5;
+    else if (type == ons::mapping_type::sispopnet_10years) years = 10;
     int blocks = BLOCKS_EXPECTED_IN_DAYS(years * ons::REGISTRATION_YEAR_DAYS);
     std::cout << boost::format(tr("Renewal years: %d (%d blocks)")) % years % blocks << "\n";
     std::cout << boost::format(tr("New expiry:    Block %d")) % (*response[0].expiration_height + blocks) << "\n";
@@ -6738,8 +6738,8 @@ bool simple_wallet::ons_update_mapping(std::vector<std::string> args)
     std::cout << std::endl << tr("Updating Sispop Name System Record") << std::endl << std::endl;
     if (type == ons::mapping_type::session)
       std::cout << boost::format(tr("Session Name:     %s")) % name << std::endl;
-    else if (ons::is_lokinet_type(type))
-      std::cout << boost::format(tr("Lokinet Name:     %s")) % name << std::endl;
+    else if (ons::is_sispopnet_type(type))
+      std::cout << boost::format(tr("Sispopnet Name:     %s")) % name << std::endl;
     else if (type == ons::mapping_type::wallet)
       std::cout << boost::format(tr("Wallet Name:     %s")) % name << std::endl;
     else

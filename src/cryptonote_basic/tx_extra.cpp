@@ -29,7 +29,7 @@ tx_extra_sispop_name_system tx_extra_sispop_name_system::make_buy(
 tx_extra_sispop_name_system tx_extra_sispop_name_system::make_renew(
     ons::mapping_type type, crypto::hash const &name_hash, crypto::hash const &prev_txid)
 {
-  assert(is_lokinet_type(type) && prev_txid);
+  assert(is_sispopnet_type(type) && prev_txid);
 
   tx_extra_sispop_name_system result{};
   result.fields = ons::extra_field::none;
@@ -84,7 +84,7 @@ std::vector<std::string> readable_reasons(uint16_t decomm_reason) {
   if (decomm_reason & storage_server_unreachable) results.push_back("Storage Server Unreachable");
   if (decomm_reason & timestamp_response_unreachable) results.push_back("Unreachable for Timestamp Check");
   if (decomm_reason & timesync_status_out_of_sync) results.push_back("Time out of sync");
-  if (decomm_reason & lokinet_unreachable) results.push_back("Lokinet Unreachable");
+  if (decomm_reason & sispopnet_unreachable) results.push_back("Sispopnet Unreachable");
   return results;
 }
 
@@ -96,7 +96,7 @@ std::vector<std::string> coded_reasons(uint16_t decomm_reason) {
   if (decomm_reason & storage_server_unreachable) results.push_back("storage");
   if (decomm_reason & timestamp_response_unreachable) results.push_back("timecheck");
   if (decomm_reason & timesync_status_out_of_sync) results.push_back("timesync");
-  if (decomm_reason & lokinet_unreachable) results.push_back("lokinet");
+  if (decomm_reason & sispopnet_unreachable) results.push_back("sispopnet");
   return results;
 }
 

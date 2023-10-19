@@ -423,14 +423,14 @@ namespace cryptonote { namespace rpc {
     res.ons_counts = {
       ons_counts[ons::mapping_type::session],
       ons_counts[ons::mapping_type::wallet],
-      ons_counts[ons::mapping_type::lokinet]};
+      ons_counts[ons::mapping_type::sispopnet]};
 
     if (context.admin)
     {
       res.service_node = m_core.service_node();
       res.start_time = (uint64_t)m_core.get_start_time();
       res.last_storage_server_ping = (uint64_t)m_core.m_last_storage_server_ping;
-      res.last_lokinet_ping = (uint64_t)m_core.m_last_lokinet_ping;
+      res.last_sispopnet_ping = (uint64_t)m_core.m_last_sispopnet_ping;
       res.free_space = m_core.get_free_space();
       res.height_without_bootstrap = res.height;
       std::shared_lock lock{m_bootstrap_daemon_mutex};
@@ -794,10 +794,10 @@ namespace cryptonote { namespace rpc {
         ons.blocks = ons::expiry_blocks(nettype, x.type);
         switch (x.type)
         {
-          case ons::mapping_type::lokinet: [[fallthrough]];
-          case ons::mapping_type::lokinet_2years: [[fallthrough]];
-          case ons::mapping_type::lokinet_5years: [[fallthrough]];
-          case ons::mapping_type::lokinet_10years: ons.type = "lokinet"; break;
+          case ons::mapping_type::sispopnet: [[fallthrough]];
+          case ons::mapping_type::sispopnet_2years: [[fallthrough]];
+          case ons::mapping_type::sispopnet_5years: [[fallthrough]];
+          case ons::mapping_type::sispopnet_10years: ons.type = "sispopnet"; break;
 
           case ons::mapping_type::session: ons.type = "session"; break;
           case ons::mapping_type::wallet:  ons.type = "wallet"; break;
@@ -3074,7 +3074,7 @@ namespace cryptonote { namespace rpc {
     auto& netconf = m_core.get_net_config();
     m_core.get_service_node_list().access_proof(sn_info.pubkey, [&entry, &netconf](const auto &proof) {
         entry.service_node_version     = proof.proof->version;
-        entry.lokinet_version          = proof.proof->lokinet_version;
+        entry.sispopnet_version          = proof.proof->sispopnet_version;
         entry.storage_server_version   = proof.proof->storage_server_version;
         entry.public_ip                = epee::string_tools::get_ip_string_from_int32(proof.proof->public_ip);
         entry.storage_port             = proof.proof->storage_https_port;
@@ -3091,10 +3091,10 @@ namespace cryptonote { namespace rpc {
         entry.storage_server_first_unreachable = reachable_to_time_t(proof.ss_reachable.first_unreachable, system_now, steady_now);
         entry.storage_server_last_unreachable = reachable_to_time_t(proof.ss_reachable.last_unreachable, system_now, steady_now);
         entry.storage_server_last_reachable = reachable_to_time_t(proof.ss_reachable.last_reachable, system_now, steady_now);
-        entry.lokinet_reachable = !proof.lokinet_reachable.unreachable_for(netconf.UPTIME_PROOF_VALIDITY - netconf.UPTIME_PROOF_FREQUENCY, steady_now);
-        entry.lokinet_first_unreachable = reachable_to_time_t(proof.lokinet_reachable.first_unreachable, system_now, steady_now);
-        entry.lokinet_last_unreachable = reachable_to_time_t(proof.lokinet_reachable.last_unreachable, system_now, steady_now);
-        entry.lokinet_last_reachable = reachable_to_time_t(proof.lokinet_reachable.last_reachable, system_now, steady_now);
+        entry.sispopnet_reachable = !proof.sispopnet_reachable.unreachable_for(netconf.UPTIME_PROOF_VALIDITY - netconf.UPTIME_PROOF_FREQUENCY, steady_now);
+        entry.sispopnet_first_unreachable = reachable_to_time_t(proof.sispopnet_reachable.first_unreachable, system_now, steady_now);
+        entry.sispopnet_last_unreachable = reachable_to_time_t(proof.sispopnet_reachable.last_unreachable, system_now, steady_now);
+        entry.sispopnet_last_reachable = reachable_to_time_t(proof.sispopnet_reachable.last_reachable, system_now, steady_now);
 
         service_nodes::participation_history<service_nodes::participation_entry> const &checkpoint_participation = proof.checkpoint_participation;
         service_nodes::participation_history<service_nodes::participation_entry> const &pulse_participation      = proof.pulse_participation;
@@ -3276,12 +3276,12 @@ namespace cryptonote { namespace rpc {
       });
   }
   //------------------------------------------------------------------------------------------------------------------------------
-  LOKINET_PING::response core_rpc_server::invoke(LOKINET_PING::request&& req, rpc_context context)
+  SISPOPNET_PING::response core_rpc_server::invoke(SISPOPNET_PING::request&& req, rpc_context context)
   {
-    m_core.lokinet_version = req.version;
-    return handle_ping<LOKINET_PING>(
-        req.version, service_nodes::MIN_LOKINET_VERSION,
-        "Lokinet", m_core.m_last_lokinet_ping, m_core.get_net_config().UPTIME_PROOF_FREQUENCY,
+    m_core.sispopnet_version = req.version;
+    return handle_ping<SISPOPNET_PING>(
+        req.version, service_nodes::MIN_SISPOPNET_VERSION,
+        "Sispopnet", m_core.m_last_sispopnet_ping, m_core.get_net_config().UPTIME_PROOF_FREQUENCY,
         [this](bool significant) { if (significant) m_core.reset_proof_interval(); });
   }
   //------------------------------------------------------------------------------------------------------------------------------
@@ -3451,8 +3451,8 @@ namespace cryptonote { namespace rpc {
     }
 
     bool success = false;
-    if (req.type == "lokinet")
-      success = m_core.get_service_node_list().set_lokinet_peer_reachable(pubkey, req.passed);
+    if (req.type == "sispopnet")
+      success = m_core.get_service_node_list().set_sispopnet_peer_reachable(pubkey, req.passed);
     else if (req.type == "storage" || req.type == "reachability" /* TODO: old name, can be removed once SS no longer uses it */)
       success = m_core.get_service_node_list().set_storage_server_peer_reachable(pubkey, req.passed);
     else
@@ -3510,7 +3510,7 @@ namespace cryptonote { namespace rpc {
       {
         types.push_back(static_cast<ons::mapping_type>(type));
         if (!ons::mapping_type_allowed(hf_version, types.back()))
-          throw rpc_error{ERROR_WRONG_PARAM, "Invalid lokinet type '" + std::to_string(type) + "'"};
+          throw rpc_error{ERROR_WRONG_PARAM, "Invalid sispopnet type '" + std::to_string(type) + "'"};
       }
 
       // This also takes 32 raw bytes, but that is undocumented (because it is painful to pass
@@ -3616,7 +3616,7 @@ namespace cryptonote { namespace rpc {
     uint8_t hf_version = m_core.get_blockchain_storage().get_network_version();
     auto type = static_cast<ons::mapping_type>(req.type);
     if (!ons::mapping_type_allowed(hf_version, type))
-      throw rpc_error{ERROR_WRONG_PARAM, "Invalid lokinet type '" + std::to_string(req.type) + "'"};
+      throw rpc_error{ERROR_WRONG_PARAM, "Invalid sispopnet type '" + std::to_string(req.type) + "'"};
 
     if (auto mapping = m_core.get_blockchain_storage().name_system_db().resolve(
         type, *name_hash, m_core.get_current_blockchain_height()))

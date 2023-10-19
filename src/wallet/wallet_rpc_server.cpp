@@ -3284,8 +3284,8 @@ namespace {
     {
       auto& entry = res.known_names.emplace_back();
       auto& type = entry_types.emplace_back(details.type);
-      if (type > ons::mapping_type::lokinet && type <= ons::mapping_type::lokinet_10years)
-        type = ons::mapping_type::lokinet;
+      if (type > ons::mapping_type::sispopnet && type <= ons::mapping_type::sispopnet_10years)
+        type = ons::mapping_type::sispopnet;
       entry.type = ons::mapping_type_str(type);
       entry.hashed = details.hashed_name;
       entry.name = details.name;

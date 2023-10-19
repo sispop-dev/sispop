@@ -93,7 +93,7 @@ namespace service_nodes
     bool timestamp_participation  = true;
     bool timesync_status          = true;
     bool storage_server_reachable = true;
-    bool lokinet_reachable        = true;
+    bool sispopnet_reachable        = true;
 
     // Returns a vector of reasons why this node is failing (nullopt if not failing).
     std::optional<std::vector<std::string_view>> why() const;
@@ -105,7 +105,7 @@ namespace service_nodes
             timestamp_participation &&
             timesync_status &&
             storage_server_reachable &&
-            lokinet_reachable;
+            sispopnet_reachable;
     }
   };
 

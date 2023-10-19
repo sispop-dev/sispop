@@ -2780,10 +2780,10 @@ namespace service_nodes
     return result;
   }
 
-  uptime_proof::Proof service_node_list::generate_uptime_proof(uint32_t public_ip, uint16_t storage_https_port, uint16_t storage_omq_port, std::array<uint16_t, 3> ss_version, uint16_t quorumnet_port, std::array<uint16_t, 3> lokinet_version) const
+  uptime_proof::Proof service_node_list::generate_uptime_proof(uint32_t public_ip, uint16_t storage_https_port, uint16_t storage_omq_port, std::array<uint16_t, 3> ss_version, uint16_t quorumnet_port, std::array<uint16_t, 3> sispopnet_version) const
   {
     const auto& keys = *m_service_node_keys;
-    return uptime_proof::Proof(public_ip, storage_https_port, storage_omq_port, ss_version, quorumnet_port, lokinet_version, keys);
+    return uptime_proof::Proof(public_ip, storage_https_port, storage_omq_port, ss_version, quorumnet_port, sispopnet_version, keys);
   }
 
 #ifdef __cpp_lib_erase_if // # (C++20)
@@ -3016,8 +3016,8 @@ namespace service_nodes
       if (vers >= min.hardfork_revision) {
         if (proof->version < min.sispopd)
           REJECT_PROOF("v" << tools::join(".", min.sispopd) << "+ sispopd version is required for v" << +vers.first << "." << +vers.second << "+ network proofs");
-        if (proof->lokinet_version < min.lokinet)
-          REJECT_PROOF("v" << tools::join(".", min.lokinet) << "+ lokinet version is required for v" << +vers.first << "." << +vers.second << "+ network proofs");
+        if (proof->sispopnet_version < min.sispopnet)
+          REJECT_PROOF("v" << tools::join(".", min.sispopnet) << "+ sispopnet version is required for v" << +vers.first << "." << +vers.second << "+ network proofs");
         if (proof->storage_server_version < min.storage_server)
           REJECT_PROOF("v" << tools::join(".", min.storage_server) << "+ storage server version is required for v" << +vers.first << "." << +vers.second << "+ network proofs");
       }
@@ -3267,7 +3267,7 @@ namespace service_nodes
 
     std::lock_guard lock(m_sn_mutex);
 
-    const auto type = storage_server ? "storage server"sv : "lokinet"sv;
+    const auto type = storage_server ? "storage server"sv : "sispopnet"sv;
 
     if (!m_state.service_nodes_infos.count(pubkey)) {
       MDEBUG("Dropping " << type << " reachable report: " << pubkey << " is not a registered SN pubkey");
@@ -3278,7 +3278,7 @@ namespace service_nodes
 
     const auto now = std::chrono::steady_clock::now();
 
-    auto& reach = storage_server ? proofs[pubkey].ss_reachable : proofs[pubkey].lokinet_reachable;
+    auto& reach = storage_server ? proofs[pubkey].ss_reachable : proofs[pubkey].sispopnet_reachable;
     if (reachable) {
       reach.last_reachable = now;
       reach.first_unreachable = NEVER;
@@ -3296,7 +3296,7 @@ namespace service_nodes
       return set_peer_reachable(true, pubkey, reachable);
   }
 
-  bool service_node_list::set_lokinet_peer_reachable(crypto::public_key const &pubkey, bool reachable)
+  bool service_node_list::set_sispopnet_peer_reachable(crypto::public_key const &pubkey, bool reachable)
   {
       return set_peer_reachable(false, pubkey, reachable);
   }

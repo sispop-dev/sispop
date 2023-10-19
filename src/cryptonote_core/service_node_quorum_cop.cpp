@@ -59,7 +59,7 @@ namespace service_nodes
     if (!timestamp_participation) results.push_back("Too many out-of-sync timesync replies."sv);
     if (!timesync_status) results.push_back("Too many missed timesync replies."sv);
     if (!storage_server_reachable) results.push_back("Storage server is not reachable."sv);
-    if (!lokinet_reachable) results.push_back("Lokinet router is not reachable."sv);
+    if (!sispopnet_reachable) results.push_back("Sispopnet router is not reachable."sv);
     return results;
   }
 
@@ -81,7 +81,7 @@ namespace service_nodes
     const auto& netconf = m_core.get_net_config();
 
     service_node_test_results result; // Defaults to true for individual tests
-    bool ss_reachable = true, lokinet_reachable = true;
+    bool ss_reachable = true, sispopnet_reachable = true;
     uint64_t timestamp = 0;
     decltype(std::declval<proof_info>().public_ips) ips{};
 
@@ -96,7 +96,7 @@ namespace service_nodes
 
     m_core.get_service_node_list().access_proof(pubkey, [&](const proof_info &proof) {
       ss_reachable             = !proof.ss_reachable.unreachable_for(unreachable_threshold);
-      lokinet_reachable        = !proof.lokinet_reachable.unreachable_for(unreachable_threshold);
+      sispopnet_reachable        = !proof.sispopnet_reachable.unreachable_for(unreachable_threshold);
       timestamp                = std::max(proof.timestamp, proof.effective_timestamp);
       ips                      = proof.public_ips;
       checkpoint_participation = proof.checkpoint_participation;
@@ -132,10 +132,10 @@ namespace service_nodes
     }
 
     // TODO: perhaps come back and make this activate on some "soft fork" height before HF19?
-    if (!lokinet_reachable && hf_version >= cryptonote::network_version_19)
+    if (!sispopnet_reachable && hf_version >= cryptonote::network_version_19)
     {
-      LOG_PRINT_L1("Service Node lokinet is not reachable for node: " << pubkey);
-      result.lokinet_reachable = false;
+      LOG_PRINT_L1("Service Node sispopnet is not reachable for node: " << pubkey);
+      result.sispopnet_reachable = false;
     }
 
     // IP change checks
@@ -382,7 +382,7 @@ namespace service_nodes
                   if (!test_results.checkpoint_participation) reason |= cryptonote::Decommission_Reason::missed_checkpoints;
                   if (!test_results.pulse_participation) reason |= cryptonote::Decommission_Reason::missed_pulse_participations;
                   if (!test_results.storage_server_reachable) reason |= cryptonote::Decommission_Reason::storage_server_unreachable;
-                  if (!test_results.lokinet_reachable) reason |= cryptonote::Decommission_Reason::lokinet_unreachable;
+                  if (!test_results.sispopnet_reachable) reason |= cryptonote::Decommission_Reason::sispopnet_unreachable;
                   if (!test_results.timestamp_participation) reason |= cryptonote::Decommission_Reason::timestamp_response_unreachable;
                   if (!test_results.timesync_status) reason |= cryptonote::Decommission_Reason::timesync_status_out_of_sync;
                   int64_t credit = calculate_decommission_credit(info, latest_height);
@@ -454,7 +454,7 @@ namespace service_nodes
                       LOG_PRINT_L0(tools::join("\n", *why));
                     else
                       LOG_PRINT_L0("Service Node is passing all local tests");
-                    LOG_PRINT_L0("(Note that some tests, such as storage server and lokinet reachability, can only assessed by remote service nodes)");
+                    LOG_PRINT_L0("(Note that some tests, such as storage server and sispopnet reachability, can only assessed by remote service nodes)");
                   }
                 }
               }

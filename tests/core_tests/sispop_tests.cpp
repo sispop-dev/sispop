@@ -1074,7 +1074,7 @@ struct ons_keys_t
 {
   ons::generic_owner owner;
   ons::mapping_value wallet_value; // NOTE: this field is the binary (value) part of the name -> (value) mapping
-  ons::mapping_value lokinet_value;
+  ons::mapping_value sispopnet_value;
   ons::mapping_value session_value;
 };
 
@@ -1084,9 +1084,9 @@ static ons_keys_t make_ons_keys(cryptonote::account_base const &src)
   result.owner                  = ons::make_monero_owner(src.get_keys().m_account_address, false /*is_subaddress*/);
   result.session_value.len      = ons::SESSION_PUBLIC_KEY_BINARY_LENGTH;
   result.wallet_value.len       = ons::WALLET_ACCOUNT_BINARY_LENGTH_NO_PAYMENT_ID;
-  result.lokinet_value.len      = sizeof(result.owner.wallet.address.m_spend_public_key);
+  result.sispopnet_value.len      = sizeof(result.owner.wallet.address.m_spend_public_key);
 
-  memcpy(&result.session_value.buffer[0] + 1, &result.owner.wallet.address.m_spend_public_key, result.lokinet_value.len);
+  memcpy(&result.session_value.buffer[0] + 1, &result.owner.wallet.address.m_spend_public_key, result.sispopnet_value.len);
 
   auto iter = result.wallet_value.buffer.begin();
   uint8_t identifier = 0;
@@ -1095,16 +1095,16 @@ static ons_keys_t make_ons_keys(cryptonote::account_base const &src)
   iter = std::copy_n(src.get_keys().m_account_address.m_view_public_key.data, sizeof(src.get_keys().m_account_address.m_view_public_key.data), iter);
 
   // NOTE: Just needs a 32 byte key. Reuse spend key
-  memcpy(&result.lokinet_value.buffer[0], (char *)&result.owner.wallet.address.m_spend_public_key, result.lokinet_value.len);
+  memcpy(&result.sispopnet_value.buffer[0], (char *)&result.owner.wallet.address.m_spend_public_key, result.sispopnet_value.len);
 
   result.session_value.buffer[0] = 5; // prefix with 0x05
   return result;
 }
 
-// Lokinet FAKECHAIN ONS expiry blocks
-uint64_t lokinet_expiry(ons::mapping_type type) {
+// Sispopnet FAKECHAIN ONS expiry blocks
+uint64_t sispopnet_expiry(ons::mapping_type type) {
   auto exp = ons::expiry_blocks(cryptonote::FAKECHAIN, type);
-  if (!exp) throw std::logic_error{"test suite bug: lokinet_expiry called with non-lokinet mapping type"};
+  if (!exp) throw std::logic_error{"test suite bug: sispopnet_expiry called with non-sispopnet mapping type"};
   return *exp;
 }
 
@@ -1118,19 +1118,19 @@ bool sispop_name_system_expiration::generate(std::vector<test_event_entry> &even
   gen.add_mined_money_unlock_blocks();
 
   ons_keys_t miner_key = make_ons_keys(miner);
-  for (auto mapping_type = ons::mapping_type::lokinet;
-       mapping_type     <= ons::mapping_type::lokinet_10years;
+  for (auto mapping_type = ons::mapping_type::sispopnet;
+       mapping_type     <= ons::mapping_type::sispopnet_10years;
        mapping_type      = static_cast<ons::mapping_type>(static_cast<uint16_t>(mapping_type) + 1))
   {
     std::string const name     = "mydomain.loki";
     if (ons::mapping_type_allowed(gen.hardfork(), mapping_type))
     {
-      cryptonote::transaction tx = gen.create_and_add_sispop_name_system_tx(miner, gen.hardfork(), mapping_type, name, miner_key.lokinet_value);
+      cryptonote::transaction tx = gen.create_and_add_sispop_name_system_tx(miner, gen.hardfork(), mapping_type, name, miner_key.sispopnet_value);
       gen.create_and_add_next_block({tx});
       crypto::hash tx_hash = cryptonote::get_transaction_hash(tx);
 
       uint64_t height_of_ons_entry   = gen.height();
-      uint64_t expected_expiry_block = height_of_ons_entry + lokinet_expiry(mapping_type);
+      uint64_t expected_expiry_block = height_of_ons_entry + sispopnet_expiry(mapping_type);
       std::string name_hash = ons::name_to_base64_hash(name);
 
       sispop_register_callback(events, "check_ons_entries", [=](cryptonote::core &c, size_t ev_index)
@@ -1145,7 +1145,7 @@ bool sispop_name_system_expiration::generate(std::vector<test_event_entry> &even
                                      << " == " << owner.address.to_string(cryptonote::FAKECHAIN));
 
         ons::mapping_record record = ons_db.get_mapping(mapping_type, name_hash);
-        CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, record, ons::mapping_type::lokinet, name, miner_key.lokinet_value, height_of_ons_entry, height_of_ons_entry + lokinet_expiry(mapping_type), tx_hash, miner_key.owner, {} /*backup_owner*/));
+        CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, record, ons::mapping_type::sispopnet, name, miner_key.sispopnet_value, height_of_ons_entry, height_of_ons_entry + sispopnet_expiry(mapping_type), tx_hash, miner_key.owner, {} /*backup_owner*/));
         return true;
       });
 
@@ -1166,14 +1166,14 @@ bool sispop_name_system_expiration::generate(std::vector<test_event_entry> &even
                                      << " == " << owner.address.to_string(cryptonote::FAKECHAIN));
 
         ons::mapping_record record = ons_db.get_mapping(mapping_type, name_hash);
-        CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, record, ons::mapping_type::lokinet, name, miner_key.lokinet_value, height_of_ons_entry, height_of_ons_entry + lokinet_expiry(mapping_type), tx_hash, miner_key.owner, {} /*backup_owner*/));
+        CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, record, ons::mapping_type::sispopnet, name, miner_key.sispopnet_value, height_of_ons_entry, height_of_ons_entry + sispopnet_expiry(mapping_type), tx_hash, miner_key.owner, {} /*backup_owner*/));
         CHECK_EQ(record.active(blockchain_height), false);
         return true;
       });
     }
     else
     {
-      cryptonote::transaction tx = gen.create_sispop_name_system_tx(miner, gen.hardfork(), mapping_type, name, miner_key.lokinet_value);
+      cryptonote::transaction tx = gen.create_sispop_name_system_tx(miner, gen.hardfork(), mapping_type, name, miner_key.sispopnet_value);
       gen.add_tx(tx, false /*can_be_added_to_blockchain*/, "Can not add ONS TX that uses disallowed type");
     }
   }
@@ -1218,21 +1218,21 @@ bool sispop_name_system_get_mappings_by_owner::generate(std::vector<test_event_e
   }
   uint64_t session_height = gen.height();
 
-  // NOTE: Register some Lokinet names
-  std::string lokinet_name1 = "Lorem.loki";
-  std::string lokinet_name_hash1 = "GsM6OUk5E5D9keBIK2PlA4kjwiPe+/UB0nUurjKvFJQ=";
-  std::string lokinet_name2 = "ipSum.loki";
-  std::string lokinet_name_hash2 = "p8IYR3ZWr0KSU4ZPazYxTkwvXsm0dzq5dmour7VmIDY=";
-  crypto::hash lokinet_name1_txid = {}, lokinet_name2_txid = {};
-  if (ons::mapping_type_allowed(gen.hardfork(), ons::mapping_type::lokinet))
+  // NOTE: Register some Sispopnet names
+  std::string sispopnet_name1 = "Lorem.loki";
+  std::string sispopnet_name_hash1 = "GsM6OUk5E5D9keBIK2PlA4kjwiPe+/UB0nUurjKvFJQ=";
+  std::string sispopnet_name2 = "ipSum.loki";
+  std::string sispopnet_name_hash2 = "p8IYR3ZWr0KSU4ZPazYxTkwvXsm0dzq5dmour7VmIDY=";
+  crypto::hash sispopnet_name1_txid = {}, sispopnet_name2_txid = {};
+  if (ons::mapping_type_allowed(gen.hardfork(), ons::mapping_type::sispopnet))
   {
-    cryptonote::transaction tx1 = gen.create_and_add_sispop_name_system_tx(bob, gen.hardfork(), ons::mapping_type::lokinet, lokinet_name1, bob_key.lokinet_value);
-    cryptonote::transaction tx2 = gen.create_and_add_sispop_name_system_tx(miner, gen.hardfork(), ons::mapping_type::lokinet_5years, lokinet_name2, bob_key.lokinet_value, &bob_key.owner);
+    cryptonote::transaction tx1 = gen.create_and_add_sispop_name_system_tx(bob, gen.hardfork(), ons::mapping_type::sispopnet, sispopnet_name1, bob_key.sispopnet_value);
+    cryptonote::transaction tx2 = gen.create_and_add_sispop_name_system_tx(miner, gen.hardfork(), ons::mapping_type::sispopnet_5years, sispopnet_name2, bob_key.sispopnet_value, &bob_key.owner);
     gen.create_and_add_next_block({tx1, tx2});
-    lokinet_name1_txid = get_transaction_hash(tx1);
-    lokinet_name2_txid = get_transaction_hash(tx2);
+    sispopnet_name1_txid = get_transaction_hash(tx1);
+    sispopnet_name2_txid = get_transaction_hash(tx2);
   }
-  uint64_t lokinet_height = gen.height();
+  uint64_t sispopnet_height = gen.height();
 
   // NOTE: Register some wallet names
   std::string wallet_name1 = "Wallet1";
@@ -1261,7 +1261,7 @@ bool sispop_name_system_get_mappings_by_owner::generate(std::vector<test_event_e
     auto netv = get_network_version(c.get_nettype(), c.get_current_blockchain_height());
     if (ons::mapping_type_allowed(netv, ons::mapping_type::session)) expected_size += 2;
     if (ons::mapping_type_allowed(netv, ons::mapping_type::wallet)) expected_size += 2;
-    if (ons::mapping_type_allowed(netv, ons::mapping_type::lokinet)) expected_size += 2;
+    if (ons::mapping_type_allowed(netv, ons::mapping_type::sispopnet)) expected_size += 2;
     CHECK_EQ(records.size(), expected_size);
 
     std::sort(records.begin(), records.end(), [](const auto& a, const auto& b) {
@@ -1277,12 +1277,12 @@ bool sispop_name_system_get_mappings_by_owner::generate(std::vector<test_event_e
       CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, records[1], ons::mapping_type::session, session_name2, bob_key.session_value, session_height, std::nullopt, session_name2_txid, bob_key.owner, {} /*backup_owner*/));
     }
 
-    if (ons::mapping_type_allowed(netv, ons::mapping_type::lokinet))
+    if (ons::mapping_type_allowed(netv, ons::mapping_type::sispopnet))
     {
-      CHECK_EQ(records[2].name_hash, lokinet_name_hash1);
-      CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, records[2], ons::mapping_type::lokinet, lokinet_name1, bob_key.lokinet_value, lokinet_height, lokinet_height + lokinet_expiry(ons::mapping_type::lokinet), lokinet_name1_txid, bob_key.owner, {} /*backup_owner*/));
-      CHECK_EQ(records[3].name_hash, lokinet_name_hash2);
-      CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, records[3], ons::mapping_type::lokinet, lokinet_name2, bob_key.lokinet_value, lokinet_height, lokinet_height + lokinet_expiry(ons::mapping_type::lokinet_5years), lokinet_name2_txid, bob_key.owner, {} /*backup_owner*/));
+      CHECK_EQ(records[2].name_hash, sispopnet_name_hash1);
+      CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, records[2], ons::mapping_type::sispopnet, sispopnet_name1, bob_key.sispopnet_value, sispopnet_height, sispopnet_height + sispopnet_expiry(ons::mapping_type::sispopnet), sispopnet_name1_txid, bob_key.owner, {} /*backup_owner*/));
+      CHECK_EQ(records[3].name_hash, sispopnet_name_hash2);
+      CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, records[3], ons::mapping_type::sispopnet, sispopnet_name2, bob_key.sispopnet_value, sispopnet_height, sispopnet_height + sispopnet_expiry(ons::mapping_type::sispopnet_5years), sispopnet_name2_txid, bob_key.owner, {} /*backup_owner*/));
     }
 
     if (ons::mapping_type_allowed(netv, ons::mapping_type::wallet))
@@ -1428,9 +1428,9 @@ bool sispop_name_system_handles_duplicate_in_ons_db::generate(std::vector<test_e
   ons_keys_t miner_key     = make_ons_keys(miner);
   ons_keys_t bob_key       = make_ons_keys(bob);
   std::string session_name = "myfriendlydisplayname.loki";
-  std::string lokinet_name = session_name;
+  std::string sispopnet_name = session_name;
   auto custom_type         = static_cast<ons::mapping_type>(3928);
-  crypto::hash session_tx_hash = {}, lokinet_tx_hash = {};
+  crypto::hash session_tx_hash = {}, sispopnet_tx_hash = {};
   {
     // NOTE: Allow duplicates with the same name but different type
     cryptonote::transaction bar = gen.create_and_add_sispop_name_system_tx(miner, gen.hardfork(), ons::mapping_type::session, session_name, bob_key.session_value);
@@ -1439,11 +1439,11 @@ bool sispop_name_system_handles_duplicate_in_ons_db::generate(std::vector<test_e
     std::vector<cryptonote::transaction> txs;
     txs.push_back(bar);
 
-    if (ons::mapping_type_allowed(gen.hardfork(), ons::mapping_type::lokinet))
+    if (ons::mapping_type_allowed(gen.hardfork(), ons::mapping_type::sispopnet))
     {
-      cryptonote::transaction bar3 = gen.create_and_add_sispop_name_system_tx(miner, gen.hardfork(), ons::mapping_type::lokinet_2years, session_name, miner_key.lokinet_value);
+      cryptonote::transaction bar3 = gen.create_and_add_sispop_name_system_tx(miner, gen.hardfork(), ons::mapping_type::sispopnet_2years, session_name, miner_key.sispopnet_value);
       txs.push_back(bar3);
-      lokinet_tx_hash = get_transaction_hash(bar3);
+      sispopnet_tx_hash = get_transaction_hash(bar3);
     }
 
     gen.create_and_add_next_block(txs);
@@ -1473,10 +1473,10 @@ bool sispop_name_system_handles_duplicate_in_ons_db::generate(std::vector<test_e
     CHECK_EQ(record1.owner_id, owner.id);
 
     auto netv = get_network_version(c.get_nettype(), c.get_current_blockchain_height());
-    if (ons::mapping_type_allowed(netv, ons::mapping_type::lokinet))
+    if (ons::mapping_type_allowed(netv, ons::mapping_type::sispopnet))
     {
-      ons::mapping_record record2 = ons_db.get_mapping(ons::mapping_type::lokinet, session_name_hash);
-      CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, record2, ons::mapping_type::lokinet, lokinet_name, miner_key.lokinet_value, height_of_ons_entry, height_of_ons_entry + lokinet_expiry(ons::mapping_type::lokinet_2years), lokinet_tx_hash, miner_key.owner, {} /*backup_owner*/));
+      ons::mapping_record record2 = ons_db.get_mapping(ons::mapping_type::sispopnet, session_name_hash);
+      CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, record2, ons::mapping_type::sispopnet, sispopnet_name, miner_key.sispopnet_value, height_of_ons_entry, height_of_ons_entry + sispopnet_expiry(ons::mapping_type::sispopnet_2years), sispopnet_tx_hash, miner_key.owner, {} /*backup_owner*/));
       CHECK_EQ(record2.owner_id, owner.id);
       CHECK_EQ(record2.active(blockchain_height), true);
     }
@@ -1594,31 +1594,31 @@ bool sispop_name_system_invalid_tx_extra_params::generate(std::vector<test_event
       }
     }
 
-    if (ons::mapping_type_allowed(gen.hardfork(), ons::mapping_type::lokinet))
+    if (ons::mapping_type_allowed(gen.hardfork(), ons::mapping_type::sispopnet))
     {
-      valid_data.type = ons::mapping_type::lokinet;
-      // Lokinet name empty
+      valid_data.type = ons::mapping_type::sispopnet;
+      // Sispopnet name empty
       {
         cryptonote::tx_extra_sispop_name_system data = valid_data;
         data.name_hash                             = {};
-        data.encrypted_value                       = miner_key.lokinet_value.make_encrypted("").to_string();
-        make_ons_tx_with_custom_extra(gen, events, miner, data, false, "(Lokinet) Empty domain name in ONS is invalid");
+        data.encrypted_value                       = miner_key.sispopnet_value.make_encrypted("").to_string();
+        make_ons_tx_with_custom_extra(gen, events, miner, data, false, "(Sispopnet) Empty domain name in ONS is invalid");
       }
 
-      // Lokinet value too short
+      // Sispopnet value too short
       {
         cryptonote::tx_extra_sispop_name_system data = valid_data;
-        data.encrypted_value                       = miner_key.lokinet_value.make_encrypted(name).to_string();
+        data.encrypted_value                       = miner_key.sispopnet_value.make_encrypted(name).to_string();
         data.encrypted_value.resize(data.encrypted_value.size() - 1);
-        make_ons_tx_with_custom_extra(gen, events, miner, data, false, "(Lokinet) Domain value in ONS too long");
+        make_ons_tx_with_custom_extra(gen, events, miner, data, false, "(Sispopnet) Domain value in ONS too long");
       }
 
-      // Lokinet value too long
+      // Sispopnet value too long
       {
         cryptonote::tx_extra_sispop_name_system data = valid_data;
-        data.encrypted_value                       = miner_key.lokinet_value.make_encrypted(name).to_string();
+        data.encrypted_value                       = miner_key.sispopnet_value.make_encrypted(name).to_string();
         data.encrypted_value.resize(data.encrypted_value.size() + 1);
-        make_ons_tx_with_custom_extra(gen, events, miner, data, false, "(Lokinet) Domain value in ONS too long");
+        make_ons_tx_with_custom_extra(gen, events, miner, data, false, "(Sispopnet) Domain value in ONS too long");
       }
     }
 
@@ -1673,10 +1673,10 @@ bool sispop_name_system_large_reorg::generate(std::vector<test_event_entry> &eve
 
   // NOTE: Generate the first round of ONS transactions belonging to miner
   uint64_t first_ons_height                 = 0;
-  std::string const lokinet_name1           = "website.loki";
+  std::string const sispopnet_name1           = "website.loki";
   std::string const wallet_name1            = "MyWallet";
   std::string const session_name1           = "I-Like-Loki";
-  crypto::hash session_tx_hash1 = {}, wallet_tx_hash1 = {}, lokinet_tx_hash1 = {};
+  crypto::hash session_tx_hash1 = {}, wallet_tx_hash1 = {}, sispopnet_tx_hash1 = {};
   {
     // NOTE: Generate and add the (transactions + block) to the blockchain
     {
@@ -1692,11 +1692,11 @@ bool sispop_name_system_large_reorg::generate(std::vector<test_event_entry> &eve
         wallet_tx_hash1 = get_transaction_hash(wallet_tx);
       }
 
-      if (ons::mapping_type_allowed(gen.hardfork(), ons::mapping_type::lokinet_10years))
+      if (ons::mapping_type_allowed(gen.hardfork(), ons::mapping_type::sispopnet_10years))
       {
-        cryptonote::transaction lokinet_tx = gen.create_and_add_sispop_name_system_tx(miner, gen.hardfork(), ons::mapping_type::lokinet_10years, lokinet_name1, miner_key.lokinet_value);
-        txs.push_back(lokinet_tx);
-        lokinet_tx_hash1 = get_transaction_hash(lokinet_tx);
+        cryptonote::transaction sispopnet_tx = gen.create_and_add_sispop_name_system_tx(miner, gen.hardfork(), ons::mapping_type::sispopnet_10years, sispopnet_name1, miner_key.sispopnet_value);
+        txs.push_back(sispopnet_tx);
+        sispopnet_tx_hash1 = get_transaction_hash(sispopnet_tx);
       }
       gen.create_and_add_next_block(txs);
     }
@@ -1712,15 +1712,15 @@ bool sispop_name_system_large_reorg::generate(std::vector<test_event_entry> &eve
       size_t expected_size = 1;
       auto netv = get_network_version(c.get_nettype(), c.get_current_blockchain_height());
       if (ons::mapping_type_allowed(netv, ons::mapping_type::wallet)) expected_size += 1;
-      if (ons::mapping_type_allowed(netv, ons::mapping_type::lokinet)) expected_size += 1;
+      if (ons::mapping_type_allowed(netv, ons::mapping_type::sispopnet)) expected_size += 1;
       CHECK_EQ(records.size(), expected_size);
 
       for (ons::mapping_record const &record : records)
       {
         if (record.type == ons::mapping_type::session)
           CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, record, ons::mapping_type::session, session_name1, miner_key.session_value, first_ons_height, std::nullopt, session_tx_hash1, miner_key.owner, {} /*backup_owner*/));
-        else if (record.type == ons::mapping_type::lokinet)
-          CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, record, ons::mapping_type::lokinet, lokinet_name1, miner_key.lokinet_value, first_ons_height, first_ons_height + lokinet_expiry(ons::mapping_type::lokinet_10years), lokinet_tx_hash1, miner_key.owner, {} /*backup_owner*/));
+        else if (record.type == ons::mapping_type::sispopnet)
+          CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, record, ons::mapping_type::sispopnet, sispopnet_name1, miner_key.sispopnet_value, first_ons_height, first_ons_height + sispopnet_expiry(ons::mapping_type::sispopnet_10years), sispopnet_tx_hash1, miner_key.owner, {} /*backup_owner*/));
         else if (record.type == ons::mapping_type::wallet)
           CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, record, ons::mapping_type::wallet, wallet_name1, miner_key.wallet_value, first_ons_height, std::nullopt, wallet_tx_hash1, miner_key.owner, {} /*backup_owner*/));
         else
@@ -1732,22 +1732,22 @@ bool sispop_name_system_large_reorg::generate(std::vector<test_event_entry> &eve
     });
   }
 
-  // NOTE: Generate and add the second round of (transactions + block) to the blockchain, renew lokinet and add bob's session, update miner's session value to other's session value
+  // NOTE: Generate and add the second round of (transactions + block) to the blockchain, renew sispopnet and add bob's session, update miner's session value to other's session value
   cryptonote::account_base const other = gen.add_account();
   ons_keys_t const other_key           = make_ons_keys(other);
   uint64_t second_ons_height = 0;
   {
     std::string const bob_session_name1 = "I-Like-Session";
-    crypto::hash session_tx_hash2 = {}, lokinet_tx_hash2 = {}, session_tx_hash3;
+    crypto::hash session_tx_hash2 = {}, sispopnet_tx_hash2 = {}, session_tx_hash3;
     {
       std::vector<cryptonote::transaction> txs;
       txs.push_back(gen.create_and_add_sispop_name_system_tx(bob, gen.hardfork(), ons::mapping_type::session, bob_session_name1, bob_key.session_value));
       session_tx_hash2 = cryptonote::get_transaction_hash(txs[0]);
 
-      if (ons::mapping_type_allowed(gen.hardfork(), ons::mapping_type::lokinet))
+      if (ons::mapping_type_allowed(gen.hardfork(), ons::mapping_type::sispopnet))
       {
-        txs.push_back(gen.create_and_add_sispop_name_system_tx_renew(miner, gen.hardfork(), ons::mapping_type::lokinet_5years, lokinet_name1));
-        lokinet_tx_hash2 = cryptonote::get_transaction_hash(txs.back());
+        txs.push_back(gen.create_and_add_sispop_name_system_tx_renew(miner, gen.hardfork(), ons::mapping_type::sispopnet_5years, sispopnet_name1));
+        sispopnet_tx_hash2 = cryptonote::get_transaction_hash(txs.back());
       }
 
       txs.push_back(gen.create_and_add_sispop_name_system_tx_update(miner, gen.hardfork(), ons::mapping_type::session, session_name1, &other_key.session_value));
@@ -1770,8 +1770,8 @@ bool sispop_name_system_large_reorg::generate(std::vector<test_event_entry> &eve
         {
           if (record.type == ons::mapping_type::session)
             CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, record, ons::mapping_type::session, session_name1, other_key.session_value, second_ons_height, std::nullopt, session_tx_hash3, miner_key.owner, {} /*backup_owner*/));
-          else if (record.type == ons::mapping_type::lokinet)
-            CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, record, ons::mapping_type::lokinet, lokinet_name1, miner_key.lokinet_value, second_ons_height, first_ons_height + lokinet_expiry(ons::mapping_type::lokinet_5years) + lokinet_expiry(ons::mapping_type::lokinet_10years), lokinet_tx_hash2, miner_key.owner, {} /*backup_owner*/));
+          else if (record.type == ons::mapping_type::sispopnet)
+            CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, record, ons::mapping_type::sispopnet, sispopnet_name1, miner_key.sispopnet_value, second_ons_height, first_ons_height + sispopnet_expiry(ons::mapping_type::sispopnet_5years) + sispopnet_expiry(ons::mapping_type::sispopnet_10years), sispopnet_tx_hash2, miner_key.owner, {} /*backup_owner*/));
           else if (record.type == ons::mapping_type::wallet)
             CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, record, ons::mapping_type::wallet, wallet_name1, miner_key.wallet_value, first_ons_height, std::nullopt, wallet_tx_hash1, miner_key.owner, {} /*backup_owner*/));
           else
@@ -1819,15 +1819,15 @@ bool sispop_name_system_large_reorg::generate(std::vector<test_event_entry> &eve
       size_t expected_size = 1;
       auto netv = get_network_version(c.get_nettype(), c.get_current_blockchain_height());
       if (ons::mapping_type_allowed(netv, ons::mapping_type::wallet)) expected_size += 1;
-      if (ons::mapping_type_allowed(netv, ons::mapping_type::lokinet)) expected_size += 1;
+      if (ons::mapping_type_allowed(netv, ons::mapping_type::sispopnet)) expected_size += 1;
       CHECK_EQ(records.size(), expected_size);
 
       for (ons::mapping_record const &record : records)
       {
         if (record.type == ons::mapping_type::session)
           CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, record, ons::mapping_type::session, session_name1, miner_key.session_value, first_ons_height, std::nullopt, session_tx_hash1, miner_key.owner, {} /*backup_owner*/));
-        else if (record.type == ons::mapping_type::lokinet)
-          CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, record, ons::mapping_type::lokinet, lokinet_name1, miner_key.lokinet_value, first_ons_height, first_ons_height + lokinet_expiry(ons::mapping_type::lokinet_10years), lokinet_tx_hash1, miner_key.owner, {} /*backup_owner*/));
+        else if (record.type == ons::mapping_type::sispopnet)
+          CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, record, ons::mapping_type::sispopnet, sispopnet_name1, miner_key.sispopnet_value, first_ons_height, first_ons_height + sispopnet_expiry(ons::mapping_type::sispopnet_10years), sispopnet_tx_hash1, miner_key.owner, {} /*backup_owner*/));
         else if (record.type == ons::mapping_type::wallet)
           CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, record, ons::mapping_type::wallet, wallet_name1, miner_key.wallet_value, first_ons_height, std::nullopt, wallet_tx_hash1, miner_key.owner, {} /*backup_owner*/));
         else
@@ -1871,7 +1871,7 @@ bool sispop_name_system_name_renewal::generate(std::vector<test_event_entry> &ev
   sispop_chain_generator gen(events, hard_forks);
   cryptonote::account_base miner = gen.first_miner_;
 
-  if (!ons::mapping_type_allowed(hard_forks.back().version, ons::mapping_type::lokinet))
+  if (!ons::mapping_type_allowed(hard_forks.back().version, ons::mapping_type::sispopnet))
       return true;
 
   {
@@ -1881,7 +1881,7 @@ bool sispop_name_system_name_renewal::generate(std::vector<test_event_entry> &ev
 
   ons_keys_t miner_key = make_ons_keys(miner);
   std::string const name    = "mydomain.loki";
-  cryptonote::transaction tx = gen.create_and_add_sispop_name_system_tx(miner, gen.hardfork(), ons::mapping_type::lokinet, name, miner_key.lokinet_value);
+  cryptonote::transaction tx = gen.create_and_add_sispop_name_system_tx(miner, gen.hardfork(), ons::mapping_type::sispopnet, name, miner_key.sispopnet_value);
   gen.create_and_add_next_block({tx});
   crypto::hash prev_txid = get_transaction_hash(tx);
 
@@ -1900,21 +1900,21 @@ bool sispop_name_system_name_renewal::generate(std::vector<test_event_entry> &ev
                                  << " == " << owner.address.to_string(cryptonote::FAKECHAIN));
 
     std::string name_hash = ons::name_to_base64_hash(name);
-    ons::mapping_record record = ons_db.get_mapping(ons::mapping_type::lokinet, name_hash);
-    CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, record, ons::mapping_type::lokinet, name, miner_key.lokinet_value, height_of_ons_entry, height_of_ons_entry + lokinet_expiry(ons::mapping_type::lokinet), prev_txid, miner_key.owner, {} /*backup_owner*/));
+    ons::mapping_record record = ons_db.get_mapping(ons::mapping_type::sispopnet, name_hash);
+    CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, record, ons::mapping_type::sispopnet, name, miner_key.sispopnet_value, height_of_ons_entry, height_of_ons_entry + sispopnet_expiry(ons::mapping_type::sispopnet), prev_txid, miner_key.owner, {} /*backup_owner*/));
     return true;
   });
 
   gen.create_and_add_next_block();
 
-  // Renew the lokinet entry a few times
-  cryptonote::transaction renew_tx = gen.create_and_add_sispop_name_system_tx_renew(miner, gen.hardfork(), ons::mapping_type::lokinet_5years, name);
+  // Renew the sispopnet entry a few times
+  cryptonote::transaction renew_tx = gen.create_and_add_sispop_name_system_tx_renew(miner, gen.hardfork(), ons::mapping_type::sispopnet_5years, name);
   gen.create_and_add_next_block({renew_tx});
-  renew_tx = gen.create_and_add_sispop_name_system_tx_renew(miner, gen.hardfork(), ons::mapping_type::lokinet_10years, name);
+  renew_tx = gen.create_and_add_sispop_name_system_tx_renew(miner, gen.hardfork(), ons::mapping_type::sispopnet_10years, name);
   gen.create_and_add_next_block({renew_tx});
-  renew_tx = gen.create_and_add_sispop_name_system_tx_renew(miner, gen.hardfork(), ons::mapping_type::lokinet_2years, name);
+  renew_tx = gen.create_and_add_sispop_name_system_tx_renew(miner, gen.hardfork(), ons::mapping_type::sispopnet_2years, name);
   gen.create_and_add_next_block({renew_tx});
-  renew_tx = gen.create_and_add_sispop_name_system_tx_renew(miner, gen.hardfork(), ons::mapping_type::lokinet, name);
+  renew_tx = gen.create_and_add_sispop_name_system_tx_renew(miner, gen.hardfork(), ons::mapping_type::sispopnet, name);
   gen.create_and_add_next_block({renew_tx});
   crypto::hash txid       = cryptonote::get_transaction_hash(renew_tx);
   uint64_t renewal_height = gen.height();
@@ -1932,15 +1932,15 @@ bool sispop_name_system_name_renewal::generate(std::vector<test_event_entry> &ev
                                  << " == " << owner.address.to_string(cryptonote::FAKECHAIN));
 
     std::string name_hash = ons::name_to_base64_hash(name);
-    ons::mapping_record record = ons_db.get_mapping(ons::mapping_type::lokinet, name_hash);
-    CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, record, ons::mapping_type::lokinet, name, miner_key.lokinet_value, renewal_height,
+    ons::mapping_record record = ons_db.get_mapping(ons::mapping_type::sispopnet, name_hash);
+    CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, record, ons::mapping_type::sispopnet, name, miner_key.sispopnet_value, renewal_height,
           // Original registration:
-          height_of_ons_entry + lokinet_expiry(ons::mapping_type::lokinet)
+          height_of_ons_entry + sispopnet_expiry(ons::mapping_type::sispopnet)
           // The renewals:
-          + lokinet_expiry(ons::mapping_type::lokinet_5years)
-          + lokinet_expiry(ons::mapping_type::lokinet_10years)
-          + lokinet_expiry(ons::mapping_type::lokinet_2years)
-          + lokinet_expiry(ons::mapping_type::lokinet),
+          + sispopnet_expiry(ons::mapping_type::sispopnet_5years)
+          + sispopnet_expiry(ons::mapping_type::sispopnet_10years)
+          + sispopnet_expiry(ons::mapping_type::sispopnet_2years)
+          + sispopnet_expiry(ons::mapping_type::sispopnet),
           txid, miner_key.owner, {} /*backup_owner*/));
     return true;
   });
@@ -1994,15 +1994,15 @@ bool sispop_name_system_name_value_max_lengths::generate(std::vector<test_event_
     make_ons_tx_with_custom_extra(gen, events, miner, data);
   }
 
-  // Lokinet
-  if (ons::mapping_type_allowed(gen.hardfork(), ons::mapping_type::lokinet))
+  // Sispopnet
+  if (ons::mapping_type_allowed(gen.hardfork(), ons::mapping_type::sispopnet))
   {
-    std::string name(ons::LOKINET_DOMAIN_NAME_MAX, 'a');
+    std::string name(ons::SISPOPNET_DOMAIN_NAME_MAX, 'a');
     name.replace(name.size() - 6, 5, ".loki");
 
-    data.type            = ons::mapping_type::lokinet;
+    data.type            = ons::mapping_type::sispopnet;
     data.name_hash       = ons::name_to_hash(name);
-    data.encrypted_value = miner_key.lokinet_value.make_encrypted(name).to_string();
+    data.encrypted_value = miner_key.sispopnet_value.make_encrypted(name).to_string();
     make_ons_tx_with_custom_extra(gen, events, miner, data);
   }
 
@@ -2028,22 +2028,22 @@ bool sispop_name_system_update_mapping_after_expiry_fails::generate(std::vector<
   gen.add_mined_money_unlock_blocks();
 
   ons_keys_t miner_key = make_ons_keys(miner);
-  if (ons::mapping_type_allowed(gen.hardfork(), ons::mapping_type::lokinet))
+  if (ons::mapping_type_allowed(gen.hardfork(), ons::mapping_type::sispopnet))
   {
     std::string const name     = "mydomain.loki";
-    cryptonote::transaction tx = gen.create_and_add_sispop_name_system_tx(miner, gen.hardfork(), ons::mapping_type::lokinet, name, miner_key.lokinet_value);
+    cryptonote::transaction tx = gen.create_and_add_sispop_name_system_tx(miner, gen.hardfork(), ons::mapping_type::sispopnet, name, miner_key.sispopnet_value);
     crypto::hash tx_hash = cryptonote::get_transaction_hash(tx);
     gen.create_and_add_next_block({tx});
 
     uint64_t height_of_ons_entry   = gen.height();
-    uint64_t expected_expiry_block = height_of_ons_entry + lokinet_expiry(ons::mapping_type::lokinet);
+    uint64_t expected_expiry_block = height_of_ons_entry + sispopnet_expiry(ons::mapping_type::sispopnet);
 
     while (gen.height() <= expected_expiry_block)
       gen.create_and_add_next_block();
 
     {
       ons_keys_t bob_key = make_ons_keys(gen.add_account());
-      cryptonote::transaction tx1 = gen.create_sispop_name_system_tx_update(miner, gen.hardfork(), ons::mapping_type::lokinet, name, &bob_key.lokinet_value);
+      cryptonote::transaction tx1 = gen.create_sispop_name_system_tx_update(miner, gen.hardfork(), ons::mapping_type::sispopnet, name, &bob_key.sispopnet_value);
       gen.add_tx(tx1, false /*can_be_added_to_blockchain*/, "Can not update a ONS record that is already expired");
     }
 
@@ -2060,8 +2060,8 @@ bool sispop_name_system_update_mapping_after_expiry_fails::generate(std::vector<
                                    << " == " << owner.address.to_string(cryptonote::FAKECHAIN));
 
       std::string name_hash        = ons::name_to_base64_hash(name);
-      ons::mapping_record record = ons_db.get_mapping(ons::mapping_type::lokinet, name_hash);
-      CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, record, ons::mapping_type::lokinet, name, miner_key.lokinet_value, height_of_ons_entry, height_of_ons_entry + lokinet_expiry(ons::mapping_type::lokinet), tx_hash, miner_key.owner, {} /*backup_owner*/));
+      ons::mapping_record record = ons_db.get_mapping(ons::mapping_type::sispopnet, name_hash);
+      CHECK_TEST_CONDITION(verify_ons_mapping_record(perr_context, record, ons::mapping_type::sispopnet, name, miner_key.sispopnet_value, height_of_ons_entry, height_of_ons_entry + sispopnet_expiry(ons::mapping_type::sispopnet), tx_hash, miner_key.owner, {} /*backup_owner*/));
       CHECK_EQ(record.active(blockchain_height), false);
       CHECK_EQ(record.owner_id, owner.id);
       return true;
@@ -2517,7 +2517,7 @@ bool sispop_name_system_wrong_burn::generate(std::vector<test_event_entry> &even
   }
 
   ons_keys_t ons_keys             = make_ons_keys(miner);
-  ons::mapping_type const types[] = {ons::mapping_type::session, ons::mapping_type::wallet, ons::mapping_type::lokinet};
+  ons::mapping_type const types[] = {ons::mapping_type::session, ons::mapping_type::wallet, ons::mapping_type::sispopnet};
   for (int i = 0; i < 2; i++)
   {
     bool under_burn = (i == 0);
@@ -2538,10 +2538,10 @@ bool sispop_name_system_wrong_burn::generate(std::vector<test_event_entry> &even
           value = ons_keys.wallet_value;
           name = "my-friendly-wallet-name";
         }
-        else if (type == ons::mapping_type::lokinet)
+        else if (type == ons::mapping_type::sispopnet)
         {
-          value = ons_keys.lokinet_value;
-          name  = "myfriendlylokinetname.loki";
+          value = ons_keys.sispopnet_value;
+          name  = "myfriendlysispopnetname.loki";
         }
         else
             assert("Unhandled type enum" == nullptr);

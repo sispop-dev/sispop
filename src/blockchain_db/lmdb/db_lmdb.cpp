@@ -6242,7 +6242,7 @@ struct service_node_proof_serialized_old
     info.proof->qnet_port = little_to_native(quorumnet_port);
     info.proof->version = little_to_native_container(version);
     info.proof->storage_server_version = {0, 0, 0};
-    info.proof->lokinet_version = {0, 0, 0};
+    info.proof->sispopnet_version = {0, 0, 0};
     info.update_pubkey(pubkey_ed25519);
   }
 
@@ -6268,17 +6268,17 @@ struct service_node_proof_serialized : service_node_proof_serialized_old {
   service_node_proof_serialized(const service_nodes::proof_info &info)
     : service_node_proof_serialized_old{info},
       storage_server_version{native_to_little_container(info.proof->storage_server_version)},
-      lokinet_version{native_to_little_container(info.proof->lokinet_version)}
+      sispopnet_version{native_to_little_container(info.proof->sispopnet_version)}
   {}
   std::array<uint16_t, 3> storage_server_version;
-  std::array<uint16_t, 3> lokinet_version;
+  std::array<uint16_t, 3> sispopnet_version;
   char _padding[4];
 
   void update(service_nodes::proof_info& info) const {
     if (!info.proof) info.proof = std::unique_ptr<uptime_proof::Proof>(new uptime_proof::Proof());
     service_node_proof_serialized_old::update(info);
     info.proof->storage_server_version = little_to_native_container(storage_server_version);
-    info.proof->lokinet_version = little_to_native_container(lokinet_version);
+    info.proof->sispopnet_version = little_to_native_container(sispopnet_version);
   }
 
   operator service_nodes::proof_info() const

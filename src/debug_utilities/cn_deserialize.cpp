@@ -80,10 +80,10 @@ struct extra_printer {
     std::cout << "ONS " << (x.is_buying() ? "registration" : x.is_updating() ? "update" : "(unknown)");
     switch (x.type)
     {
-      case ons::mapping_type::lokinet: std::cout << " - Lokinet (1y)"; break;
-      case ons::mapping_type::lokinet_2years: std::cout << " - Lokinet (2y)"; break;
-      case ons::mapping_type::lokinet_5years: std::cout << " - Lokinet (5y)"; break;
-      case ons::mapping_type::lokinet_10years: std::cout << " - Lokinet (10y)"; break;
+      case ons::mapping_type::sispopnet: std::cout << " - Sispopnet (1y)"; break;
+      case ons::mapping_type::sispopnet_2years: std::cout << " - Sispopnet (2y)"; break;
+      case ons::mapping_type::sispopnet_5years: std::cout << " - Sispopnet (5y)"; break;
+      case ons::mapping_type::sispopnet_10years: std::cout << " - Sispopnet (10y)"; break;
       case ons::mapping_type::session: std::cout << " - Session address"; break;
       case ons::mapping_type::wallet: std::cout << " - Wallet address"; break;
       case ons::mapping_type::update_record_internal:
