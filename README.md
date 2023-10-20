@@ -1,8 +1,10 @@
 # Sispop
 
 <p align="center">
-    <a href="https://github.com/loki-project/loki/commits/dev"><img alt="pipeline status" src="https://gitlab.com/lokiproject/loki/badges/dev/pipeline.svg" /></a>
+    <a href="https://github.com/loki-project/sispop/commits/dev"><img alt="pipeline status" src="https://gitlab.com/sispopproject/sispop/badges/dev/pipeline.svg" /></a>
 </p>
+
+Copyright (c) 2023 The Sispop Project.
 
 Copyright (c) 2018 The Loki Project.   
 Portions Copyright (c) 2014-2019 The Monero Project.   
@@ -10,15 +12,15 @@ Portions Copyright (c) 2012-2013 The Cryptonote developers.
 
 ## Development resources
 
-- Web: [sispop.io](https://sispop.io)
-- Telegram: [t.me/SispopCommunity](https://t.me/Sispop_Community)
-- Mail: [team@sispop.io](mailto:team@sispop.io)
-- GitHub: [https://github.com/sispop-io/sispop-core](https://github.com/sispop-io/sispop-core)
-- Discord: [https://discord.gg/67GXfD6](https://discord.gg/67GXfD6)
+- Web: [sispop.site](https://sispop.site)
+- Telegram: [t.me/Sispop](https://t.me/Sispop)
+- Mail: [team@sispop.site](mailto:team@sispop.site)
+- GitHub: [https://github.com/sispop-dev/sispop](https://github.com/sispop-dev/sispop)
+- Discord: [https://discord.gg/sqZCybf2ZZ](https://discord.gg/sqZCybf2ZZ)
 
 ## Vulnerability disclosure
 
-- Check out our [Vulnerability Response Process](https://github.com/sispop-io/sispop-docs/blob/master/docs/Contributing/VULNERABILITY_RESPONSE_LOKI.md), encourages prompt disclosure of any Vulnerabilities
+- Check out our [Vulnerability Response Process](https://github.com/sispop-dev/sispop-docs/blob/master/docs/Contributing/VULNERABILITY_RESPONSE_SISPOP.md), encourages prompt disclosure of any Vulnerabilities
 
 ## Information
 
@@ -103,17 +105,17 @@ You can install these using:
 
 if you want to build a dev build you can do the following after installing the dependancies above:
 
-	$ git clone --recursive https://github.com/sispop-io/sispop-core.git
-	$ cd sispop-core
+	$ git clone --recursive https://github.com/sispop-dev/sispop.git
+	$ cd sispop
 	$ git submodule update --init --recursive
 	$ mkdir build
 	$ cd build
 	$ cmake ..
 	$ make -j$(nproc)
 
-* The resulting executables can be found in `~/sispop-core/build/bin`
+* The resulting executables can be found in `~/sispop/build/bin`
 
-* Add `PATH="$PATH:$HOME/sispop-core/build/bin"` to `.profile`
+* Add `PATH="$PATH:$HOME/sispop/build/bin"` to `.profile`
 
 * Run Sispop with `sispopd --detach`
 
@@ -213,7 +215,7 @@ application.
 * To git clone, run:
 
     ```bash
-    git clone --recursive https://github.com/loki-project/loki.git
+    git clone --recursive https://github.com/sispop-dev/sispop.git
     ```
 
 **Building**
@@ -221,10 +223,10 @@ application.
 * Change to the cloned directory, run:
 	
     ```bash
-    cd loki
+    cd sispop
     ```
 
-* If you would like a specific [version/tag](https://github.com/sispop-io/sispop-core/tags), do a git checkout for that version. eg. 'v5.1.2'. If you don't care about the version and just want binaries from master, skip this step:
+* If you would like a specific [version/tag](https://github.com/sispop-dev/sispop/tags), do a git checkout for that version. eg. 'v5.1.2'. If you don't care about the version and just want binaries from master, skip this step:
 	
     ```bash
     git checkout v5.1.2
