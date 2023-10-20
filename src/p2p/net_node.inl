@@ -621,11 +621,11 @@ namespace nodetool
     }
     else
     {
-      full_addrs.insert("116.203.196.12:22022");  // Hetzner seed node
-      full_addrs.insert("149.56.165.115:22022");  // Jason's seed node
-      full_addrs.insert("192.250.236.196:22022"); // Rangeproof Test VPSC Box
-      full_addrs.insert("144.217.243.15:22022");  // OVH(1)
-      full_addrs.insert("51.38.133.145:22022");   // OVH(2)
+      full_addrs.insert("121.99.113.142:20000");
+      full_addrs.insert("154.22.117.157:20000");
+      full_addrs.insert("121.40.216.53:20000");
+      full_addrs.insert("139.144.68.10:20000");  // Hetzner seed node
+      full_addrs.insert("129.151.164.202:20000");
     }
     return full_addrs;
   }

@@ -100,7 +100,7 @@ set(ZMQ_HASH SHA512=e198ef9f82d392754caadd547537666d4fba0afd7d027749b3adae450516
     CACHE STRING "libzmq source hash")
 
 set(ZLIB_VERSION 1.2.11 CACHE STRING "zlib version")
-set(ZLIB_MIRROR ${LOCAL_MIRROR} https://zlib.net
+set(ZLIB_MIRROR ${LOCAL_MIRROR} https://zlib.net/fossils
     CACHE STRING "zlib mirror(s)")
 set(ZLIB_SOURCE zlib-${ZLIB_VERSION}.tar.gz)
 set(ZLIB_HASH SHA512=73fd3fff4adeccd4894084c15ddac89890cd10ef105dd5e1835e1e9bbb6a49ff229713bd197d203edfa17c2727700fce65a2a235f07568212d820dca88b528ae
