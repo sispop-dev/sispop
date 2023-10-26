@@ -86,7 +86,9 @@ void init_lmq_options(boost::program_options::options_description& desc)
   command_line::add_arg(desc, arg_lmq_admin);
   command_line::add_arg(desc, arg_lmq_user);
   command_line::add_arg(desc, arg_lmq_local_control);
+#ifndef _WIN32
   command_line::add_arg(desc, arg_lmq_umask);
+#endif
 }
 
 lmq_rpc::lmq_rpc(cryptonote::core& core, core_rpc_server& rpc, const boost::program_options::variables_map& vm)
