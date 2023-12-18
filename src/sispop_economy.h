@@ -16,7 +16,7 @@ constexpr uint64_t FOUNDATION_REWARD_HF15 = BLOCK_REWARD_HF15 * 10 / 100;
 
 // New (HF16+) money supply parameters (tentative - HF16 not yet scheduled)
 constexpr uint64_t BLOCK_REWARD_HF16      = 1250 * COIN;
-constexpr uint64_t MINER_REWARD_HF16      = BLOCK_REWARD_HF15 * 30 / 100;
+constexpr uint64_t MINER_REWARD_HF16      = BLOCK_REWARD_HF16 * 30 / 100;
 constexpr uint64_t SN_REWARD_HF16         = BLOCK_REWARD_HF16 * 60 / 100;
 constexpr uint64_t FOUNDATION_REWARD_HF16 = BLOCK_REWARD_HF16 * 10 / 100;
 
