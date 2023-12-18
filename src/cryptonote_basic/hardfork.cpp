@@ -77,25 +77,30 @@ static constexpr HardFork::Params mainnet_hard_forks[] =
 
 static constexpr HardFork::Params testnet_hard_forks[] =
 {
-  { network_version_7,                      1,      0, 1533631121 },
-  { network_version_8,                      2,      0, 1533631122 },
-  { network_version_9_service_nodes,        3,      0, 1533631123 },
-  { network_version_10_bulletproofs,        4,      0, 1542681077 },
-  { network_version_11_infinite_staking,    5,      0, 1551223964 },
-  { network_version_12_checkpointing,       75471,  0, 1561608000 }, // 2019-06-28 14:00AEDT
-  { network_version_13_enforce_checkpoints, 127028, 0, 1568440800 }, // 2019-09-13 16:00AEDT
-  { network_version_14_blink,               174630, 0, 1575075600 }, // 2019-11-30 07:00UTC
-  { network_version_15_lns,                 244777, 0, 1583940000 }, // 2020-03-11 15:20UTC
+  { network_version_7,                      1,      0, 1503046577 },
+  { network_version_8,                      100,  0, 1692426487 },
+  { network_version_9_service_nodes,        102, 0, 1692426900 },
+  { network_version_10_bulletproofs,        110, 0, 1692427080 }, // 2018-12-13 23:30UTC
+  { network_version_11_infinite_staking,    118, 0, 1692427200 }, // 2019-03-26 13:00AEDT
+  { network_version_12_checkpointing,       120, 0, 1692427260 }, // 2019-07-24 14:00AEDT
+  { network_version_13_enforce_checkpoints, 125, 0, 1692427500 }, // 2019-10-23 19:00AEDT
+  { network_version_14_blink,               128, 0, 1692427620 }, // 2020-01-09 00:00UTC
+  { network_version_15_lns,                 130, 0, 1692427740 }, // 2020-03-25 14:00AEDT (03:00UTC)
+  {network_version_16,			    140, 0, 1702245292},
 };
 
 static constexpr HardFork::Params stagenet_hard_forks[] =
 {
-  { network_version_7,                   1,      0, 1341378000 },
-  { network_version_8,                   64324,  0, 1533006000 },
-  { network_version_9_service_nodes,     96210,  0, 1536840000 },
-  { network_version_10_bulletproofs,     96211,  0, 1536840120 },
-  { network_version_11_infinite_staking, 147029, 0, 1551223964 }, // 2019-02-27 12:30 AEDT
-  { network_version_12_checkpointing,    213125, 0, 1561608000 }, // 2019-06-28 14:00 AEDT
+  { network_version_7,                      1,      0, 1503046577 },
+  { network_version_8,                      100,  0, 1692426487 },
+  { network_version_9_service_nodes,        102, 0, 1692426900 },
+  { network_version_10_bulletproofs,        110, 0, 1692427080 }, // 2018-12-13 23:30UTC
+  { network_version_11_infinite_staking,    118, 0, 1692427200 }, // 2019-03-26 13:00AEDT
+  { network_version_12_checkpointing,       120, 0, 1692427260 }, // 2019-07-24 14:00AEDT
+  { network_version_13_enforce_checkpoints, 125, 0, 1692427500 }, // 2019-10-23 19:00AEDT
+  { network_version_14_blink,               128, 0, 1692427620 }, // 2020-01-09 00:00UTC
+  { network_version_15_lns,                 130, 0, 1692427740 }, // 2020-03-25 14:00AEDT (03:00UTC)
+  {network_version_16,                      140, 0, 1702245292},
 };
 
 uint64_t HardFork::get_hardcoded_hard_fork_height(network_type nettype, cryptonote::network_version version)

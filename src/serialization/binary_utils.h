@@ -32,6 +32,7 @@
 
 #include <sstream>
 #include "binary_archive.h"
+#include <vector>
 #include <streambuf>
 
 namespace serialization {

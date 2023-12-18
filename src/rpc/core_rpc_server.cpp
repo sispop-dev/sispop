@@ -2860,6 +2860,7 @@ namespace cryptonote { namespace rpc {
   //------------------------------------------------------------------------------------------------------------------------------
   void core_rpc_server::fill_sn_response_entry(GET_SERVICE_NODES::response::entry& entry, const service_nodes::service_node_pubkey_info &sn_info, uint64_t current_height) {
 
+    uint8_t hf_version =  entry.version_major;
     const auto &info = *sn_info.info;
     entry.service_node_pubkey           = string_tools::pod_to_hex(sn_info.pubkey);
     entry.registration_height           = info.registration_height;
@@ -2870,7 +2871,7 @@ namespace cryptonote { namespace rpc {
     entry.funded                        = info.is_fully_funded();
     entry.state_height                  = info.is_fully_funded()
         ? (info.is_decommissioned() ? info.last_decommission_height : info.active_since_height) : info.last_reward_block_height;
-    entry.earned_downtime_blocks        = service_nodes::quorum_cop::calculate_decommission_credit(info, current_height);
+    entry.earned_downtime_blocks        = service_nodes::quorum_cop::calculate_decommission_credit(info, current_height,  hf_version);
     entry.decommission_count            = info.decommission_count;
 
     m_core.get_service_node_list().access_proof(sn_info.pubkey, [&entry](const auto &proof) {

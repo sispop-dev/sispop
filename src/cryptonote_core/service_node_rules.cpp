@@ -13,7 +13,10 @@ namespace service_nodes {
 uint64_t get_staking_requirement(cryptonote::network_type m_nettype, uint64_t height, uint8_t hf_version)
 {
   if (m_nettype == cryptonote::TESTNET || m_nettype == cryptonote::FAKECHAIN)
-      return COIN * 100;
+      return COIN * 500;
+
+  if (hf_version >= cryptonote::network_version_16)
+    return 150000 * COIN;
 
   uint64_t hardfork_height = m_nettype == cryptonote::MAINNET ? 105 : 96210 /* stagenet */;
   if (height < hardfork_height) height = hardfork_height;
@@ -21,7 +24,7 @@ uint64_t get_staking_requirement(cryptonote::network_type m_nettype, uint64_t he
   uint64_t height_adjusted = height - hardfork_height;
   uint64_t base = 0, variable = 0;
   std::fesetround(FE_TONEAREST);
-   if (height >= 133) {
+   if (height >= 133 && hf_version < cryptonote::network_version_16) {
     base     = 75000 * COIN;
     variable = (75000 * COIN) / sispop::exp2(height_adjusted/129600.0);
     } else {

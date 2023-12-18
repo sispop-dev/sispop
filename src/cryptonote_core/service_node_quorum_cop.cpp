@@ -343,7 +343,7 @@ namespace service_nodes
 
                 }
                 else {
-                  int64_t credit = calculate_decommission_credit(info, latest_height);
+                  int64_t credit = calculate_decommission_credit(info, latest_height, hf_version);
 
                   if (info.is_decommissioned()) {
                     if (credit >= 0) {
@@ -355,7 +355,7 @@ namespace service_nodes
                     }
 
                     LOG_PRINT_L2("Decommissioned service node " << quorum->workers[node_index] << " has no remaining credit; voting to deregister");
-                    vote_for_state = new_state::deregister; // Credit ran out!
+                    vote_for_state = new_state::decommission;
                   } else {
                     if (credit >= DECOMMISSION_MINIMUM) {
                       vote_for_state = new_state::decommission;
@@ -363,7 +363,7 @@ namespace service_nodes
                                    << quorum->workers[node_index]
                                    << " has stopped passing required checks, but has sufficient earned credit (" << credit << " blocks) to avoid deregistration; voting to decommission");
                     } else {
-                      vote_for_state = new_state::deregister;
+                      vote_for_state = new_state::decommission;
                       LOG_PRINT_L2("Service node "
                                    << quorum->workers[node_index]
                                    << " has stopped passing required checks, but does not have sufficient earned credit ("
@@ -656,7 +656,7 @@ namespace service_nodes
   // Calculate the decommission credit for a service node.  If the SN is current decommissioned this
   // returns the number of blocks remaining in the credit; otherwise this is the number of currently
   // accumulated blocks.
-  int64_t quorum_cop::calculate_decommission_credit(const service_node_info &info, uint64_t current_height)
+  int64_t quorum_cop::calculate_decommission_credit(const service_node_info &info, uint64_t current_height, const uint8_t hf_version)
   {
     // If currently decommissioned, we need to know how long it was up before being decommissioned;
     // otherwise we need to know how long since it last become active until now (or 0 if not staked
@@ -671,13 +671,15 @@ namespace service_nodes
 
     // Now we calculate the credit earned from being up for `blocks_up` blocks
     int64_t credit = 0;
+
     if (blocks_up >= 0) {
       credit = blocks_up * DECOMMISSION_CREDIT_PER_DAY / BLOCKS_EXPECTED_IN_HOURS(24);
 
       if (info.decommission_count <= info.is_decommissioned()) // Has never been decommissioned (or is currently in the first decommission), so add initial starting credit
         credit += DECOMMISSION_INITIAL_CREDIT;
-      if (credit > DECOMMISSION_MAX_CREDIT)
+      if (credit > DECOMMISSION_MAX_CREDIT) {
         credit = DECOMMISSION_MAX_CREDIT; // Cap the available decommission credit blocks if above the max
+      }
     }
 
     // If currently decommissioned, remove any used credits used for the current downtime

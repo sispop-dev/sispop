@@ -235,21 +235,21 @@ namespace config
     uint16_t const ZMQ_RPC_DEFAULT_PORT = 38158;
     uint16_t const QNET_DEFAULT_PORT = 38159;
     boost::uuids::uuid const NETWORK_ID = { {
-        0x5f, 0x3a, 0x78, 0x65, 0xe1, 0x6f, 0xca, 0xb8, 0x02, 0xa1, 0xdc, 0x17, 0x61, 0x64, 0x15, 0xbe,
+        0x22, 0x3a, 0x78, 0x65, 0x88, 0x6f, 0xca, 0xb8, 0x01, 0xa1, 0xdc, 0x07, 0x71, 0x55, 0x15, 0x22,
       } }; // Bender's daydream
-    std::string const GENESIS_TX = "03011e001e01ff00018080c9db97f4fb270259b546996f69aa71abe4238995f41d780ab1abebcac9f00e808f147bdb9e3228420112573af8c309b69a1a646f41b5212ba7d9c4590bf86e04f36c486467cfef9d3d72000000000000000000000000000000000000000000000000000000000000000000";
+    std::string const GENESIS_TX = "013c01ff0001ffffffffffff03029b2e4c0281c0b02e7c53291a94d1d0cbff8883f8024f5142ee494ffbbd08807121017767aafcde9be00dcfd098715ebcf7f410daebc582fda69d24a28e9d0bc890d1";
     uint32_t const GENESIS_NONCE = 10001;
 
     uint64_t const GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS = 1000;
     std::string const GOVERNANCE_WALLET_ADDRESS[] =
     {
-      "T6SUprTYE5rQpep9iQFxyPcKVd91DFR1fQ1Qsyqp5eYLiFc8XuYd3reRE71qDL8c3DXioUbDEpDFdaUpetnL37NS1R3rzoKxi", // hardfork v7-9
-      "T6TzkJb5EiASaCkcH7idBEi1HSrpSQJE1Zq3aL65ojBMPZvqHNYPTL56i3dncGVNEYCG5QG5zrBmRiVwcg6b1cRM1SRNqbp44", // hardfork v10
+      "T6TU9yWHiYwKnJLWKoBQyWKXQSkRv7WnPacqFzrw5kPvgJJM7oQn4GNCPDimwU87RxVy69cRgpMoFUeZpTqyjGR91nW2PYdkq", // hardfork v7-9
+      "T6TU9yWHiYwKnJLWKoBQyWKXQSkRv7WnPacqFzrw5kPvgJJM7oQn4GNCPDimwU87RxVy69cRgpMoFUeZpTqyjGR91nW2PYdkq", // hardfork v10
     };
 
     // Testnet uptime proofs are 6x faster than mainnet (devnet config also uses these)
-    inline constexpr auto UPTIME_PROOF_FREQUENCY = 10min;
-    inline constexpr auto UPTIME_PROOF_VALIDITY = 21min;
+    inline constexpr auto UPTIME_PROOF_FREQUENCY = 2min;
+    inline constexpr auto UPTIME_PROOF_VALIDITY = 5min;
   }
 
   namespace stagenet
@@ -262,16 +262,16 @@ namespace config
     uint16_t const ZMQ_RPC_DEFAULT_PORT = 38058;
     uint16_t const QNET_DEFAULT_PORT = 38059;
     boost::uuids::uuid const NETWORK_ID = { {
-        0xbb ,0x37, 0x9B, 0x22 , 0x0A, 0x66 , 0x69, 0x1E, 0x09, 0xB2, 0x97, 0x8A, 0xCC, 0xA1, 0xDF, 0x9C
+        0xbb ,0x37, 0x55, 0x22 , 0x0A, 0x66 , 0x19, 0x65, 0x09, 0xB2, 0x97, 0x8A, 0xCC, 0x01, 0xDF, 0x9C
       } }; // Beep Boop
-    std::string const GENESIS_TX = "021e01ff000380808d93f5d771027e4490431900c66a6532917ad9e6a1de634a209b708f653097e7b48efc1238c68080b4ccd4dfc60302ba19a224e6474371f9161b2e6271a36d060cbdc2e479ad78f1be64c56576fa07808088fccdbcc32302bccf9c13ba1b5bb02638de6e557acdd46bf48953e42cf98a12d2ad2900cc316121018fc6728d9e3c062d3afae3b2317998d2abee1e12f51271ba1c0d3cdd236b81d200";
+    std::string const GENESIS_TX = "013c01ff0001ffffffffffff0302df5d56da0c7d643ddd1ce61901c7bdc5fb1738bfe39fbe69c28a3a7032729c0f2101168d0c4ca86fb55a4cf6a36d31431be1c53a3bd7411bb24e8832410289fa6f3b";
     uint32_t const GENESIS_NONCE = 10002;
 
     uint64_t const GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS = ((60 * 60 * 24 * 7) / DIFFICULTY_TARGET_V2);
     std::string const GOVERNANCE_WALLET_ADDRESS[] =
     {
-      "59f7FCwYMiwMnFr8HwsnfJ2hK3DYB1tryhjsfmXqEBJojKyqKeNWoaDaZaauoZPiZHUYp2wJuy5s9H96qy4q9xUVCXXHmTU", // hardfork v7-9
-      "59f7FCwYMiwMnFr8HwsnfJ2hK3DYB1tryhjsfmXqEBJojKyqKeNWoaDaZaauoZPiZHUYp2wJuy5s9H96qy4q9xUVCXXHmTU", // hardfork v10
+      "5A8U5rKBGTQNN3JoNDFPyTgARrmvqyMgR15ZGSFWhRgJ9JA62V6gUox8NbVCq9Y2jCVcuWPETLAzoNSWvCyYBxGtRPG4TVq", // hardfork v7-9
+      "5A8U5rKBGTQNN3JoNDFPyTgARrmvqyMgR15ZGSFWhRgJ9JA62V6gUox8NbVCq9Y2jCVcuWPETLAzoNSWvCyYBxGtRPG4TVq", // hardfork v10
     };
   }
 
