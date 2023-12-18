@@ -581,11 +581,11 @@ namespace nodetool
     std::set<std::string> full_addrs;
     if (nettype == cryptonote::TESTNET)
     {
-      full_addrs.insert("159.69.109.145:38156");
+       full_addrs.insert("172.233.67.201:38156");
     }
     else if (nettype == cryptonote::STAGENET)
     {
-      full_addrs.insert("159.69.109.145:38153");
+       full_addrs.insert("172.233.67.201:38153");
     }
     else if (nettype == cryptonote::FAKECHAIN)
     {
@@ -596,8 +596,15 @@ namespace nodetool
       full_addrs.insert("154.22.117.157:20000");
       full_addrs.insert("121.40.216.53:20000");
       full_addrs.insert("129.151.173.97:20000"); 
-      full_addrs.insert("139.144.68.10:20000");  // Hetzner seed node
+      full_addrs.insert("139.144.68.10:20000");
       full_addrs.insert("129.151.164.202:20000");
+      full_addrs.insert("173.249.31.145:20000");
+      full_addrs.insert("209.250.235.91:20000");
+      full_addrs.insert("158.101.192.88:20000");
+      full_addrs.insert("188.193.78.252:20000");
+      full_addrs.insert("173.212.211.55:20000");
+      full_addrs.insert("207.180.218.18:20000");
+      full_addrs.insert("167.86.94.164:20000");
     }
     return full_addrs;
   }

@@ -353,9 +353,14 @@ namespace service_nodes
                                    << " blocks); abstaining (to leave decommissioned)");
                       continue;
                     }
-
+                     if (hf_version < cryptonote::network_version_16) {
                     LOG_PRINT_L2("Decommissioned service node " << quorum->workers[node_index] << " has no remaining credit; voting to deregister");
                     vote_for_state = new_state::deregister; // Credit ran out!
+                     } else {
+                      // Instead of just deregistering simply recommission.
+                    LOG_PRINT_L0("Recommissioned service node ");
+                    vote_for_state = new_state::recommission;
+                    }
                   } else {
                     if (credit >= DECOMMISSION_MINIMUM) {
                       vote_for_state = new_state::decommission;
@@ -363,12 +368,17 @@ namespace service_nodes
                                    << quorum->workers[node_index]
                                    << " has stopped passing required checks, but has sufficient earned credit (" << credit << " blocks) to avoid deregistration; voting to decommission");
                     } else {
+                    if (hf_version < cryptonote::network_version_16) {
                       vote_for_state = new_state::deregister;
                       LOG_PRINT_L2("Service node "
                                    << quorum->workers[node_index]
                                    << " has stopped passing required checks, but does not have sufficient earned credit ("
                                    << credit << " blocks, " << DECOMMISSION_MINIMUM
                                    << " required) to decommission; voting to deregister");
+                      } else {
+                    LOG_PRINT_L0("Recommissioned service node");
+                      vote_for_state = new_state::recommission;
+			}
                     }
                   }
                 }
