@@ -33,6 +33,7 @@
 
 #include "include_base_utils.h"
 #include "account.h"
+#include "cryptonote_config.h"
 #include "warnings.h"
 #include "crypto/crypto.h"
 extern "C"
@@ -45,7 +46,6 @@ extern "C"
 #undef SISPOP_DEFAULT_LOG_CATEGORY
 #define SISPOP_DEFAULT_LOG_CATEGORY "account"
 
-#define KEYS_ENCRYPTION_SALT 'k'
 
 
 using namespace std;
@@ -70,7 +70,7 @@ DISABLE_VS_WARNINGS(4244 4345)
     static_assert(sizeof(base_key) == sizeof(crypto::hash), "chacha key and hash should be the same size");
     epee::mlocked<tools::scrubbed_arr<char, sizeof(base_key)+1>> data;
     memcpy(data.data(), &base_key, sizeof(base_key));
-    data[sizeof(base_key)] = KEYS_ENCRYPTION_SALT;
+    data[sizeof(base_key)] = config::HASH_KEY_MEMORY;
     crypto::generate_chacha_key(data.data(), sizeof(data), key, 1);
   }
   //-----------------------------------------------------------------

@@ -36,6 +36,7 @@
 #include "misc_language.h"
 #include "wallet_errors.h"
 #include "ringdb.h"
+#include "cryptonote_config.h"
 
 #undef SISPOP_DEFAULT_LOG_CATEGORY
 #define SISPOP_DEFAULT_LOG_CATEGORY "wallet.ringdb"
@@ -94,14 +95,14 @@ std::string get_rings_filename(boost::filesystem::path filename)
   return filename.string();
 }
 
-static crypto::chacha_iv make_iv(const crypto::key_image &key_image, const crypto::chacha_key &key)
+static crypto::chacha_iv make_iv(const crypto::key_image &key_image, const crypto::chacha_key &key, uint8_t field)
 {
-  static const char salt[] = "ringdsb";
+  uint8_t buffer[sizeof(key_image) + sizeof(key) + sizeof(config::HASH_KEY_RINGDB) + sizeof(field)];
 
-  uint8_t buffer[sizeof(key_image) + sizeof(key) + sizeof(salt)];
   memcpy(buffer, &key_image, sizeof(key_image));
   memcpy(buffer + sizeof(key_image), &key, sizeof(key));
-  memcpy(buffer + sizeof(key_image) + sizeof(key), salt, sizeof(salt));
+  memcpy(buffer + sizeof(key_image) + sizeof(key), config::HASH_KEY_RINGDB, sizeof(config::HASH_KEY_RINGDB));
+  memcpy(buffer + sizeof(key_image) + sizeof(key) + sizeof(config::HASH_KEY_RINGDB), &field, sizeof(field));
   crypto::hash hash;
   crypto::cn_fast_hash(buffer, sizeof(buffer), hash.data);
   static_assert(sizeof(hash) >= CHACHA_IV_SIZE, "Incompatible hash and chacha IV sizes");
@@ -110,9 +111,9 @@ static crypto::chacha_iv make_iv(const crypto::key_image &key_image, const crypt
   return iv;
 }
 
-static std::string encrypt(const std::string &plaintext, const crypto::key_image &key_image, const crypto::chacha_key &key)
+static std::string encrypt(const std::string &plaintext, const crypto::key_image &key_image, const crypto::chacha_key &key, uint8_t field)
 {
-  const crypto::chacha_iv iv = make_iv(key_image, key);
+  const crypto::chacha_iv iv = make_iv(key_image, key, field);
   std::string ciphertext;
   ciphertext.resize(plaintext.size() + sizeof(iv));
   crypto::chacha20(plaintext.data(), plaintext.size(), key, iv, &ciphertext[sizeof(iv)]);
@@ -120,14 +121,14 @@ static std::string encrypt(const std::string &plaintext, const crypto::key_image
   return ciphertext;
 }
 
-static std::string encrypt(const crypto::key_image &key_image, const crypto::chacha_key &key)
+static std::string encrypt(const crypto::key_image &key_image, const crypto::chacha_key &key, uint8_t field)
 {
-  return encrypt(std::string((const char*)&key_image, sizeof(key_image)), key_image, key);
+  return encrypt(std::string((const char*)&key_image, sizeof(key_image)), key_image, key, field);
 }
 
-static std::string decrypt(const std::string &ciphertext, const crypto::key_image &key_image, const crypto::chacha_key &key)
+static std::string decrypt(const std::string &ciphertext, const crypto::key_image &key_image, const crypto::chacha_key &key, uint8_t field)
 {
-  const crypto::chacha_iv iv = make_iv(key_image, key);
+  const crypto::chacha_iv iv = make_iv(key_image, key, field);
   std::string plaintext;
   THROW_WALLET_EXCEPTION_IF(ciphertext.size() < sizeof(iv), tools::error::wallet_internal_error, "Bad ciphertext text");
   plaintext.resize(ciphertext.size() - sizeof(iv));
@@ -138,11 +139,11 @@ static std::string decrypt(const std::string &ciphertext, const crypto::key_imag
 static void store_relative_ring(MDB_txn *txn, MDB_dbi &dbi, const crypto::key_image &key_image, const std::vector<uint64_t> &relative_ring, const crypto::chacha_key &chacha_key)
 {
   MDB_val key, data;
-  std::string key_ciphertext = encrypt(key_image, chacha_key);
+  std::string key_ciphertext = encrypt(key_image, chacha_key, 0);
   key.mv_data = (void*)key_ciphertext.data();
   key.mv_size = key_ciphertext.size();
   std::string compressed_ring = compress_ring(relative_ring);
-  std::string data_ciphertext = encrypt(compressed_ring, key_image, chacha_key);
+  std::string data_ciphertext = encrypt(compressed_ring, key_image, chacha_key, 1);
   data.mv_size = data_ciphertext.size();
   data.mv_data = (void*)data_ciphertext.c_str();
   int dbr = mdb_put(txn, dbi, &key, &data, 0);
@@ -298,7 +299,7 @@ bool ringdb::remove_rings(const crypto::chacha_key &chacha_key, const std::vecto
   for (const crypto::key_image &key_image: key_images)
   {
     MDB_val key, data;
-    std::string key_ciphertext = encrypt(key_image, chacha_key);
+    std::string key_ciphertext = encrypt(key_image, chacha_key, 0);
     key.mv_data = (void*)key_ciphertext.data();
     key.mv_size = key_ciphertext.size();
 
@@ -350,7 +351,7 @@ bool ringdb::get_ring(const crypto::chacha_key &chacha_key, const crypto::key_im
   tx_active = true;
 
   MDB_val key, data;
-  std::string key_ciphertext = encrypt(key_image, chacha_key);
+  std::string key_ciphertext = encrypt(key_image, chacha_key, 0);
   key.mv_data = (void*)key_ciphertext.data();
   key.mv_size = key_ciphertext.size();
   dbr = mdb_get(txn, dbi_rings, &key, &data);
@@ -359,7 +360,7 @@ bool ringdb::get_ring(const crypto::chacha_key &chacha_key, const crypto::key_im
     return false;
   THROW_WALLET_EXCEPTION_IF(data.mv_size <= 0, tools::error::wallet_internal_error, "Invalid ring data size");
 
-  std::string data_plaintext = decrypt(std::string((const char*)data.mv_data, data.mv_size), key_image, chacha_key);
+  std::string data_plaintext = decrypt(std::string((const char*)data.mv_data, data.mv_size), key_image, chacha_key, 1);
   outs = decompress_ring(data_plaintext);
   MDEBUG("Found ring for key image " << key_image << ":");
   MDEBUG("Relative: " << boost::join(outs | boost::adaptors::transformed([](uint64_t out){return std::to_string(out);}), " "));
