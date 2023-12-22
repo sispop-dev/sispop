@@ -114,6 +114,7 @@ static_assert(STAKING_PORTIONS % 12 == 0, "Use a multiple of twelve, so that it 
 #define COMMAND_RPC_GET_BLOCKS_FAST_MAX_COUNT           1000
 #define COMMAND_RPC_GET_CHECKPOINTS_MAX_COUNT           256
 #define COMMAND_RPC_GET_QUORUM_STATE_MAX_COUNT          256
+#define MAX_RPC_CONTENT_LENGTH                          1048576 // 1 MB
 
 #define P2P_LOCAL_WHITE_PEERLIST_LIMIT                  1000
 #define P2P_LOCAL_GRAY_PEERLIST_LIMIT                   5000
