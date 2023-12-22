@@ -210,11 +210,6 @@ namespace cryptonote
     auto access_control_origins_input = command_line::get_arg(vm, arg.rpc_access_control_origins);
     if (!access_control_origins_input.empty())
     {
-      if (!config.login)
-      {
-        LOG_ERROR(arg.rpc_access_control_origins.name  << tr(" requires RPC server password --") << arg.rpc_login.name << tr(" cannot be empty"));
-        return boost::none;
-      }
 
       using namespace boost::placeholders;
       std::vector<std::string> access_control_origins;
