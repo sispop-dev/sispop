@@ -73,6 +73,7 @@ add_subdirectory(multisig)
 add_subdirectory(net)
 add_subdirectory(mnemonics)
 add_subdirectory(wallet)
+add_subdirectory(http_wallet)
 add_subdirectory(cryptonote_protocol)
 
 if(NOT IOS)

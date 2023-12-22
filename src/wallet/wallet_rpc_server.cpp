@@ -56,6 +56,7 @@ using namespace epee;
 #include "rpc/core_rpc_server.h"
 #include "daemonizer/daemonizer.h"
 #include "cryptonote_core/sispop_name_system.h"
+#include "http_wallet/files.h"
 
 #undef SISPOP_DEFAULT_LOG_CATEGORY
 #define SISPOP_DEFAULT_LOG_CATEGORY "wallet.rpc"
@@ -69,6 +70,7 @@ namespace
   const command_line::arg_descriptor<bool> arg_restricted = {"restricted-rpc", "Restricts to view-only commands", false};
   const command_line::arg_descriptor<std::string> arg_wallet_dir = {"wallet-dir", "Directory for newly created wallets"};
   const command_line::arg_descriptor<bool> arg_prompt_for_password = {"prompt-for-password", "Prompts for password when not provided", false};
+  const command_line::arg_descriptor<bool> arg_http_wallet = {"http-wallet", "Enables the HTTP wallet", false};
 
   constexpr const char default_rpc_username[] = "sispop";
 
@@ -189,6 +191,8 @@ namespace tools
     std::string bind_port = command_line::get_arg(*m_vm, arg_rpc_bind_port);
     const bool disable_auth = command_line::get_arg(*m_vm, arg_disable_rpc_login);
     m_restricted = command_line::get_arg(*m_vm, arg_restricted);
+    m_http_wallet = command_line::get_arg(*m_vm, arg_http_wallet);
+
     if (!command_line::is_arg_defaulted(*m_vm, arg_wallet_dir))
     {
       if (!command_line::is_arg_defaulted(*m_vm, wallet_args::arg_wallet_file()))
@@ -337,6 +341,29 @@ void wallet_rpc_server::require_open() {
       er.code = WALLET_RPC_ERROR_CODE_NOT_OPEN;
       er.message = "No wallet file";
       return false;
+  }
+  //------------------------------------------------------------------------------------------------------------------------------
+  bool wallet_rpc_server::on_httpwallet(const epee::net_utils::http::http_request_info& query_info, epee::net_utils::http::http_response_info& response_info, connection_context& m_conn_context)
+  {
+    for (const auto& entry : http_wallet::files)
+    {
+      if (entry.first == query_info.m_URI)
+      {
+        if (entry.first != entry.second.m_name)
+        {
+          response_info.m_response_code = 301;
+          response_info.m_response_comment = "Moved Permanently";
+          response_info.m_additional_fields.push_back(std::pair<std::string, std::string>("Location", entry.second.m_name));
+          return true;
+        }
+        response_info.m_response_code = 200;
+        response_info.m_mime_tipe = entry.second.m_type;
+        response_info.m_body = entry.second.m_content;
+        response_info.m_additional_fields.push_back(std::pair<std::string, std::string>("Content-Security-Policy", "default-src 'self';"));
+        return true;
+      }
+    }
+    return false;
   }
   //------------------------------------------------------------------------------------------------------------------------------
   bool wallet_rpc_server::on_getbalance(const wallet_rpc::COMMAND_RPC_GET_BALANCE::request& req, wallet_rpc::COMMAND_RPC_GET_BALANCE::response& res, epee::json_rpc::error& er, const connection_context *ctx)
@@ -638,6 +665,8 @@ void wallet_rpc_server::require_open() {
     {
       res.height           = m_wallet->get_blockchain_current_height();
       res.immutable_height = m_wallet->get_immutable_height();
+      std::string err;
+      res.daemon_height = m_wallet->get_daemon_blockchain_height(err);
     }
     catch (const std::exception& e)
     {
@@ -4577,10 +4606,17 @@ public:
       const auto wallet_dir = command_line::get_arg(vm, arg_wallet_dir);
       const auto prompt_for_password = command_line::get_arg(vm, arg_prompt_for_password);
       const auto password_prompt = prompt_for_password ? password_prompter : nullptr;
+      const auto http_wallet = command_line::get_arg(vm, arg_http_wallet);
 
       if(!wallet_file.empty() && !from_json.empty())
       {
         LOG_ERROR(tools::wallet_rpc_server::tr("Can't specify more than one of --wallet-file and --generate-from-json"));
+        return false;
+      }
+
+      if (http_wallet && wallet_dir.empty())
+      {
+        LOG_ERROR(tools::wallet_rpc_server::tr("--http-wallet requires --wallet-dir"));
         return false;
       }
 
@@ -4731,6 +4767,7 @@ int main(int argc, char** argv) {
   command_line::add_arg(desc_params, arg_from_json);
   command_line::add_arg(desc_params, arg_wallet_dir);
   command_line::add_arg(desc_params, arg_prompt_for_password);
+  command_line::add_arg(desc_params, arg_http_wallet);
 
   daemonizer::init_options(hidden_options, desc_params);
   desc_params.add(hidden_options);

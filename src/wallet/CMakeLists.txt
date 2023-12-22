@@ -62,6 +62,7 @@ target_link_libraries(wallet_rpc_server
     wallet
     rpc_base
     daemonizer
+    http_wallet
     epee_readline
     Boost::program_options
     Boost::regex
