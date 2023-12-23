@@ -323,6 +323,14 @@ namespace cryptonote
       tvc.m_too_big = true;
       return false;
     }
+    size_t tx_extra_size = tx.extra.size();
+    if (tx_extra_size > MAX_TX_EXTRA_SIZE)
+    {
+      LOG_PRINT_L1("transaction tx-extra is too big: " << tx_extra_size << " bytes, the limit is: " << MAX_TX_EXTRA_SIZE);
+      tvc.m_verifivation_failed = true;
+      tvc.m_tx_extra_too_big = true;
+      return false;
+    }
 
     {
       std::vector<crypto::hash> conflict_txs;

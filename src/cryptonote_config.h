@@ -177,6 +177,11 @@ static_assert(STAKING_PORTIONS % 12 == 0, "Use a multiple of twelve, so that it 
 #define CRYPTONOTE_PRUNING_TIP_BLOCKS           5500 // the smaller, the more space saved
 //#define CRYPTONOTE_PRUNING_DEBUG_SPOOF_SEED
 
+//The limit is enough for the mandatory transaction content with 16 outputs (547 bytes),
+//a custom tag (1 byte) and up to 32 bytes of custom data for each recipient.
+// (1+32) + (1+1+16*32) + (1+16*32) = 1060
+#define MAX_TX_EXTRA_SIZE                       1060
+
 // New constants are intended to go here
 namespace config
 {

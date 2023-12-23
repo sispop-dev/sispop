@@ -726,6 +726,8 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
       bool untrusted;     // States if the result is obtained using the bootstrap mode, and is therefore not trusted (`true`), or when the daemon is fully synced (`false`).
       tx_verification_context tvc;
       bool sanity_check_failed;
+      bool tx_extra_too_big;
+
       blink_result blink_status; // 0 for a non-blink tx.  For a blink tx: 1 means rejected, 2 means accepted, 3 means timeout.
 
       BEGIN_KV_SERIALIZE_MAP()
@@ -734,6 +736,7 @@ constexpr char const CORE_RPC_STATUS_TX_LONG_POLL_MAX_CONNECTIONS[] = "Daemon ma
         KV_SERIALIZE(not_relayed)
         KV_SERIALIZE(sanity_check_failed)
         KV_SERIALIZE(untrusted)
+        KV_SERIALIZE(tx_extra_too_big)
         KV_SERIALIZE(tvc)
         KV_SERIALIZE_ENUM(blink_status)
       END_KV_SERIALIZE_MAP()

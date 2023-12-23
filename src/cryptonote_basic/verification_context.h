@@ -83,6 +83,7 @@ namespace cryptonote
     bool m_invalid_type;
     bool m_key_image_locked_by_snode;
     bool m_key_image_blacklisted;
+    bool m_tx_extra_too_big;
     std::string m_verbose_error;
     vote_verification_context m_vote_ctx;
 

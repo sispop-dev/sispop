@@ -893,6 +893,9 @@ namespace cryptonote
       std::string reason  = print_tx_verification_context  (tvc);
       reason             += print_vote_verification_context(vvc);
       res.tvc             = tvc;
+        if ((res.tx_extra_too_big = tvc.m_tx_extra_too_big)) {
+      res.reason = std::string{"tx-extra too big: "};
+      }
       const std::string punctuation = res.reason.empty() ? "" : ": ";
       if (tvc.m_verifivation_failed)
       {
