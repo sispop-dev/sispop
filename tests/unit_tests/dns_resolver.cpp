@@ -157,6 +157,16 @@ TEST(DNSResolver, GetTXTRecord)
   addr = tools::DNSResolver::instance().get_dns_format_from_oa_address("donate.getmonero.org");
   EXPECT_STREQ("donate.getmonero.org", addr.c_str());
 }
+TEST(DNSResolver, Localhost)
+{
+  tools::DNSResolver resolver = tools::DNSResolver::create();
+
+  bool avail, valid;
+  std::vector<std::string> ips = resolver.get_ipv4("localhost", avail, valid);
+
+  ASSERT_EQ(1, ips.size());
+  ASSERT_EQ("127.0.0.1", ips[0]);
+}
 
 bool is_equal(const char *s, const std::vector<std::string> &v) { return v.size() == 1 && v[0] == s; }
 
