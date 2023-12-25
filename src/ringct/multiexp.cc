@@ -443,7 +443,7 @@ size_t straus_get_cache_size(const std::shared_ptr<straus_cached_data> &cache)
   return sz;
 }
 
-rct::key straus(const std::vector<MultiexpData> &data, const std::shared_ptr<straus_cached_data> &cache, size_t STEP)
+ge_p3 straus_p3(const std::vector<MultiexpData> &data, const std::shared_ptr<straus_cached_data> &cache, size_t STEP)
 {
   CHECK_AND_ASSERT_THROW_MES(cache == NULL || cache->size >= data.size(), "Cache is too small");
   MULTIEXP_PERF(PERF_TIMER_UNIT(straus, 1000000));
@@ -555,8 +555,13 @@ skipfirst:
     ge_add(&p1, &res_p3, &cached);
     ge_p1p1_to_p3(&res_p3, &p1);
   }
+  return res_p3;
+}
 
+rct::key straus(const std::vector<MultiexpData> &data, const std::shared_ptr<straus_cached_data> &cache, size_t STEP)
+{
   rct::key res;
+  const ge_p3 res_p3 = straus_p3(data, cache, STEP);
   ge_p3_tobytes(res.bytes, &res_p3);
   return res;
 }
@@ -573,13 +578,6 @@ size_t get_pippenger_c(size_t N)
   return 9;
 }
 
-struct pippenger_cached_data
-{
-  size_t size;
-  ge_cached *cached;
-  pippenger_cached_data(): size(0), cached(NULL) {}
-  ~pippenger_cached_data() { aligned_free(cached); }
-};
 
 std::shared_ptr<pippenger_cached_data> pippenger_init_cache(const std::vector<MultiexpData> &data, size_t start_offset, size_t N)
 {
@@ -589,13 +587,11 @@ std::shared_ptr<pippenger_cached_data> pippenger_init_cache(const std::vector<Mu
     N = data.size() - start_offset;
   CHECK_AND_ASSERT_THROW_MES(N <= data.size() - start_offset, "Bad cache base data");
   ge_cached cached;
-  std::shared_ptr<pippenger_cached_data> cache(new pippenger_cached_data());
+  std::shared_ptr<pippenger_cached_data> cache= std::make_shared<pippenger_cached_data>();
 
-  cache->size = N;
-  cache->cached = (ge_cached*)aligned_realloc(cache->cached, N * sizeof(ge_cached), 4096);
-  CHECK_AND_ASSERT_THROW_MES(cache->cached, "Out of memory");
+  cache->resize(N);
   for (size_t i = 0; i < N; ++i)
-    ge_p3_to_cached(&cache->cached[i], &data[i+start_offset].point);
+    ge_p3_to_cached(&(*cache)[i], &data[i+start_offset].point);
 
   MULTIEXP_PERF(PERF_TIMER_STOP(pippenger_init_cache));
   return cache;
@@ -603,14 +599,14 @@ std::shared_ptr<pippenger_cached_data> pippenger_init_cache(const std::vector<Mu
 
 size_t pippenger_get_cache_size(const std::shared_ptr<pippenger_cached_data> &cache)
 {
-  return cache->size * sizeof(*cache->cached);
+  return cache->size() * sizeof(ge_cached);
 }
 
-rct::key pippenger(const std::vector<MultiexpData> &data, const std::shared_ptr<pippenger_cached_data> &cache, size_t cache_size, size_t c)
+ge_p3 pippenger_p3(const std::vector<MultiexpData> &data, const std::shared_ptr<pippenger_cached_data> &cache, size_t cache_size, size_t c)
 {
   if (cache != NULL && cache_size == 0)
-    cache_size = cache->size;
-  CHECK_AND_ASSERT_THROW_MES(cache == NULL || cache_size <= cache->size, "Cache is too small");
+    cache_size = cache->size();
+  CHECK_AND_ASSERT_THROW_MES(cache == NULL || cache_size <= cache->size(), "Cache is too small");
   if (c == 0)
     c = get_pippenger_c(data.size());
   CHECK_AND_ASSERT_THROW_MES(c <= 9, "c is too large");
@@ -664,9 +660,9 @@ rct::key pippenger(const std::vector<MultiexpData> &data, const std::shared_ptr<
       if (buckets_init[bucket])
       {
         if (i < cache_size)
-          add(buckets[bucket], local_cache->cached[i]);
+          add(buckets[bucket], (*local_cache)[i]);
         else
-          add(buckets[bucket], local_cache_2->cached[i - cache_size]);
+          add(buckets[bucket], (*local_cache_2)[i - cache_size]);
       }
       else
       {
@@ -703,8 +699,14 @@ rct::key pippenger(const std::vector<MultiexpData> &data, const std::shared_ptr<
     }
   }
 
+  return result;
+}
+
+rct::key pippenger(const std::vector<MultiexpData> &data, const std::shared_ptr<pippenger_cached_data> &cache, const size_t cache_size, const size_t c)
+{
   rct::key res;
-  ge_p3_tobytes(res.bytes, &result);
+  const ge_p3 result_p3 = pippenger_p3(data, cache, cache_size, c);
+  ge_p3_tobytes(res.bytes, &result_p3);
   return res;
 }
 
