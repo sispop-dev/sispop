@@ -602,6 +602,17 @@ enum class Level : base::type::EnumType {
   /// @brief Represents unknown level
   Unknown = 1010
 };
+
+enum class Color : base::type::EnumType {
+  Default,
+  Red,
+  Green,
+  Yellow,
+  Blue,
+  Magenta,
+  Cyan,
+};
+
 } // namespace el
 namespace std {
 template<> struct hash<el::Level> {
