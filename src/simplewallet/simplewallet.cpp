@@ -5713,25 +5713,9 @@ bool simple_wallet::confirm_and_send_tx(std::vector<cryptonote::address_parse_in
         if (!print_ring_members(ptx_vector, prompt))
           return false;
       }
-      bool default_ring_size = true;
-      for (const auto &ptx: ptx_vector)
-      {
-        for (const auto &vin: ptx.tx.vin)
-        {
-          if (vin.type() == typeid(txin_to_key))
-          {
-            const txin_to_key& in_to_key = boost::get<txin_to_key>(vin);
-            if (in_to_key.key_offsets.size() != CRYPTONOTE_DEFAULT_TX_MIXIN + 1)
-              default_ring_size = false;
-          }
-        }
-      }
-      if (m_wallet->confirm_non_default_ring_size() && !default_ring_size)
-      {
-        prompt << tr("WARNING: this is a non default ring size, which may harm your privacy. Default is recommended.");
-      }
+
       prompt << ENDL << tr("Is this okay?");
-      
+
       std::string accepted = input_line(prompt.str(), true);
       if (std::cin.eof())
         return false;
