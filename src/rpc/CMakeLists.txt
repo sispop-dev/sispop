@@ -52,7 +52,6 @@ target_link_libraries(rpc_base
     epee
     Boost::thread
     Boost::program_options
-    OpenSSL::SSL
   PRIVATE
     extra)
 

@@ -70,6 +70,7 @@ file(COPY
   data/outputs
   data/unsigned_sispop_tx
   data/signed_sispop_tx
+  data/sha256sum
   DESTINATION data)
 
 find_package(PythonInterp 3)

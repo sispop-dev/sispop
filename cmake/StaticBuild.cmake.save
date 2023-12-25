@@ -8,7 +8,7 @@ set(LOCAL_MIRROR "" CACHE STRING "local mirror path/URL for lib downloads")
 set(OPENSSL_VERSION 3.0.11 CACHE STRING "openssl version")
 set(OPENSSL_MIRROR ${LOCAL_MIRROR} https://www.openssl.org/source CACHE STRING "openssl download mirror(s)")
 set(OPENSSL_SOURCE openssl-${OPENSSL_VERSION}.tar.gz)
-set(OPENSSL_HASH SHA256=b3425d3bb4a2218d0697eb41f7fc0cdede016ed19ca49d168b78e8d947887f55
+set(OPENSSL_HASH SHA256=ddb04774
     CACHE STRING "openssl source hash")
 
 set(EXPAT_VERSION 2.2.9 CACHE STRING "expat version")
