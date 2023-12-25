@@ -541,7 +541,40 @@ TEST(get_network_address, ipv4subnet)
     address = net::get_ipv4_subnet_address("12.34.56.78/16");
     EXPECT_STREQ("12.34.0.0/16", address->str().c_str());
 }
+namespace
+{
+    void na_host_and_port_test(std::string addr, std::string exp_host, std::string exp_port)
+    {
+        std::string host{"xxxxx"};
+        std::string port{"xxxxx"};
+        net::get_network_address_host_and_port(addr, host, port);
+        EXPECT_EQ(exp_host, host);
+        EXPECT_EQ(exp_port, port);
+    }
+} // anonymous namespace
 
+TEST(get_network_address_host_and_port, ipv4)
+{
+    na_host_and_port_test("9.9.9.9", "9.9.9.9", "xxxxx");
+    na_host_and_port_test("9.9.9.9:30000", "9.9.9.9", "30000");
+}
+
+TEST(get_network_address_host_and_port, ipv6)
+{
+    na_host_and_port_test("::ffff", "::ffff", "xxxxx");
+    na_host_and_port_test("[::ffff]", "::ffff", "xxxxx");
+    na_host_and_port_test("[::ffff]:00231", "::ffff", "00231");
+    na_host_and_port_test("ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff", "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff", "xxxxx");
+    na_host_and_port_test("[7777:7777:7777:7777:7777:7777:7777:7777]", "7777:7777:7777:7777:7777:7777:7777:7777", "xxxxx");
+    na_host_and_port_test("[7777:7777:7777:7777:7777:7777:7777:7777]:48080", "7777:7777:7777:7777:7777:7777:7777:7777", "48080");
+}
+
+TEST(get_network_address_host_and_port, hostname)
+{
+    na_host_and_port_test("localhost", "localhost", "xxxxx");
+    na_host_and_port_test("bar:29080", "bar", "29080"); // Issue https://github.com/monero-project/monero/issues/8633
+    na_host_and_port_test("mainnet.sispop.site:30000", "sotrage-1.sispop.site", "30000");
+}
 namespace
 {
     using stream_type = boost::asio::ip::tcp;
