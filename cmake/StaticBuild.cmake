@@ -5,24 +5,24 @@
 
 set(LOCAL_MIRROR "" CACHE STRING "local mirror path/URL for lib downloads")
 
-set(OPENSSL_VERSION 3.0.11 CACHE STRING "openssl version")
+set(OPENSSL_VERSION 3.0.9 CACHE STRING "openssl version")
 set(OPENSSL_MIRROR ${LOCAL_MIRROR} https://www.openssl.org/source CACHE STRING "openssl download mirror(s)")
 set(OPENSSL_SOURCE openssl-${OPENSSL_VERSION}.tar.gz)
-set(OPENSSL_HASH SHA256=b3425d3bb4a2218d0697eb41f7fc0cdede016ed19ca49d168b78e8d947887f55
+set(OPENSSL_HASH SHA256=eb1ab04781474360f77c318ab89d8c5a03abc38e63d65a603cabbf1b00a1dc90
     CACHE STRING "openssl source hash")
 
-set(EXPAT_VERSION 2.2.9 CACHE STRING "expat version")
+set(EXPAT_VERSION 2.5.0 CACHE STRING "expat version")
 string(REPLACE "." "_" EXPAT_TAG "R_${EXPAT_VERSION}")
 set(EXPAT_MIRROR ${LOCAL_MIRROR} https://github.com/libexpat/libexpat/releases/download/${EXPAT_TAG}
     CACHE STRING "expat download mirror(s)")
 set(EXPAT_SOURCE expat-${EXPAT_VERSION}.tar.xz)
-set(EXPAT_HASH SHA512=e082874efcc4b00709e2c0192c88fb15dfc4f33fc3a2b09e619b010ea93baaf7e7572683f738463db0ce2350cab3de48a0c38af6b74d1c4f5a9e311f499edab0
+set(EXPAT_HASH SHA256=ef2420f0232c087801abf705e89ae65f6257df6b7931d37846a193ef2e8cdcbe
     CACHE STRING "expat source hash")
 
-set(UNBOUND_VERSION 1.10.1 CACHE STRING "unbound version")
+set(UNBOUND_VERSION 1.16.0 CACHE STRING "unbound version")
 set(UNBOUND_MIRROR ${LOCAL_MIRROR} https://nlnetlabs.nl/downloads/unbound CACHE STRING "unbound download mirror(s)")
 set(UNBOUND_SOURCE unbound-${UNBOUND_VERSION}.tar.gz)
-set(UNBOUND_HASH SHA256=b73677c21a71cf92f15cc8cfe76a3d875e40f65b6150081c39620b286582d536
+set(UNBOUND_HASH SHA256=6701534c938eb019626601191edc6d012fc534c09d2418d5b92827db0cbe48a5
     CACHE STRING "unbound source hash")
 
 set(BOOST_VERSION 1.73.0 CACHE STRING "boost version")
@@ -203,8 +203,9 @@ if(CMAKE_CROSSCOMPILING)
 endif()
 build_external(openssl
   CONFIGURE_COMMAND ${CMAKE_COMMAND} -E env CC=${deps_cc} ${openssl_system_env} ./config
-    --prefix=${DEPS_DESTDIR} no-shared no-capieng no-dso no-dtls1 no-ec_nistp_64_gcc_128 no-gost
-    no-heartbeats no-md2 no-rc5 no-rdrand no-rfc3779 no-sctp no-ssl-trace no-ssl2 no-ssl3
+    --prefix=${DEPS_DESTDIR} --openssldir=${DEPS_DESTDIR}/etc/openssl --libdir=${DEPS_DESTDIR}/lib
+   no-shared no-capieng no-dso no-dtls1 no-ec_nistp_64_gcc_128 no-gost
+    no-tests no-md2 no-rc5 no-rdrand no-rfc3779 no-sctp no-ssl-trace  no-ssl3
     no-static-engine no-tests no-weak-ssl-ciphers no-zlib no-zlib-dynamic "CFLAGS=-O2 ${flto}"
   INSTALL_COMMAND make install_sw
   BUILD_BYPRODUCTS
@@ -214,7 +215,11 @@ build_external(openssl
 add_static_target(OpenSSL::SSL openssl_external libssl.a)
 add_static_target(OpenSSL::Crypto openssl_external libcrypto.a)
 set(OPENSSL_INCLUDE_DIR ${DEPS_DESTDIR}/include)
-set(OPENSSL_VERSION 1.1.1)
+set(OPENSSL_VERSION 3.0.9)
+set(OPENSSL_VERSION 3.0.9 CACHE STRING "OpenSSL version")
+
+# Use the specified OpenSSL version in the build
+set(OPENSSL_PATH ${openssl_external}/${OPENSSL_VERSION} CACHE STRING "Path to openssl_external")
 
 
 
