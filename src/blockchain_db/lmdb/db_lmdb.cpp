@@ -372,7 +372,7 @@ void setup_rcursor(const MDB_dbi& db, MDB_cursor*& cursor, MDB_txn* txn, bool& r
 namespace cryptonote
 {
 
-struct mdb_block_info_1
+ typedef struct mdb_block_info_1
 {
   uint64_t bi_height;
   uint64_t bi_timestamp;
@@ -380,7 +380,7 @@ struct mdb_block_info_1
   uint64_t bi_weight; // a size_t really but we need to keep this struct padding-free
   difficulty_type bi_diff;
   crypto::hash bi_hash;
-};
+} mdb_block_info_1;
 
  typedef struct mdb_block_info_2
 {
