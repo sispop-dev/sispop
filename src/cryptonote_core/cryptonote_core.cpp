@@ -872,7 +872,7 @@ namespace cryptonote
       cryptonote::BlockchainDB::fixup_context context  = {};
       context.type                                     = cryptonote::BlockchainDB::fixup_type::calculate_difficulty;
       context.calculate_difficulty_params.start_height = recalc_diff_from_block;
-      m_blockchain_storage.get_db().fixup(context);
+      m_blockchain_storage.get_db().fixup();
     }
 
     r = m_mempool.init(max_txpool_weight);
@@ -2152,6 +2152,7 @@ namespace cryptonote
     }
 
     m_blockchain_pruning_interval.do_call(boost::bind(&core::update_blockchain_pruning, this));
+    m_diff_recalc_interval.do_call(boost::bind(&core::recalculate_difficulties, this));
     m_miner.on_idle();
     m_mempool.on_idle();
 
@@ -2427,6 +2428,12 @@ namespace cryptonote
       }
     }
 
+    return true;
+  }
+   //----------------------------------------------------------------------------------------------
+  bool core::recalculate_difficulties()
+  {
+    m_blockchain_storage.recalculate_difficulties();
     return true;
   }
   //-----------------------------------------------------------------------------------------------

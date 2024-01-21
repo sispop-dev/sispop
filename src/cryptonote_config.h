@@ -93,7 +93,7 @@ static_assert(STAKING_PORTIONS % 12 == 0, "Use a multiple of twelve, so that it 
 #define DIFFICULTY_WINDOW_V2                            60
 #define DIFFICULTY_BLOCKS_COUNT_V2                      (DIFFICULTY_WINDOW_V2 + 1) // added +1 to make N=N
 #define TARGET_BLOCK_TIME                               5 * 60
-
+#define DIFFICULTY_CUT                                  20  // timestamps to cut after sorting
 #define BLOCKS_EXPECTED_IN_HOURS(val)                   (((60 * 60) / DIFFICULTY_TARGET_V2) * (val))
 #define BLOCKS_EXPECTED_IN_DAYS(val)                    (BLOCKS_EXPECTED_IN_HOURS(24) * (val))
 #define BLOCKS_EXPECTED_IN_YEARS(val)                   (BLOCKS_EXPECTED_IN_DAYS(365) * (val))
@@ -285,6 +285,7 @@ namespace cryptonote
     network_version_14_blink,
     network_version_15_lns,
     network_version_16, // future fork
+    network_version_17,
 
     network_version_count,
   };

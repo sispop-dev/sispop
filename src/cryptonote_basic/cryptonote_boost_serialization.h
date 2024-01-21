@@ -1,3 +1,4 @@
+
 // Copyright (c) 2014-2019, The Monero Project
 // 
 // All rights reserved.
@@ -40,6 +41,7 @@
 #include <boost/archive/portable_binary_iarchive.hpp>
 #include <boost/archive/portable_binary_oarchive.hpp>
 #include "cryptonote_basic.h"
+#include "difficulty.h"
 #include "common/unordered_containers_boost_serialization.h"
 #include "common/util.h"
 #include "crypto/crypto.h"

@@ -40,7 +40,6 @@
 namespace cryptonote
 {
 
-struct mdb_block_info;
 
 struct txindex {
     crypto::hash key;
@@ -174,7 +173,7 @@ class BlockchainLMDB : public BlockchainDB
 {
 public:
   BlockchainLMDB(bool batch_transactions=true);
-  ~BlockchainLMDB();
+  ~BlockchainLMDB() override;
 
   void open(const std::string& filename, cryptonote::network_type nettype, const int mdb_flags=0) override;
 
@@ -214,11 +213,15 @@ public:
 
   size_t get_block_weight(const uint64_t& height) const override;
 
-  std::vector<uint64_t> get_block_weights(uint64_t start_height, size_t count) const override;
+  virtual std::vector<uint64_t> get_block_weights(uint64_t start_height, size_t count) const;
 
   difficulty_type get_block_cumulative_difficulty(const uint64_t& height) const override;
 
-  difficulty_type get_block_difficulty(const uint64_t& height) const override;
+//  difficulty_type get_block_difficulty(const uint64_t& height) const override;
+
+ virtual void correct_block_cumulative_difficulties(const uint64_t& start_height, const std::vector<difficulty_type>& new_cumulative_difficulties);
+
+  virtual difficulty_type get_block_difficulty(const uint64_t& height) const;
 
   uint64_t get_block_already_generated_coins(const uint64_t& height) const override;
 
@@ -410,13 +413,13 @@ private:
 
   uint64_t get_database_size() const override;
 
-  std::vector<uint64_t> get_block_info_64bit_fields(uint64_t start_height, size_t count, uint64_t (*extract)(const mdb_block_info*)) const;
+  std::vector<uint64_t> get_block_info_64bit_fields(uint64_t start_height, size_t count, off_t offset) const;
 
   uint64_t get_max_block_size() override;
   void add_max_block_size(uint64_t sz) override;
 
   // fix up anything that may be wrong due to past bugs
-  void fixup(fixup_context const context) override;
+  void fixup();
 
   // migrate from older DB version to current
   void migrate(const uint32_t oldversion, cryptonote::network_type nettype);

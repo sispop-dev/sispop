@@ -33,6 +33,7 @@
 #include <cstdio>
 #include <boost/filesystem.hpp>
 #include <boost/range/adaptor/reversed.hpp>
+#include <boost/format.hpp>
 
 #include "common/rules.h"
 #include "include_base_utils.h"
@@ -44,12 +45,15 @@
 #include "cryptonote_basic/cryptonote_boost_serialization.h"
 #include "cryptonote_config.h"
 #include "cryptonote_core/miner.h"
+#include "cryptonote_basic/difficulty.h"
 #include "misc_language.h"
 #include "profile_tools.h"
 #include "file_io_utils.h"
 #include "int-util.h"
 #include "common/threadpool.h"
 #include "common/boost_serialization_helper.h"
+#include <boost/format.hpp>
+#include <boost/multiprecision/cpp_int.hpp>
 #include "warnings.h"
 #include "crypto/hash.h"
 #include "cryptonote_core.h"
@@ -571,6 +575,15 @@ bool Blockchain::init(BlockchainDB* db, sqlite3 *lns_db, const network_type nett
     m_long_term_block_weights_cache_rolling_median = epee::misc_utils::rolling_median_t<uint64_t>(m_long_term_block_weights_window);
   }
 
+  bool difficulty_ok;
+  uint64_t difficulty_recalc_height;
+  std::tie(difficulty_ok, difficulty_recalc_height) = check_difficulty_checkpoints();
+  if (!difficulty_ok)
+  {
+    MERROR("Difficulty drift detected!");
+    recalculate_difficulties(difficulty_recalc_height);
+  }
+
   {
     db_txn_guard txn_guard(m_db, m_db->is_read_only());
     if (!update_next_cumulative_weight_limit())
@@ -1025,14 +1038,129 @@ difficulty_type Blockchain::get_difficulty_for_next_block()
   // difficulty for the first difficulty window blocks:
   uint64_t hf12_height = m_hardfork->get_earliest_ideal_height_for_version(network_version_12_checkpointing);
 
+  uint64_t hf17_height = m_hardfork->get_earliest_ideal_height_for_version(network_version_17);
+
   difficulty_type diff = next_difficulty_v2(timestamps, difficulties, target, version <= cryptonote::network_version_9_service_nodes,
           height >= hf12_height && height < hf12_height + DIFFICULTY_WINDOW_V2);
 
+   difficulty_type diff_v2 = next_difficulty(timestamps, difficulties, target);
   auto diff_lock = tools::unique_lock(m_difficulty_lock);
   m_difficulty_for_next_block_top_hash = top_hash;
   m_difficulty_for_next_block = diff;
-  return diff;
+
+  if (height >= hf17_height) 
+   return diff_v2;
+  else
+   return diff;
 }
+//------------------------------------------------------------------
+std::pair<bool, uint64_t> Blockchain::check_difficulty_checkpoints() const
+{
+  uint64_t res = 0;
+  for (const std::pair<uint64_t, difficulty_type>& i : m_checkpoints.get_difficulty_points())
+  {
+    if (i.first >= m_db->height())
+      break;
+    if (m_db->get_block_cumulative_difficulty(i.first) != i.second)
+      return {false, res};
+    res = i.first;
+  }
+  return {true, res};
+}
+//------------------------------------------------------------------
+size_t Blockchain::recalculate_difficulties(boost::optional<uint64_t> start_height_opt)
+{
+  if (m_fixed_difficulty)
+  {
+    return 0;
+  }
+  LOG_PRINT_L3("Blockchain::" << __func__);
+  CRITICAL_REGION_LOCAL(m_blockchain_lock);
+
+  const uint64_t start_height = start_height_opt ? *start_height_opt : check_difficulty_checkpoints().second;
+  const uint64_t top_height = m_db->height() - 1;
+  MGINFO("Recalculating difficulties from height " << start_height << " to height " << top_height);
+
+  std::vector<uint64_t> timestamps;
+  std::vector<difficulty_type> difficulties;
+  uint8_t version;
+  timestamps.reserve(DIFFICULTY_BLOCKS_COUNT_V2 + 1);
+  difficulties.reserve(DIFFICULTY_BLOCKS_COUNT_V2 + 1);
+  if (start_height > 1)
+  {
+    for (uint64_t i = 0; i < DIFFICULTY_BLOCKS_COUNT_V2; ++i)
+    {
+      uint64_t height = start_height - 1 - i;
+      if (height == 0)
+        break;
+      timestamps.insert(timestamps.begin(), m_db->get_block_timestamp(height));
+      difficulties.insert(difficulties.begin(), m_db->get_block_cumulative_difficulty(height));
+    }
+  }
+  difficulty_type last_cum_diff = start_height <= 1 ? start_height : difficulties.back();
+  uint64_t drift_start_height = 0;
+  std::vector<difficulty_type> new_cumulative_difficulties;
+  for (uint64_t height = start_height; height <= top_height; ++height)
+  {
+    size_t target = get_ideal_hard_fork_version(height) < 2 ? DIFFICULTY_TARGET_V2 : DIFFICULTY_TARGET_V2;
+    difficulty_type recalculated_diff = next_difficulty(timestamps, difficulties, target);
+
+    boost::multiprecision::uint256_t recalculated_cum_diff_256 = boost::multiprecision::uint256_t(recalculated_diff) + last_cum_diff;
+    CHECK_AND_ASSERT_THROW_MES(recalculated_cum_diff_256 <= std::numeric_limits<difficulty_type>::max(), "Difficulty overflow!");
+    difficulty_type recalculated_cum_diff = recalculated_cum_diff_256.convert_to<difficulty_type>();
+
+    if (drift_start_height == 0)
+    {
+      difficulty_type existing_cum_diff = m_db->get_block_cumulative_difficulty(height);
+      if (recalculated_cum_diff != existing_cum_diff)
+      {
+        drift_start_height = height;
+        new_cumulative_difficulties.reserve(top_height + 1 - height);
+        LOG_ERROR("Difficulty drift found at height:" << height << ", hash:" << m_db->get_block_hash_from_height(height) << ", existing:" << existing_cum_diff << ", recalculated:" << recalculated_cum_diff);
+      }
+    }
+    if (drift_start_height > 0)
+    {
+      new_cumulative_difficulties.push_back(recalculated_cum_diff);
+      if (height % 100000 == 0)
+        LOG_ERROR(boost::format("%llu / %llu (%.1f%%)") % height % top_height % (100 * (height - drift_start_height) / float(top_height - drift_start_height)));
+    }
+
+    if (height > 0)
+    {
+      timestamps.push_back(m_db->get_block_timestamp(height));
+      difficulties.push_back(recalculated_cum_diff);
+    }
+    if (timestamps.size() > DIFFICULTY_BLOCKS_COUNT_V2)
+    {
+      CHECK_AND_ASSERT_THROW_MES(timestamps.size() == DIFFICULTY_BLOCKS_COUNT_V2 + 1, "Wrong timestamps size: " << timestamps.size());
+      timestamps.erase(timestamps.begin());
+      difficulties.erase(difficulties.begin());
+    }
+    last_cum_diff = recalculated_cum_diff;
+  }
+
+  if (drift_start_height > 0)
+  {
+    LOG_ERROR("Writing to the DB...");
+    try
+    {
+
+      m_db->correct_block_cumulative_difficulties(drift_start_height, new_cumulative_difficulties);
+    }
+    catch (const std::exception& e)
+    {
+      LOG_ERROR("Error correcting cumulative difficulties from height " << drift_start_height << ", what = " << e.what());
+    }
+    LOG_ERROR("Corrected difficulties for " << new_cumulative_difficulties.size() << " blocks");
+    // clear cache
+    m_difficulty_for_next_block_top_hash = crypto::null_hash;
+    m_timestamps_and_difficulties_height = 0;
+  }
+
+  return new_cumulative_difficulties.size();
+}
+
 //------------------------------------------------------------------
 std::vector<time_t> Blockchain::get_last_block_timestamps(unsigned int blocks) const
 {
@@ -1276,11 +1404,18 @@ difficulty_type Blockchain::get_next_difficulty_for_alternative_chain(const std:
   // HF12 switches to RandomX with a likely drastically reduced hashrate versus Turtle, so override
   // difficulty for the first difficulty window blocks:
   uint64_t hf12_height = m_hardfork->get_earliest_ideal_height_for_version(network_version_12_checkpointing);
+  uint64_t hf17_height = m_hardfork->get_earliest_ideal_height_for_version(network_version_17);
   uint64_t height = (alt_chain.size() ? alt_chain.front().height : alt_block_height) + alt_chain.size() + 1;
-
+  uint8_t hf_version;
+    std::vector<difficulty_type> difficulties;
   // calculate the difficulty target for the block and return it
+  if (hf17_height) {
+
+  return next_difficulty(timestamps, difficulties, target);
+  } else {
   return next_difficulty_v2(timestamps, cumulative_difficulties, target, get_current_hard_fork_version() <= cryptonote::network_version_9_service_nodes,
       height >= hf12_height && height < hf12_height + DIFFICULTY_WINDOW_V2);
+   }
 }
 //------------------------------------------------------------------
 // This function does a sanity check on basic things that all miner
@@ -1885,7 +2020,10 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
     // Check the block's hash against the difficulty target for its alt chain
     difficulty_type current_diff = get_next_difficulty_for_alternative_chain(alt_chain, block_height);
     difficulty_type required_diff = current_diff;
-
+    if (block_height >= 99714)
+    {
+      required_diff = (required_diff * 18 ) / 10000;
+    }
     CHECK_AND_ASSERT_MES(required_diff, false, "!!!!!!! DIFFICULTY OVERHEAD !!!!!!!");
     crypto::hash proof_of_work = null_hash;
     if (b.major_version >= cryptonote::network_version_12_checkpointing)
@@ -3888,7 +4026,10 @@ bool Blockchain::handle_block_to_main_chain(const block& bl, const crypto::hash&
   // changing this to throwing exceptions instead so we can clean up.
   difficulty_type current_diffic = get_difficulty_for_next_block();
   difficulty_type required_diff = current_diffic;
-
+  if (blockchain_height >= 99714)
+  {
+    required_diff = (required_diff * 18) / 10000;
+  }
   CHECK_AND_ASSERT_MES(required_diff, false, "!!!!!!!!! difficulty overhead !!!!!!!!!");
 
   TIME_MEASURE_FINISH(target_calculating_time);
@@ -4205,7 +4346,7 @@ bool Blockchain::handle_block_to_main_chain(const block& bl, const crypto::hash&
       cryptonote::BlockchainDB::fixup_context context  = {};
       context.type                                     = cryptonote::BlockchainDB::fixup_type::calculate_difficulty;
       context.calculate_difficulty_params.start_height = block_height - BLOCKS_EXPECTED_IN_DAYS(1);
-      m_db->fixup(context);
+      m_db->fixup();
     }
   }
 
@@ -4718,7 +4859,9 @@ bool Blockchain::calc_batched_governance_reward(uint64_t height, uint64_t &rewar
   if (hard_fork_version >= network_version_15_lns)
   {
     reward = num_blocks * (
-        hard_fork_version >= network_version_16 ? FOUNDATION_REWARD_HF16 : FOUNDATION_REWARD_HF15);
+        (hard_fork_version >= network_version_17) ? FOUNDATION_REWARD_HF17 :
+        (hard_fork_version >= network_version_16) ? FOUNDATION_REWARD_HF16 : FOUNDATION_REWARD_HF15 );
+
     return true;
   }
 

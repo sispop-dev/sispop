@@ -55,4 +55,7 @@ namespace cryptonote
 
     difficulty_type next_difficulty_v2(std::vector<std::uint64_t> timestamps, std::vector<difficulty_type> cumulative_difficulties, size_t target_seconds,
         bool use_old_lwma, bool v12_initial_override);
+
+    difficulty_type next_difficulty(std::vector<std::uint64_t> timestamps, std::vector<difficulty_type> cumulative_difficulties, size_t target_seconds);
+    std::string hex(difficulty_type v);
 }

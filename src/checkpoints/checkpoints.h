@@ -38,10 +38,12 @@
 #include "cryptonote_core/service_node_voting.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "string_tools.h"
+#include "cryptonote_basic/difficulty.h"
 
 #include <boost/serialization/base_object.hpp>
 
 #define ADD_CHECKPOINT(h, hash)  CHECK_AND_ASSERT(add_checkpoint(h,  hash), false);
+#define ADD_CHECKPOINT2(h, hash, difficulty)  CHECK_AND_ASSERT(add_checkpoint(h,  hash, difficulty), false);
 #define JSON_HASH_FILE_NAME "checkpoints.json"
 
 namespace cryptonote
@@ -94,9 +96,11 @@ namespace cryptonote
   {
     uint64_t height; //!< the height of the checkpoint
     std::string hash; //!< the hash for the checkpoint
+    std::string difficulty;
         BEGIN_KV_SERIALIZE_MAP()
           KV_SERIALIZE(height)
           KV_SERIALIZE(hash)
+         KV_SERIALIZE(difficulty)
         END_KV_SERIALIZE_MAP()
   };
 
@@ -139,7 +143,7 @@ namespace cryptonote
      *         AND the existing checkpoint hash does not match the new one,
      *         otherwise returns true
      */
-    bool add_checkpoint(uint64_t height, const std::string& hash_str);
+    bool add_checkpoint(uint64_t height, const std::string& hash_str, const std::string& difficulty_str = "");
 
     bool update_checkpoint(checkpoint_t const &checkpoint);
 
@@ -199,6 +203,13 @@ namespace cryptonote
     uint64_t get_max_height() const;
 
     /**
+     * @brief gets the difficulty checkpoints container
+     *
+     * @return a const reference to the difficulty checkpoints container
+     */
+    const std::map<uint64_t, difficulty_type>& get_difficulty_points() const;
+
+    /**
      * @brief loads the default main chain checkpoints
      * @param nettype network type
      *
@@ -207,6 +218,7 @@ namespace cryptonote
     bool init(network_type nettype, class BlockchainDB *db);
 
   private:
+    std::map<uint64_t, difficulty_type> m_difficulty_points; //!< the difficulty checkpoints container
     network_type m_nettype = UNDEFINED;
     uint64_t m_last_cull_height = 0;
     uint64_t m_immutable_height = 0;

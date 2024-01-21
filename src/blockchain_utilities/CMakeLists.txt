@@ -77,11 +77,6 @@ sispop_add_executable(blockchain_ancestry "sispop-blockchain-ancestry"
   )
 target_link_libraries(blockchain_ancestry PRIVATE blockchain_tools_common_libs)
 
-sispop_add_executable(blockchain_depth "sispop-blockchain-depth"
-  blockchain_depth.cpp
-  )
-target_link_libraries(blockchain_depth PRIVATE blockchain_tools_common_libs)
-
 sispop_add_executable(blockchain_stats "sispop-blockchain-stats"
   blockchain_stats.cpp
   )

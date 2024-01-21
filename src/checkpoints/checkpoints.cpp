@@ -51,6 +51,7 @@ using namespace epee;
 
 namespace cryptonote
 {
+
   bool checkpoint_t::check(crypto::hash const &hash) const
   {
     bool result = block_hash == hash;
@@ -59,11 +60,16 @@ namespace cryptonote
     return result;
   }
 
+  //---------------------------------------------------------------------------
+  const std::map<uint64_t,  difficulty_type>& checkpoints::get_difficulty_points() const
+  {
+    return m_difficulty_points;
+  }
+  //---------------------------------------------------------------------------
+
   height_to_hash const HARDCODED_MAINNET_CHECKPOINTS[] =
   {
-    {0,      "8cc33ab439f5fec5a384321b872c25686d2ab9d688e715ee3087b20094fccd47"},
-    {121,    "443511445c6f5608401a03695e3622d27e16b304181723145fe67692991c449b"},
-    {122,    "1e18dd27edb860c2513b85cf823203d85c646dbeb0f5fe6aa5ae6f6c26c61d44"},
+    {0,      "8cc33ab439f5fec5a384321b872c25686d2ab9d688e715ee3087b20094fccd47", "0x1"},
   };
 
   crypto::hash get_newest_hardcoded_checkpoint(cryptonote::network_type nettype, uint64_t *height)
@@ -118,7 +124,7 @@ namespace cryptonote
     }
   }
   //---------------------------------------------------------------------------
-  bool checkpoints::add_checkpoint(uint64_t height, const std::string& hash_str)
+  bool checkpoints::add_checkpoint(uint64_t height, const std::string& hash_str, const std::string& difficulty_str)
   {
     crypto::hash h = crypto::null_hash;
     bool r         = epee::string_tools::hex_to_pod(hash_str, h);
@@ -308,7 +314,7 @@ namespace cryptonote
       for (size_t i = 0; i < sispop::array_count(HARDCODED_MAINNET_CHECKPOINTS); ++i)
       {
         height_to_hash const &checkpoint = HARDCODED_MAINNET_CHECKPOINTS[i];
-        ADD_CHECKPOINT(checkpoint.height, checkpoint.hash);
+        ADD_CHECKPOINT2(checkpoint.height, checkpoint.hash, checkpoint.difficulty);
       }
     }
 #endif

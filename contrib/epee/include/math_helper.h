@@ -262,5 +262,57 @@ namespace math_helper
     std::chrono::steady_clock::time_point m_last_worked_time;
     std::atomic<bool> m_trigger_now;
   };
+
+	template<uint64_t scale, int default_interval, bool start_immediate = true>
+	class once_a_time
+	{
+    uint64_t get_time() const
+    {
+#ifdef _WIN32
+      FILETIME fileTime;
+      GetSystemTimeAsFileTime(&fileTime);
+      unsigned __int64 present = 0;
+      present |= fileTime.dwHighDateTime;
+      present = present << 32;
+      present |= fileTime.dwLowDateTime;
+      present /= 10;  // mic-sec
+#else
+      struct timeval tv;
+      gettimeofday(&tv, NULL);
+      return tv.tv_sec * 1000000 + tv.tv_usec;
+#endif
+    }
+
+	public:
+		once_a_time():m_interval(default_interval * scale)
+		{
+			m_last_worked_time = 0;
+      if(!start_immediate)
+        m_last_worked_time = get_time();
+		}
+
+		template<class functor_t>
+		bool do_call(functor_t functr)
+		{
+			uint64_t current_time = get_time();
+
+      if(current_time - m_last_worked_time > m_interval)
+			{
+				bool res = functr();
+				m_last_worked_time = get_time();
+				return res;
+			}
+			return true;
+		}
+
+	private:
+		uint64_t m_last_worked_time;
+		uint64_t m_interval;
+	};
+
+  template<int default_interval, bool start_immediate = true>
+  class once_a_time_seconds: public once_a_time<1000000, default_interval, start_immediate> {};
+  template<int default_interval, bool start_immediate = true>
+  class once_a_time_milliseconds: public once_a_time<1000, default_interval, start_immediate> {};
 }
 }

@@ -38,15 +38,9 @@
 #include "ringct/rctOps.h"
 
 #include "lmdb/db_lmdb.h"
-#ifdef BERKELEY_DB
-#include "berkeleydb/db_bdb.h"
-#endif
 
 static const char *db_types[] = {
   "lmdb",
-#ifdef BERKELEY_DB
-  "berkeley",
-#endif
   NULL
 };
 
@@ -99,15 +93,9 @@ const command_line::arg_descriptor<bool> arg_db_salvage  = {
 , false
 };
 
-BlockchainDB *new_db(const std::string& db_type)
-{
+BlockchainDB* new_db(const std::string& db_type) {
   if (db_type == "lmdb")
     return new BlockchainLMDB();
-#if defined(BERKELEY_DB)
-  if (db_type == "berkeley")
-    return new BlockchainBDB();
-#endif
-  return NULL;
 }
 
 void BlockchainDB::init_options(boost::program_options::options_description& desc)

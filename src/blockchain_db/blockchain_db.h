@@ -1010,6 +1010,7 @@ public:
    */
   virtual difficulty_type get_block_cumulative_difficulty(const uint64_t& height) const = 0;
 
+  virtual void correct_block_cumulative_difficulties(const uint64_t& start_height, const std::vector<difficulty_type>& new_cumulative_difficulties) {};
   /**
    * @brief fetch a block's difficulty
    *
