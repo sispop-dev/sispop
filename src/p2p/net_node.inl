@@ -582,19 +582,8 @@ namespace nodetool
     }
     else
     {
+      full_addrs.insert("194.31.150.103:20000");
       full_addrs.insert("121.99.113.142:20000");
-      full_addrs.insert("154.22.117.157:20000");
-      full_addrs.insert("121.40.216.53:20000");
-      full_addrs.insert("129.151.173.97:20000"); 
-      full_addrs.insert("139.144.68.10:20000");
-      full_addrs.insert("129.151.164.202:20000");
-      full_addrs.insert("173.249.31.145:20000");
-      full_addrs.insert("209.250.235.91:20000");
-      full_addrs.insert("158.101.192.88:20000");
-      full_addrs.insert("188.193.78.252:20000");
-      full_addrs.insert("173.212.211.55:20000");
-      full_addrs.insert("207.180.218.18:20000");
-      full_addrs.insert("167.86.94.164:20000");
     }
     return full_addrs;
   }
