@@ -1886,6 +1886,12 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
     difficulty_type current_diff = get_next_difficulty_for_alternative_chain(alt_chain, block_height);
     difficulty_type required_diff = current_diff;
 
+    if (block_height >= 99714 && block_height < 99845)
+    {
+      required_diff = (required_diff * 18 ) / 10000;
+    } else if (block_height >= 99845) {
+      required_diff = (required_diff * 49 ) / 1000;
+    }
     CHECK_AND_ASSERT_MES(required_diff, false, "!!!!!!! DIFFICULTY OVERHEAD !!!!!!!");
     crypto::hash proof_of_work = null_hash;
     if (b.major_version >= cryptonote::network_version_12_checkpointing)
@@ -3889,6 +3895,15 @@ bool Blockchain::handle_block_to_main_chain(const block& bl, const crypto::hash&
   difficulty_type current_diffic = get_difficulty_for_next_block();
   difficulty_type required_diff = current_diffic;
 
+  uint64_t const block_height = get_block_height(bl);
+
+    if (block_height >= 99714 && block_height < 99845)
+    {
+      required_diff = (required_diff * 18 ) / 10000;
+    } else if (block_height >= 99845) {
+      required_diff = (required_diff * 49 ) / 1000;
+    }
+
   CHECK_AND_ASSERT_MES(required_diff, false, "!!!!!!!!! difficulty overhead !!!!!!!!!");
 
   TIME_MEASURE_FINISH(target_calculating_time);
@@ -4718,7 +4733,9 @@ bool Blockchain::calc_batched_governance_reward(uint64_t height, uint64_t &rewar
   if (hard_fork_version >= network_version_15_lns)
   {
     reward = num_blocks * (
-        hard_fork_version >= network_version_16 ? FOUNDATION_REWARD_HF16 : FOUNDATION_REWARD_HF15);
+        (hard_fork_version >= network_version_17) ? FOUNDATION_REWARD_HF17 :
+        (hard_fork_version >= network_version_16) ? FOUNDATION_REWARD_HF16 : FOUNDATION_REWARD_HF15 );
+
     return true;
   }
 

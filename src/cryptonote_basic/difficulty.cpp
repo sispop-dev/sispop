@@ -209,9 +209,9 @@ namespace cryptonote {
     // Rough estimate based on comparable coins, pre-merge-mining hashrate, and hashrate changes is
     // that 30MH/s seems more or less right, so we cap it there for the first WINDOW blocks to
     // prevent too-long blocks right after the fork.
-    if (v12_initial_override)
-      return std::min(next_difficulty, 30000000 * uint64_t(target_seconds));
-
+      if  (v12_initial_override) {
+      return std::min(next_difficulty, 5000000 * uint64_t(target_seconds));
+     }
     return next_difficulty;
   }
 }

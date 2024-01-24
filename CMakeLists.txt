@@ -57,9 +57,9 @@ cmake_minimum_required(VERSION 3.10)
 message(STATUS "CMake version ${CMAKE_VERSION}")
 
 project(sispop
-    VERSION 10.0.3
+    VERSION 10.1.5
     LANGUAGES CXX C)
-set(SISPOP_RELEASE_CODENAME "Sweet Water")
+set(SISPOP_RELEASE_CODENAME "Cold Water")
 
 add_compile_options(-fassociative-math)
 # String value to append to the full version string; this is intended to easily identify whether a

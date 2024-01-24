@@ -285,6 +285,8 @@ namespace cryptonote
     network_version_14_blink,
     network_version_15_lns,
     network_version_16, // future fork
+    network_version_17,
+    network_version_18,
 
     network_version_count,
   };
