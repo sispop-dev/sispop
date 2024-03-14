@@ -1,5 +1,5 @@
-// Copyright (c) 2014-2019, The Monero Project
-// Copyright (c) 2018-2019, The Sispop Project
+// Copyright (c) 2014-2024, The Monero Project
+// Copyright (c) 2018-2024, The Sispop Project
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without modification, are
@@ -48,6 +48,9 @@
 #include "cryptonote_core/service_node_rules.h"
 #include "cryptonote_core/service_node_list.h"
 #include "cryptonote_basic/hardfork.h"
+
+#include "oracle/asset_types.h"
+#include "oracle/pricing_record.h"
 
 #undef SISPOP_DEFAULT_LOG_CATEGORY
 #define SISPOP_DEFAULT_LOG_CATEGORY "blockchain.db.lmdb"
