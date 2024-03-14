@@ -49,6 +49,9 @@
 #include "cryptonote_core/service_node_list.h"
 #include "cryptonote_basic/hardfork.h"
 
+#include "oracle/asset_types.h"
+#include "oracle/pricing_record.h"
+
 #undef SISPOP_DEFAULT_LOG_CATEGORY
 #define SISPOP_DEFAULT_LOG_CATEGORY "blockchain.db.lmdb"
 
