@@ -555,16 +555,17 @@ void wallet_rpc_server::require_open() {
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
-  bool wallet_rpc_server::on_get_accounts(const wallet_rpc::COMMAND_RPC_GET_ACCOUNTS::request& req, wallet_rpc::COMMAND_RPC_GET_ACCOUNTS::response& res, epee::json_rpc::error& er, const connection_context *ctx)
+  bool wallet_rpc_server::on_get_accounts(const wallet_rpc::COMMAND_RPC_GET_ACCOUNTS::request &req, wallet_rpc::COMMAND_RPC_GET_ACCOUNTS::response &res, epee::json_rpc::error &er, const connection_context *ctx)
   {
-    if (!m_wallet) return not_open(er);
+    if (!m_wallet)
+      return not_open(er);
     try
     {
       res.total_balance = 0;
       res.total_unlocked_balance = 0;
-      cryptonote::subaddress_index subaddr_index = {0,0};
+      cryptonote::subaddress_index subaddr_index = {0, 0};
       const std::pair<std::map<std::string, std::string>, std::vector<std::string>> account_tags = m_wallet->get_account_tags();
-      if (!req.tag.empty() && account_tags.first.count(req.tag) == 0)
+      if (!req.tag.empty() && account_tags.first.count(req.tag) == 0 && !req.regexp)
       {
         er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
         er.message = (boost::format(tr("Tag %s is unregistered.")) % req.tag).str();
@@ -572,21 +573,29 @@ void wallet_rpc_server::require_open() {
       }
       for (; subaddr_index.major < m_wallet->get_num_subaddress_accounts(); ++subaddr_index.major)
       {
-        if (!req.tag.empty() && req.tag != account_tags.second[subaddr_index.major])
+        bool no_match = !req.regexp ? (!req.tag.empty() && req.tag != account_tags.second[subaddr_index.major])
+                                    : (!req.tag.empty() && !boost::regex_match(account_tags.second[subaddr_index.major], boost::regex(req.tag)));
+        if (no_match)
           continue;
         wallet_rpc::COMMAND_RPC_GET_ACCOUNTS::subaddress_account_info info;
         info.account_index = subaddr_index.major;
         info.base_address = m_wallet->get_subaddress_as_str(subaddr_index);
-        info.balance = m_wallet->balance(subaddr_index.major);
-        info.unlocked_balance = m_wallet->unlocked_balance(subaddr_index.major);
+        info.balance = m_wallet->balance("SISPOP", subaddr_index.major, req.strict_balances);
+        info.unlocked_balance = m_wallet->unlocked_balance("SISPOP", subaddr_index.major, req.strict_balances);
         info.label = m_wallet->get_subaddress_label(subaddr_index);
         info.tag = account_tags.second[subaddr_index.major];
         res.subaddress_accounts.push_back(info);
         res.total_balance += info.balance;
         res.total_unlocked_balance += info.unlocked_balance;
       }
+      if (res.subaddress_accounts.size() == 0 && req.regexp)
+      {
+        er.code = WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR;
+        er.message = (boost::format(tr("No matches for regex filter %s .")) % req.tag).str();
+        return false;
+      }
     }
-    catch (const std::exception& e)
+    catch (const std::exception &e)
     {
       handle_rpc_exception(std::current_exception(), er, WALLET_RPC_ERROR_CODE_UNKNOWN_ERROR);
       return false;
