@@ -30,6 +30,7 @@
 
 #pragma once
 
+#include <array>
 #include <stdexcept>
 #include <string>
 #include <boost/uuid/uuid.hpp>
@@ -245,6 +246,17 @@ namespace config
       "T6TU9yWHiYwKnJLWKoBQyWKXQSkRv7WnPacqFzrw5kPvgJJM7oQn4GNCPDimwU87RxVy69cRgpMoFUeZpTqyjGR91nW2PYdkq", // hardfork v10
     };
 
+    std::array<std::string, 1> const ORACLE_URLS = {{"https://sispop-dev-oracle.onrender.com/"}};
+
+    std::string const ORACLE_PUBLIC_KEY = "-----BEGIN PUBLIC KEY-----\n"
+                                          "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA02Gh3CcFQ0rJGUe13rbd\n"
+                                          "FOhRN2Sf6h6TUGhdVtVl991Jb+cD56uyvb6Pay/OI/PI6KFj7nuAZyRw1rrP5o+p\n"
+                                          "Uel6/CX0d3reLU+xCiQLz3CsaGYOT2piqoQZlTIJKMFNfO1WY6+azXyUmwTZ7kVw\n"
+                                          "C2bVgmgk+JWuILMqL2agwGP4r+05jPLil5kftQbZn0QaSny05ihjnrwv9dyKQJEY\n"
+                                          "zTg8/lljwbrH3TpVU+kEqaMyglDA3MB1/6K4xQ0Vr3lJTdmy9FQxUGm/ad4pzl7o\n"
+                                          "GM1Mxn8isMBWtfB5BcApOFpYlufXuMlv5X3zK6LQ4zG9ZWCG/wOqy1RH3S5WiZuo\n"
+                                          "XwIDAQAB\n"
+                                          "-----END PUBLIC KEY-----\n";
   }
 
   namespace stagenet
@@ -344,6 +356,8 @@ namespace cryptonote
       ::config::testnet::GENESIS_NONCE,
       ::config::testnet::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
       &::config::testnet::GOVERNANCE_WALLET_ADDRESS[0],
+      ::config::testnet::ORACLE_URLS,
+      ::config::testnet::ORACLE_PUBLIC_KEY
     };
 
     static config_t stagenet = {
