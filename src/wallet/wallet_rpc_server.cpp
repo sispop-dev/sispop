@@ -912,14 +912,15 @@ void wallet_rpc_server::require_open() {
     return true;
   }
   //------------------------------------------------------------------------------------------------------------------------------
-  bool wallet_rpc_server::on_transfer(const wallet_rpc::COMMAND_RPC_TRANSFER::request& req, wallet_rpc::COMMAND_RPC_TRANSFER::response& res, epee::json_rpc::error& er, const connection_context *ctx)
+  bool wallet_rpc_server::on_transfer(const wallet_rpc::COMMAND_RPC_TRANSFER::request &req, wallet_rpc::COMMAND_RPC_TRANSFER::response &res, epee::json_rpc::error &er, const connection_context *ctx)
   {
 
     std::vector<cryptonote::tx_destination_entry> dsts;
     std::vector<uint8_t> extra;
 
     LOG_PRINT_L3("on_transfer starts");
-    if (!m_wallet) return not_open(er);
+    if (!m_wallet)
+      return not_open(er);
     if (m_restricted)
     {
       er.code = WALLET_RPC_ERROR_CODE_DENIED;
@@ -927,27 +928,30 @@ void wallet_rpc_server::require_open() {
       return false;
     }
 
+    CHECK_MULTISIG_ENABLED();
+
+    if ((req.source_asset.empty() && !req.destination_asset.empty()) || (!req.source_asset.empty() && req.destination_asset.empty()))
+    {
+      er.code = WALLET_RPC_ERROR_CODE_GENERIC_TRANSFER_ERROR;
+      er.message = "Missing source or destination asset. Either specify both or neither.";
+      return false;
+    }
+
+    // uniform the asset types
+    std::string source_asset = req.source_asset.empty() ? "SISPOP" : boost::algorithm::to_upper_copy(req.source_asset);
+    std::string destination_asset = req.destination_asset.empty() ? "SISPOP" : boost::algorithm::to_upper_copy(req.destination_asset);
+
     // validate the transfer requested and populate dsts & extra
-    if (!validate_transfer(req.destinations, req.payment_id, dsts, extra, true, er))
+    if (!validate_transfer(source_asset, destination_asset, req.destinations, req.payment_id, dsts, extra, true, er))
     {
       return false;
     }
 
     try
     {
-      uint32_t priority = req.priority;
-      if (req.blink || priority != tx_priority_unimportant)
-        priority = tx_priority_blink;
-
-      boost::optional<uint8_t> hf_version = m_wallet->get_hard_fork_version();
-      if (!hf_version)
-      {
-        er.code    = WALLET_RPC_ERROR_CODE_HF_QUERY_FAILED;
-        er.message = tools::ERR_MSG_NETWORK_VERSION_QUERY_FAILED;
-        return false;
-      }
-      cryptonote::sispop_construct_tx_params tx_params = tools::wallet2::construct_params(*hf_version, cryptonote::txtype::standard, priority);
-      std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_2(dsts, CRYPTONOTE_DEFAULT_TX_MIXIN, req.unlock_time, priority, extra, req.account_index, req.subaddr_indices, tx_params);
+      uint64_t mixin = m_wallet->adjust_mixin(req.ring_size ? req.ring_size - 1 : 0);
+      uint32_t priority = m_wallet->adjust_priority(req.priority);
+      std::vector<wallet2::pending_tx> ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, mixin, req.unlock_time, priority, extra, req.account_index, req.subaddr_indices);
 
       if (ptx_vector.empty())
       {
@@ -964,10 +968,10 @@ void wallet_rpc_server::require_open() {
         return false;
       }
 
-      return fill_response(ptx_vector, req.get_tx_key, res.tx_key, res.amount, res.fee, res.multisig_txset, res.unsigned_txset, req.do_not_relay, priority == tx_priority_blink,
-          res.tx_hash, req.get_tx_hex, res.tx_blob, req.get_tx_metadata, res.tx_metadata, er);
+      return fill_response(ptx_vector, req.get_tx_key, res.tx_key, res.amount, res.fee, res.weight, res.multisig_txset, res.unsigned_txset, req.do_not_relay,
+                           res.tx_hash, req.get_tx_hex, res.tx_blob, req.get_tx_metadata, res.tx_metadata, res.spent_key_images, er);
     }
-    catch (const std::exception& e)
+    catch (const std::exception &e)
     {
       handle_rpc_exception(std::current_exception(), er, WALLET_RPC_ERROR_CODE_GENERIC_TRANSFER_ERROR);
       return false;
