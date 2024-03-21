@@ -282,6 +282,18 @@ namespace config
       "5A8U5rKBGTQNN3JoNDFPyTgARrmvqyMgR15ZGSFWhRgJ9JA62V6gUox8NbVCq9Y2jCVcuWPETLAzoNSWvCyYBxGtRPG4TVq", // hardfork v7-9
       "5A8U5rKBGTQNN3JoNDFPyTgARrmvqyMgR15ZGSFWhRgJ9JA62V6gUox8NbVCq9Y2jCVcuWPETLAzoNSWvCyYBxGtRPG4TVq", // hardfork v10
     };
+
+    std::array<std::string, 1> const ORACLE_URLS = {{"https://sispop-dev-oracle.onrender.com/"}};
+
+    std::string const ORACLE_PUBLIC_KEY = "-----BEGIN PUBLIC KEY-----\n"
+                                          "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA02Gh3CcFQ0rJGUe13rbd\n"
+                                          "FOhRN2Sf6h6TUGhdVtVl991Jb+cD56uyvb6Pay/OI/PI6KFj7nuAZyRw1rrP5o+p\n"
+                                          "Uel6/CX0d3reLU+xCiQLz3CsaGYOT2piqoQZlTIJKMFNfO1WY6+azXyUmwTZ7kVw\n"
+                                          "C2bVgmgk+JWuILMqL2agwGP4r+05jPLil5kftQbZn0QaSny05ihjnrwv9dyKQJEY\n"
+                                          "zTg8/lljwbrH3TpVU+kEqaMyglDA3MB1/6K4xQ0Vr3lJTdmy9FQxUGm/ad4pzl7o\n"
+                                          "GM1Mxn8isMBWtfB5BcApOFpYlufXuMlv5X3zK6LQ4zG9ZWCG/wOqy1RH3S5WiZuo\n"
+                                          "XwIDAQAB\n"
+                                          "-----END PUBLIC KEY-----\n";
   }
 }
 
@@ -327,6 +339,8 @@ namespace cryptonote
     uint32_t GENESIS_NONCE;
     uint64_t GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS;
     std::string const *GOVERNANCE_WALLET_ADDRESS;
+    std::array<std::string, 1> const ORACLE_URLS;
+    std::string const ORACLE_PUBLIC_KEY;
   };
   inline const config_t& get_config(network_type nettype, int hard_fork_version = 7)
   {
@@ -375,6 +389,8 @@ namespace cryptonote
       ::config::stagenet::GENESIS_NONCE,
       ::config::stagenet::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
       &::config::stagenet::GOVERNANCE_WALLET_ADDRESS[0],
+      ::config::stagenet::ORACLE_URLS,
+      ::config::stagenet::ORACLE_PUBLIC_KEY
     };
 
     switch (nettype)
