@@ -1805,33 +1805,56 @@ end:
   }
   //---------------------------------------------------------------------------------
   //TODO: investigate whether boolean return is appropriate
-  bool tx_memory_pool::fill_block_template(block &bl, size_t median_weight, uint64_t already_generated_coins, size_t &total_weight, uint64_t &fee, uint64_t &expected_reward, uint8_t version, uint64_t height)
+
+  bool tx_memory_pool::fill_block_template(
+      block &bl,
+      size_t median_weight,
+      uint64_t already_generated_coins,
+      size_t &total_weight,
+      std::map<std::string, uint64_t> &fee_map,
+      uint64_t &expected_reward,
+      uint8_t version)
   {
-    auto locks = tools::unique_locks(m_transactions_lock, m_blockchain);
+    CRITICAL_REGION_LOCAL(m_transactions_lock);
+    CRITICAL_REGION_LOCAL1(m_blockchain);
+    using tt = cryptonote::transaction_type;
 
     uint64_t best_coinbase = 0, coinbase = 0;
     total_weight = 0;
-    fee = 0;
-    
-    //baseline empty block
-    sispop_block_reward_context block_reward_context = {};
-    block_reward_context.height                    = height;
-    if (!m_blockchain.calc_batched_governance_reward(height, block_reward_context.batched_governance))
+
+    // baseline empty block
+    if (!get_block_reward(median_weight, total_weight, already_generated_coins, best_coinbase, version))
     {
-      MERROR("Failed to calculated batched governance reward");
+      MERROR("Failed to get block reward for empty block");
       return false;
     }
 
-    block_reward_parts reward_parts = {};
-    get_sispop_block_reward(median_weight, total_weight, already_generated_coins, version, reward_parts, block_reward_context);
-    best_coinbase = reward_parts.base_miner;
-
-    size_t max_total_weight = 2 * median_weight - CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE;
+    size_t max_total_weight_pre_v5 = (130 * median_weight) / 100 - CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE;
+    size_t max_total_weight_v5 = 2 * median_weight - CRYPTONOTE_COINBASE_BLOB_RESERVED_SIZE;
+    size_t max_total_weight = max_total_weight_v5;
     std::unordered_set<crypto::key_image> k_images;
 
     LOG_PRINT_L2("Filling block template, median weight " << median_weight << ", " << m_txs_by_fee_and_receive_time.size() << " txes in the pool");
 
-    LockedTXN lock(m_blockchain);
+    LockedTXN lock(m_blockchain.get_db());
+
+    bool have_valid_pr = true;
+    if (bl.pricing_record.empty() || bl.pricing_record.has_missing_rates())
+    {
+      if (version >= HF_VERSION_DJED)
+      {
+        MWARNING("Failed to find a pricing record in last 10 blocks.");
+        MWARNING("Will not include any conversion transactions in block template.");
+      }
+      have_valid_pr = false;
+    }
+    // Convert stable and reserve fees into equivalent sispop value to maximize coinbase
+    uint64_t total_collected_fee_in_sispop = 0;
+
+    boost::multiprecision::int128_t total_conversion_sispop = 0;
+    boost::multiprecision::int128_t total_conversion_stables = 0;
+    boost::multiprecision::int128_t total_conversion_reserves = 0;
+    std::vector<std::pair<std::string, std::string>> circ_supply = m_blockchain.get_db().get_circulating_supply();
 
     auto sorted_it = m_txs_by_fee_and_receive_time.begin();
     for (; sorted_it != m_txs_by_fee_and_receive_time.end(); ++sorted_it)
@@ -1839,10 +1862,25 @@ end:
       txpool_tx_meta_t meta;
       if (!m_blockchain.get_txpool_tx_meta(sorted_it->second, meta))
       {
-        MERROR("  failed to find tx meta");
+        static bool warned = false;
+        if (!warned)
+          MERROR("  failed to find tx meta: " << sorted_it->second << " (will only print once)");
+        warned = true;
         continue;
       }
-      LOG_PRINT_L2("Considering " << sorted_it->second << ", weight " << meta.weight << ", current block weight " << total_weight << "/" << max_total_weight << ", current coinbase " << print_money(best_coinbase));
+
+      LOG_PRINT_L2("Considering " << sorted_it->second << ", weight " << meta.weight << ", current block weight " << total_weight << "/" << max_total_weight << ", current coinbase " << print_money(best_coinbase) << ", relay method " << (unsigned)meta.get_relay_method());
+
+      if (!meta.matches(relay_category::legacy) && !(m_mine_stem_txes && meta.get_relay_method() == relay_method::stem))
+      {
+        LOG_PRINT_L2("  tx relay method is " << (unsigned)meta.get_relay_method());
+        // continue;
+      }
+      if (meta.pruned)
+      {
+        LOG_PRINT_L2("  tx is pruned");
+        continue;
+      }
 
       // Can not exceed maximum block weight
       if (max_total_weight < total_weight + meta.weight)
@@ -1851,26 +1889,38 @@ end:
         continue;
       }
 
-      if (true /* version >= 5 -- always true for Sispop */)
+      // If we're getting lower coinbase tx,
+      // stop including more tx
+      uint64_t block_reward;
+      if (!get_block_reward(median_weight, total_weight + meta.weight, already_generated_coins, block_reward, version))
       {
-        // If we're getting lower coinbase tx, stop including more tx
-        block_reward_parts reward_parts_other = {};
-        if(!get_sispop_block_reward(median_weight, total_weight + meta.weight, already_generated_coins, version, reward_parts_other, block_reward_context))
-        {
-          LOG_PRINT_L2("  would exceed maximum block weight");
-          continue;
-        }
-
-        uint64_t block_reward = reward_parts_other.base_miner;
-        coinbase = block_reward + fee + meta.fee;
-        if (coinbase < template_accept_threshold(best_coinbase))
-        {
-          LOG_PRINT_L2("  would decrease coinbase to " << print_money(coinbase));
-          continue;
-        }
+        LOG_PRINT_L2("  would exceed maximum block weight");
+        continue;
       }
 
-      cryptonote::blobdata txblob = m_blockchain.get_txpool_tx_blob(sorted_it->second);
+      uint64_t fee_this_tx_in_sispop = 0;
+      if (have_valid_pr)
+      {
+        fee_this_tx_in_sispop = meta.weight * sorted_it->first.first; // fee in sispop
+      }
+      else
+      {
+        fee_this_tx_in_sispop = meta.fee; // fallback to fee in asset type (stable/reserve transfers in absence of pricing record)
+      }
+
+      coinbase = block_reward + total_collected_fee_in_sispop + fee_this_tx_in_sispop;
+
+      LOG_PRINT_L2(" coinbase " << print_money(coinbase) << ", best " << print_money(best_coinbase) << ", block reward " << print_money(block_reward) << ", total collected fee " << print_money(total_collected_fee_in_sispop) << ", fee this tx " << print_money(fee_this_tx_in_sispop));
+
+      if (coinbase < template_accept_threshold(best_coinbase))
+      {
+        LOG_PRINT_L2("  would decrease coinbase to " << print_money(coinbase));
+        continue;
+      }
+
+      // "local" and "stem" txes are filtered above
+      cryptonote::blobdata txblob = m_blockchain.get_txpool_tx_blob(sorted_it->second, relay_category::all);
+
       cryptonote::transaction tx;
 
       // Skip transactions that are not ready to be
@@ -1890,14 +1940,14 @@ end:
       if (memcmp(&original_meta, &meta, sizeof(meta)))
       {
         try
-	{
-	  m_blockchain.update_txpool_tx(sorted_it->second, meta);
-	}
+        {
+          m_blockchain.update_txpool_tx(sorted_it->second, meta);
+        }
         catch (const std::exception &e)
-	{
-	  MERROR("Failed to update tx meta: " << e.what());
-	  // continue, not fatal
-	}
+        {
+          MERROR("Failed to update tx meta: " << e.what());
+          // continue, not fatal
+        }
       }
       if (!ready)
       {
@@ -1910,9 +1960,99 @@ end:
         continue;
       }
 
+      // get the asset types
+      std::string source;
+      std::string dest;
+      tt tx_type;
+      if (!get_tx_asset_types(tx, sorted_it->second, source, dest, false))
+      {
+        LOG_PRINT_L2("At least 1 input or 1 output of the tx was invalid.");
+        continue;
+      }
+      if (!get_tx_type(source, dest, tx_type))
+      {
+        LOG_PRINT_L2(" transaction has invalid tx type " << sorted_it->second);
+        continue;
+      }
+
+      boost::multiprecision::int128_t conversion_this_tx_sispop = 0;
+      boost::multiprecision::int128_t conversion_this_tx_stables = 0;
+      boost::multiprecision::int128_t conversion_this_tx_reserves = 0;
+      if (source != dest)
+      {
+        if (!have_valid_pr)
+        {
+          continue;
+        }
+
+        if (tx_type == tt::MINT_STABLE)
+        {
+          conversion_this_tx_sispop += tx.amount_burnt; // Added to the reserve
+          conversion_this_tx_stables += tx.amount_minted;
+        }
+        else if (tx_type == tt::REDEEM_STABLE)
+        {
+          conversion_this_tx_stables -= tx.amount_burnt;
+          conversion_this_tx_sispop -= tx.amount_minted; // Deducted from the reserve
+        }
+        else if (tx_type == tt::MINT_RESERVE)
+        {
+          conversion_this_tx_sispop += tx.amount_burnt;
+          conversion_this_tx_reserves += tx.amount_minted;
+        }
+        else if (tx_type == tt::REDEEM_RESERVE)
+        {
+          conversion_this_tx_reserves -= tx.amount_burnt;
+          conversion_this_tx_sispop -= tx.amount_minted;
+        }
+        else
+        {
+          LOG_PRINT_L2(" conversion transaction has invalid tx type " << sorted_it->second);
+          continue;
+        }
+
+        boost::multiprecision::int128_t tally_sispop = total_conversion_sispop + conversion_this_tx_sispop;
+        boost::multiprecision::int128_t tally_stables = total_conversion_stables + conversion_this_tx_stables;
+        boost::multiprecision::int128_t tally_reserves = total_conversion_reserves + conversion_this_tx_reserves;
+
+        if (!reserve_ratio_satisfied(circ_supply, bl.pricing_record, tx_type, tally_sispop, tally_stables, tally_reserves))
+        {
+          LOG_PRINT_L2(" transaction ignored: reserve ratio would be invalid " << sorted_it->second);
+          continue;
+        }
+
+        // Validate that tx pricing record has not grown too old since it was first included in the pool
+        if (!tx_pr_height_valid(m_blockchain.get_current_blockchain_height(), tx.pricing_record_height, sorted_it->second))
+        {
+          LOG_PRINT_L2("error : transaction references a pricing record that is too old (height " << tx.pricing_record_height << ")");
+          continue;
+        }
+
+        // get pricing record for this tx
+        block tx_pr_block;
+        if (!m_blockchain.get_block_by_hash(m_blockchain.get_block_id_by_height(tx.pricing_record_height), tx_pr_block))
+        {
+          LOG_PRINT_L2("error: failed to get block containing pricing record");
+          continue;
+        }
+
+        // make sure proof-of-value still holds
+        if (!rct::verRctSemanticsSimple(tx.rct_signatures, tx_pr_block.pricing_record, tx_type, source, dest, tx.amount_burnt, tx.vout, tx.vin, version))
+        {
+          LOG_PRINT_L2(" transaction proof-of-value is now invalid for tx " << sorted_it->second);
+          continue;
+        }
+      }
+
       bl.tx_hashes.push_back(sorted_it->second);
       total_weight += meta.weight;
-      fee += meta.fee;
+
+      total_collected_fee_in_sispop += fee_this_tx_in_sispop;
+      fee_map[meta.fee_asset_type] += meta.fee;
+      total_conversion_sispop += conversion_this_tx_sispop;
+      total_conversion_stables += conversion_this_tx_stables;
+      total_conversion_reserves += conversion_this_tx_reserves;
+
       best_coinbase = coinbase;
       append_key_images(k_images, tx);
       LOG_PRINT_L2("  added, new block weight " << total_weight << "/" << max_total_weight << ", coinbase " << print_money(best_coinbase));
@@ -1921,8 +2061,10 @@ end:
 
     expected_reward = best_coinbase;
     LOG_PRINT_L2("Block template filled with " << bl.tx_hashes.size() << " txes, weight "
-        << total_weight << "/" << max_total_weight << ", coinbase " << print_money(best_coinbase)
-        << " (including " << print_money(fee) << " in fees)");
+                                               << total_weight << "/" << max_total_weight << ", coinbase " << print_money(best_coinbase)
+                                               << " (including " << print_money(fee_map["SISPOP"]) << " SISPOP in fees | "
+                                               << print_money(fee_map["SISPOPUSD"]) << " ZSD in fees | "
+                                               << print_money(fee_map["SISPOPRSV"]) << " ZRS in fees)");
     return true;
   }
   //---------------------------------------------------------------------------------

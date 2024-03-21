@@ -82,6 +82,8 @@
 #include "wallet/wallet_rpc_server_commands_defs.h"
 #include "string_coding.h"
 #include "QrCode.hpp"
+#include "oracle/asset_types.h"
+#include "console_handler.h"
 
 #ifdef WIN32
 #include <boost/locale.hpp>
@@ -266,6 +268,17 @@ namespace
   const char* USAGE_SHOW_QR_CODE("show_qr_code [<subaddress_index>]");
   const char* USAGE_VERSION("version");
   const char* USAGE_HELP("help [<command>]");
+
+  const char *USAGE_MINT_STABLE("mint_stable [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] (<URI> | <address> <SISPOP amount> [memo=<memo data>])");
+  const char *USAGE_REDEEM_STABLE("redeem_stable [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] (<URI> | <address> <SISPOPUSD amount> [memo=<memo data>])");
+  const char *USAGE_STABLE_TRANSFER("stable_transfer [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] (<URI> | <address> <SISPOPUSD amount> [memo=<memo data>])");
+
+  const char *USAGE_MINT_RESERVE("mint_reserve [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] (<URI> | <address> <SISPOP amount> [memo=<memo data>])");
+  const char *USAGE_REDEEM_RESERVE("redeem_reserve [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] (<URI> | <address> <SISPOPRSV amount> [memo=<memo data>])");
+  const char *USAGE_RESERVE_TRANSFER("reserve_transfer [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] (<URI> | <address> <SISPOPRSV amount> [memo=<memo data>])");
+
+  const char *USAGE_RESERVE_INFO("reserve_info");
+  const char *USAGE_RESERVE_RATIO("reserve_ratio");
 
   //
   // Sispop
@@ -2172,6 +2185,118 @@ bool simple_wallet::version(const std::vector<std::string> &args)
   return true;
 }
 
+bool simple_wallet::mint_stable(const std::vector<std::string> &args_)
+{
+  transfer_main(Transfer, "SISPOP", "SISPOPUSD", args_, false);
+  return true;
+}
+bool simple_wallet::redeem_stable(const std::vector<std::string> &args_)
+{
+  transfer_main(Transfer, "SISPOPUSD", "SISPOP", args_, false);
+  return true;
+}
+bool simple_wallet::stable_transfer(const std::vector<std::string> &args_)
+{
+  transfer_main(Transfer, "SISPOPUSD", "SISPOPUSD", args_, false);
+  return true;
+}
+
+bool simple_wallet::mint_reserve(const std::vector<std::string> &args_)
+{
+  transfer_main(Transfer, "SISPOP", "SISPOPRSV", args_, false);
+  return true;
+}
+bool simple_wallet::redeem_reserve(const std::vector<std::string> &args_)
+{
+  transfer_main(Transfer, "SISPOPRSV", "SISPOP", args_, false);
+  return true;
+}
+bool simple_wallet::reserve_transfer(const std::vector<std::string> &args_)
+{
+  transfer_main(Transfer, "SISPOPRSV", "SISPOPRSV", args_, false);
+  return true;
+}
+
+bool simple_wallet::reserve_info(const std::vector<std::string> &args)
+{
+  uint64_t current_height = m_wallet->get_blockchain_current_height();
+
+  // Get the pricing record for the current height
+  oracle::pricing_record pr;
+  if (!m_wallet->get_pricing_record(pr, current_height - 1))
+  {
+    fail_msg_writer() << boost::format(tr("Failed to get prices at height %d - maybe pricing record is missing?")) % (current_height - 1);
+    return false;
+  }
+
+  boost::multiprecision::uint128_t sispop_reserve;
+  boost::multiprecision::uint128_t num_stables;
+  boost::multiprecision::uint128_t num_reserves;
+
+  boost::multiprecision::uint128_t assets;
+  boost::multiprecision::uint128_t assets_ma;
+  boost::multiprecision::uint128_t liabilities;
+  boost::multiprecision::uint128_t equity;
+  boost::multiprecision::uint128_t equity_ma;
+
+  double reserve_ratio;
+  double reserve_ratio_ma;
+
+  m_wallet->get_reserve_info(pr, sispop_reserve, num_stables, num_reserves, assets, assets_ma, liabilities, equity, equity_ma, reserve_ratio, reserve_ratio_ma);
+
+  message_writer(console_color_white, false) << boost::format(tr("Height:             %d")) % current_height;
+  message_writer(console_color_white, false) << "";
+  message_writer(console_color_default, false) << "Reserve Info";
+  message_writer(console_color_white, false) << boost::format(tr("Reserve:            %d ƶeph")) % print_money(sispop_reserve);
+  message_writer(console_color_white, false) << boost::format(tr("SISPOPUSD circ:           %d ƶsd")) % print_money(num_stables);
+  message_writer(console_color_white, false) << boost::format(tr("SISPOPRSV circ:           %d ƶrs")) % print_money(num_reserves);
+
+  message_writer(console_color_white, false) << "";
+  message_writer(console_color_white, false) << boost::format(tr("Assets:             $%d")) % print_money(assets);
+  message_writer(console_color_white, false) << boost::format(tr("Liabilities:        $%d")) % print_money(liabilities);
+  message_writer(console_color_white, false) << boost::format(tr("Equity:             $%d")) % print_money(equity);
+  message_writer(console_color_white, false) << "";
+  message_writer(console_color_white, false) << boost::format(tr("Assets (MA):        $%d")) % print_money(assets_ma);
+  message_writer(console_color_white, false) << boost::format(tr("Liabilities:        $%d")) % print_money(liabilities);
+  message_writer(console_color_white, false) << boost::format(tr("Equity (MA):        $%d")) % print_money(equity_ma);
+  message_writer(console_color_white, false) << "";
+  message_writer(console_color_white, false) << boost::format(tr("Reserve ratio:      %.2f")) % reserve_ratio;
+  message_writer(console_color_white, false) << boost::format(tr("Reserve ratio (MA): %.2f")) % reserve_ratio_ma;
+
+  message_writer(console_color_white, false) << "";
+  message_writer(console_color_default, false) << "Exchange Rates";
+  message_writer(console_color_white, false) << boost::format(tr("Spot:               $%d")) % print_money(pr.spot);
+  message_writer(console_color_white, false) << boost::format(tr("Moving average:     $%d")) % print_money(pr.moving_average);
+  message_writer(console_color_white, false) << boost::format(tr("Stable:             %d ƶeph")) % print_money(pr.stable);
+  message_writer(console_color_white, false) << boost::format(tr("Stable (MA):        %d ƶeph")) % print_money(pr.stable_ma);
+  message_writer(console_color_white, false) << boost::format(tr("Reserve:            %d ƶeph")) % print_money(pr.reserve);
+  message_writer(console_color_white, false) << boost::format(tr("Reserve (MA):       %d ƶeph")) % print_money(pr.reserve_ma);
+
+  return true;
+}
+bool simple_wallet::reserve_ratio(const std::vector<std::string> &args)
+{
+  // Get the current blockchain height
+  uint64_t current_height = m_wallet->get_blockchain_current_height() - 1;
+
+  // Get the pricing record for the current height
+  oracle::pricing_record pr;
+  if (!m_wallet->get_pricing_record(pr, current_height))
+  {
+    fail_msg_writer() << boost::format(tr("Failed to get prices at height %d - maybe pricing record is missing?")) % current_height;
+    return false;
+  }
+
+  double reserve_ratio_spot = m_wallet->get_spot_reserve_ratio(pr);
+  double reserve_ratio_ma = m_wallet->get_ma_reserve_ratio(pr);
+
+  // Iterate over the provided currencies
+  message_writer(console_color_white, false) << boost::format(tr("Spot reserve ratio: %.2f")) % reserve_ratio_spot;
+  message_writer(console_color_white, false) << boost::format(tr("MA reserve ratio: %.2f")) % reserve_ratio_ma;
+
+  return true;
+}
+
 bool simple_wallet::cold_sign_tx(const std::vector<tools::wallet2::pending_tx>& ptx_vector, tools::wallet2::signed_tx_set &exported_txs, std::vector<cryptonote::address_parse_info> const &dsts_info, std::function<bool(const tools::wallet2::signed_tx_set &)> accept_func)
 {
   std::vector<std::string> tx_aux;
@@ -2638,9 +2763,51 @@ bool simple_wallet::set_device_name(const std::vector<std::string> &args/* = std
   return true;
 }
 
-bool simple_wallet::help(const std::vector<std::string> &args/* = std::vector<std::string>()*/)
+bool simple_wallet::help(const std::vector<std::string> &args /* = std::vector<std::string>()*/)
 {
-  if(args.empty())
+  if (args.empty())
+  {
+    message_writer() << "";
+    message_writer() << tr("Important commands:");
+    message_writer() << "";
+    message_writer() << tr("\"welcome\" - Show welcome message.");
+    message_writer() << tr("\"help all\" - Show the list of all available commands.");
+    message_writer() << tr("\"help <command>\" - Show a command's documentation.");
+    message_writer() << tr("\"apropos <keyword>\" - Show commands related to a keyword.");
+    message_writer() << "";
+    message_writer() << tr("\"wallet_info\" - Show wallet main address and other info.");
+    message_writer() << tr("\"balance\" - Show balance.");
+    message_writer() << tr("\"address all\" - Show all addresses.");
+    message_writer() << tr("\"address new\" - Create new subaddress.");
+    message_writer() << tr("\"transfer <address> <amount>\" - Send SISPOP to an address.");
+    message_writer() << tr("\"stable_transfer <address> <amount>\" - Send SISPOPUSD to an address.");
+    message_writer() << tr("\"reserve_transfer <address> <amount>\" - Send SISPOPRSV to an address.");
+
+    message_writer() << tr("\"mint_stable <address> <amount_sispop>\" - Mint SISPOPUSD from SISPOP to an address.");
+    message_writer() << tr("\"mint_stable_sweep_all <address>\" - Mint SISPOPUSD from entire SISPOP balance to another wallet.");
+    message_writer() << tr("\"mint_reserve <address> <amount_sispop>\" - Mint SISPOPRSV from SISPOP to an address.");
+    message_writer() << tr("\"mint_reserve_sweep_all <address>\" - Mint SISPOPRSV from entire SISPOP balance to another wallet.");
+
+    message_writer() << tr("\"redeem_stable <address> <amount_sispopusd>\" - Redeem SISPOPUSD for SISPOP to an address.");
+    message_writer() << tr("\"redeem_stable_sweep_all <address>\" - Redeem entire SISPOPUSD balance for SISPOP to another wallet.");
+    message_writer() << tr("\"redeem_reserve <address> <amount_SISPOPRSV>\" - Redeem SISPOPRSV for SISPOP to an address.");
+    message_writer() << tr("\"redeem_reserve_sweep_all <address>\" - Redeem entire SISPOPRSV balance for SISPOP to another wallet.");
+
+    message_writer() << tr("\"show_transfers [in|out|pending|failed|pool]\" - Show transactions.");
+    message_writer() << tr("\"sweep_all <address>\" - Send whole SISPOP balance to another wallet.");
+    message_writer() << tr("\"stable_sweep_all <address>\" - Send whole SISPOPUSD balance to another wallet.");
+    message_writer() << tr("\"reserve_sweep_all <address>\" - Send whole SISPOPRSV balance to another wallet.");
+
+    message_writer() << tr("\"seed\" - Show secret 25 words that can be used to recover this wallet.");
+    message_writer() << tr("\"refresh\" - Synchronize wallet with the Sispop network.");
+    message_writer() << tr("\"status\" - Check current status of wallet.");
+    message_writer() << tr("\"version\" - Check software version.");
+    message_writer() << tr("\"exit\" - Exit wallet.");
+    message_writer() << "";
+    message_writer() << tr("\"donate <amount>\" - Donate SISPOP to the development team.");
+    message_writer() << "";
+  }
+  else if ((args.size() == 1) && (args.front() == "all"))
   {
     success_msg_writer() << get_commands_str();
   }
@@ -2658,13 +2825,7 @@ bool simple_wallet::help(const std::vector<std::string> &args/* = std::vector<st
 }
 
 simple_wallet::simple_wallet()
-  : m_allow_mismatched_daemon_version(false)
-  , m_refresh_progress_reporter(*this)
-  , m_idle_run(true)
-  , m_auto_refresh_enabled(false)
-  , m_auto_refresh_refreshing(false)
-  , m_in_manual_refresh(false)
-    , m_current_subaddress_account(0)
+    : m_allow_mismatched_daemon_version(false), m_refresh_progress_reporter(*this), m_idle_run(true), m_auto_refresh_enabled(false), m_auto_refresh_refreshing(false), m_in_manual_refresh(false), m_current_subaddress_account(0), m_locked(false), m_in_command(false), m_in_command(false), m_last_activity_time(time(NULL))
 {
   using namespace boost::placeholders;
   m_cmd_binder.set_handler("start_mining",
@@ -2728,6 +2889,39 @@ simple_wallet::simple_wallet()
                            boost::bind(&simple_wallet::sweep_single, this, _1),
                            tr(USAGE_SWEEP_SINGLE),
                            tr("Send a single output of the given key image to an address without change."));
+  m_cmd_binder.set_handler("stable_sweep_all", boost::bind(&simple_wallet::on_command, this, &simple_wallet::stable_sweep_all, _1),
+                           tr(USAGE_STABLE_SWEEP_ALL),
+                           tr("Send all unlocked SISPOPUSD balance to an address. If the parameter \"index=<N1>[,<N2>,...]\" or \"index=all\" is specified, the wallet sweeps outputs received by those or all address indices, respectively. If omitted, the wallet randomly chooses an address index to be used. If the parameter \"outputs=<N>\" is specified and  N > 0, wallet splits the transaction into N even outputs."));
+  m_cmd_binder.set_handler("stable_sweep_below",
+                           boost::bind(&simple_wallet::on_command, this, &simple_wallet::stable_sweep_below, _1),
+                           tr(USAGE_STABLE_SWEEP_BELOW),
+                           tr("Send all unlocked SISPOPUSD outputs below the threshold to an address."));
+
+  m_cmd_binder.set_handler("reserve_sweep_all", boost::bind(&simple_wallet::on_command, this, &simple_wallet::reserve_sweep_all, _1),
+                           tr(USAGE_RESERVE_SWEEP_ALL),
+                           tr("Send all unlocked SISPOPRSV balance to an address. If the parameter \"index=<N1>[,<N2>,...]\" or \"index=all\" is specified, the wallet sweeps outputs received by those or all address indices, respectively. If omitted, the wallet randomly chooses an address index to be used. If the parameter \"outputs=<N>\" is specified and  N > 0, wallet splits the transaction into N even outputs."));
+  m_cmd_binder.set_handler("reserve_sweep_below",
+                           boost::bind(&simple_wallet::on_command, this, &simple_wallet::reserve_sweep_below, _1),
+                           tr(USAGE_RESERVE_SWEEP_BELOW),
+                           tr("Send all unlocked SISPOPRSV outputs below the threshold to an address."));
+
+  m_cmd_binder.set_handler("mint_stable_sweep_all",
+                           boost::bind(&simple_wallet::mint_stable_sweep_all, this, _1),
+                           tr(USAGE_MINT_STABLE_SWEEP_ALL),
+                           tr("Convert all SISPOP balance into SISPOPUSD. If the parameter \"index=<N1>[,<N2>,...]\" or \"index=all\" is specified, the wallet sweeps outputs received by those or all address indices, respectively. If omitted, the wallet randomly chooses an address index to be used. If the parameter \"outputs=<N>\" is specified and  N > 0, wallet splits the transaction into N even outputs."));
+  m_cmd_binder.set_handler("mint_reserve_sweep_all",
+                           boost::bind(&simple_wallet::mint_reserve_sweep_all, this, _1),
+                           tr(USAGE_MINT_RESERVE_SWEEP_ALL),
+                           tr("Convert all SISPOP balance into SISPOPRSV. If the parameter \"index=<N1>[,<N2>,...]\" or \"index=all\" is specified, the wallet sweeps outputs received by those or all address indices, respectively. If omitted, the wallet randomly chooses an address index to be used. If the parameter \"outputs=<N>\" is specified and  N > 0, wallet splits the transaction into N even outputs."));
+
+  m_cmd_binder.set_handler("redeem_stable_sweep_all",
+                           boost::bind(&simple_wallet::redeem_stable_sweep_all, this, _1),
+                           tr(USAGE_REDEEM_STABLE_SWEEP_ALL),
+                           tr("Convert all SISPOPUSD balance into SISPOP. If the parameter \"index=<N1>[,<N2>,...]\" or \"index=all\" is specified, the wallet sweeps outputs received by those or all address indices, respectively. If omitted, the wallet randomly chooses an address index to be used. If the parameter \"outputs=<N>\" is specified and  N > 0, wallet splits the transaction into N even outputs."));
+  m_cmd_binder.set_handler("redeem_reserve_sweep_all",
+                           boost::bind(&simple_wallet::redeem_reserve_sweep_all, this, _1),
+                           tr(USAGE_REDEEM_RESERVE_SWEEP_ALL),
+                           tr("Convert all SISPOPRSV balance into SISPOP. If the parameter \"index=<N1>[,<N2>,...]\" or \"index=all\" is specified, the wallet sweeps outputs received by those or all address indices, respectively. If omitted, the wallet randomly chooses an address index to be used. If the parameter \"outputs=<N>\" is specified and  N > 0, wallet splits the transaction into N even outputs."));
   m_cmd_binder.set_handler("sweep_unmixable",
                            boost::bind(&simple_wallet::sweep_unmixable, this, _1),
                            tr("Deprecated"));
@@ -5178,30 +5372,41 @@ bool simple_wallet::show_balance_unlocked(bool detailed)
   if (m_wallet->has_multisig_partial_key_images())
     extra = tr(" (Some owned outputs have partial key images - import_multisig_info needed)");
   else if (m_wallet->has_unknown_key_images())
-    extra += tr(" (Some owned outputs have missing key images - import_key_images needed)");
+    extra += tr(" (Some owned outputs have missing key images - export_outputs, import_outputs, export_key_images, and import_key_images needed)");
   success_msg_writer() << tr("Currently selected account: [") << m_current_subaddress_account << tr("] ") << m_wallet->get_subaddress_label({m_current_subaddress_account, 0});
   const std::string tag = m_wallet->get_account_tags().second[m_current_subaddress_account];
   success_msg_writer() << tr("Tag: ") << (tag.empty() ? std::string{tr("(No tag assigned)")} : tag);
-  uint64_t blocks_to_unlock;
-  uint64_t unlocked_balance = m_wallet->unlocked_balance(m_current_subaddress_account, &blocks_to_unlock);
-  std::string unlock_time_message;
-  if (blocks_to_unlock > 0)
-    unlock_time_message = (boost::format(" (%lu block(s) to unlock)") % blocks_to_unlock).str();
-  success_msg_writer() << tr("Balance: ") << print_money(m_wallet->balance(m_current_subaddress_account)) << ", "
-    << tr("unlocked balance: ") << print_money(unlocked_balance) << unlock_time_message << extra;
-  std::map<uint32_t, uint64_t> balance_per_subaddress = m_wallet->balance_per_subaddress(m_current_subaddress_account);
-  std::map<uint32_t, std::pair<uint64_t, uint64_t>> unlocked_balance_per_subaddress = m_wallet->unlocked_balance_per_subaddress(m_current_subaddress_account);
+  for (const auto &asset : oracle::ASSET_TYPES)
+  {
+    uint64_t balance = m_wallet->balance(asset, m_current_subaddress_account, false);
+    if (balance == 0)
+      continue;
+    uint64_t blocks_to_unlock, time_to_unlock;
+    uint64_t unlocked_balance = m_wallet->unlocked_balance(asset, m_current_subaddress_account, false, &blocks_to_unlock, &time_to_unlock);
+    std::string unlock_time_message;
+    if (blocks_to_unlock > 0 && time_to_unlock > 0)
+      unlock_time_message = (boost::format(" (%lu block(s) and %s to unlock)") % blocks_to_unlock % get_human_readable_timespan(time_to_unlock)).str();
+    else if (blocks_to_unlock > 0)
+      unlock_time_message = (boost::format(" (%lu block(s) to unlock)") % blocks_to_unlock).str();
+    else if (time_to_unlock > 0)
+      unlock_time_message = (boost::format(" (%s to unlock)") % get_human_readable_timespan(time_to_unlock)).str();
+    success_msg_writer() << tr("Balance: ") << print_money(balance) << ", "
+                         << tr("unlocked balance: ") << print_money(unlocked_balance) << " " << asset_display_name(asset) << " " << unlock_time_message << extra;
+  }
+  std::map<uint32_t, uint64_t> balance_per_subaddress = m_wallet->balance_per_subaddress("SISPOP", m_current_subaddress_account, false);
+  std::map<uint32_t, std::pair<uint64_t, std::pair<uint64_t, uint64_t>>> unlocked_balance_per_subaddress = m_wallet->unlocked_balance_per_subaddress("SISPOP", m_current_subaddress_account, false);
   if (!detailed || balance_per_subaddress.empty())
     return true;
   success_msg_writer() << tr("Balance per address:");
   success_msg_writer() << boost::format("%15s %21s %21s %7s %21s") % tr("Address") % tr("Balance") % tr("Unlocked balance") % tr("Outputs") % tr("Label");
   std::vector<tools::wallet2::transfer_details> transfers;
   m_wallet->get_transfers(transfers);
-  for (const auto& i : balance_per_subaddress)
+  for (const auto &i : balance_per_subaddress)
   {
     cryptonote::subaddress_index subaddr_index = {m_current_subaddress_account, i.first};
-    std::string address_str = m_wallet->get_subaddress_as_str(subaddr_index).substr(0, 6);
-    uint64_t num_unspent_outputs = std::count_if(transfers.begin(), transfers.end(), [&subaddr_index](const tools::wallet2::transfer_details& td) { return !td.m_spent && td.m_subaddr_index == subaddr_index; });
+    std::string address_str = m_wallet->get_subaddress_as_str(subaddr_index).substr(0, 9);
+    uint64_t num_unspent_outputs = std::count_if(transfers.begin(), transfers.end(), [&subaddr_index](const tools::wallet2::transfer_details &td)
+                                                 { return !td.m_spent && td.m_subaddr_index == subaddr_index; });
     success_msg_writer() << boost::format(tr("%8u %6s %21s %21s %7u %21s")) % i.first % address_str % print_money(i.second) % print_money(unlocked_balance_per_subaddress[i.first].first) % num_unspent_outputs % m_wallet->get_subaddress_label(subaddr_index);
   }
   return true;
@@ -5795,18 +6000,64 @@ bool simple_wallet::confirm_and_send_tx(std::vector<cryptonote::address_parse_in
   return true;
 }
 
-bool simple_wallet::transfer_main(Transfer transfer_type, const std::vector<std::string> &args_, bool called_by_mms)
-{
-//  "transfer [index=<N1>[,<N2>,...]] [<priority>] <address> <amount> [<payment_id>]"
+bool simple_wallet::transfer_main(
+  int transfer_type,
+  const std::string& source_asset,
+  const std::string& dest_asset,
+  const std::vector<std::string> &args_,
+  bool called_by_mms
+){
+//  "transfer [index=<N1>[,<N2>,...]] [<priority>] [<ring_size>] <address> <amount> [<payment_id>]"
   if (!try_connect_to_daemon())
     return false;
 
   std::vector<std::string> local_args = args_;
-  uint32_t priority = 0;
-  std::set<uint32_t> subaddr_indices  = {};
-  if (!parse_subaddr_indices_and_priority(*m_wallet, local_args, subaddr_indices, priority)) return false;
 
-  const size_t min_args = (transfer_type == Transfer::Locked) ? 2 : 1;
+  std::set<uint32_t> subaddr_indices;
+  if (local_args.size() > 0 && local_args[0].substr(0, 6) == "index=")
+  {
+    if (!parse_subaddress_indices(local_args[0], subaddr_indices))
+      return false;
+    local_args.erase(local_args.begin());
+  }
+
+  uint32_t priority = 0;
+  if (local_args.size() > 0 && parse_priority(local_args[0], priority))
+    local_args.erase(local_args.begin());
+
+  priority = m_wallet->adjust_priority(priority);
+
+  const size_t min_ring_size = m_wallet->get_min_ring_size();
+  size_t fake_outs_count = min_ring_size - 1;
+  if(local_args.size() > 0) {
+    size_t ring_size;
+    if(!epee::string_tools::get_xtype_from_string(ring_size, local_args[0]))
+    {
+    }
+    else if (ring_size == 0)
+    {
+      fail_msg_writer() << tr("Ring size must not be 0");
+      return false;
+    }
+    else
+    {
+      fake_outs_count = ring_size - 1;
+      local_args.erase(local_args.begin());
+    }
+  }
+  uint64_t adjusted_fake_outs_count = m_wallet->adjust_mixin(fake_outs_count);
+  if (adjusted_fake_outs_count > fake_outs_count)
+  {
+    fail_msg_writer() << (boost::format(tr("ring size %u is too small, minimum is %u")) % (fake_outs_count+1) % (adjusted_fake_outs_count+1)).str();
+    return false;
+  }
+  if (adjusted_fake_outs_count < fake_outs_count)
+  {
+    fail_msg_writer() << (boost::format(tr("ring size %u is too large, maximum is %u")) % (fake_outs_count+1) % (adjusted_fake_outs_count+1)).str();
+    return false;
+  }
+
+  const size_t min_args = (transfer_type == TransferLocked) ? 2 : 1;
   if(local_args.size() < min_args)
   {
      fail_msg_writer() << tr("wrong number of arguments");
@@ -5823,13 +6074,6 @@ bool simple_wallet::transfer_main(Transfer transfer_type, const std::vector<std:
     if (tools::wallet2::parse_long_payment_id(payment_id_str, payment_id))
     {
       LONG_PAYMENT_ID_SUPPORT_CHECK();
-
-      std::string extra_nonce;
-      set_payment_id_to_tx_extra_nonce(extra_nonce, payment_id);
-      r = add_extra_nonce_to_tx_extra(extra, extra_nonce);
-      local_args.pop_back();
-      payment_id_seen = true;
-      message_writer() << tr("Warning: Unencrypted payment IDs will harm your privacy: ask the recipient to use subaddresses instead");
     }
     if(!r)
     {
@@ -5839,24 +6083,43 @@ bool simple_wallet::transfer_main(Transfer transfer_type, const std::vector<std:
   }
 
   uint64_t locked_blocks = 0;
-  if (transfer_type == Transfer::Locked)
+  if (transfer_type == TransferLocked)
   {
-    if (priority == tools::tx_priority_blink)
+    try
     {
-      fail_msg_writer() << tr("blink priority cannot be used for locked transfers");
+      locked_blocks = boost::lexical_cast<uint64_t>(local_args.back());
+    }
+    catch (const std::exception &e)
+    {
+      fail_msg_writer() << tr("bad locked_blocks parameter:") << " " << local_args.back();
       return false;
     }
-
-    if (!locked_blocks_arg_valid(local_args.back(), locked_blocks))
+    if (locked_blocks > 1000000)
     {
-      return true;
+      fail_msg_writer() << tr("Locked blocks too high, max 1000000 (˜4 yrs)");
+      return false;
     }
     local_args.pop_back();
   }
 
+  // get tx type
+  using tt = cryptonote::transaction_type;
+  tt tx_type;
+  if(!get_tx_type(source_asset, dest_asset, tx_type)) {
+    fail_msg_writer() << tr("failed to get tx asset types.");
+    return false;
+  }
+
+  // adjust priority
+  if (tx_type == tt::STABLE_TRANSFER || tx_type == tt::RESERVE_TRANSFER) {
+    if (priority > 1) {
+      message_writer() << boost::format(tr("Reducing priority from %d to 1 - Transfers do not permit other priorities\n")) % priority;
+      priority = 1;
+    }
+  }
+
   vector<cryptonote::address_parse_info> dsts_info;
   vector<cryptonote::tx_destination_entry> dsts;
-  size_t num_subaddresses = 0;
   for (size_t i = 0; i < local_args.size(); )
   {
     dsts_info.emplace_back();
@@ -5889,6 +6152,7 @@ bool simple_wallet::transfer_main(Transfer transfer_type, const std::vector<std:
     {
       r = cryptonote::get_account_address_from_str_or_url(info, m_wallet->nettype(), local_args[i], oa_prompter);
       bool ok = cryptonote::parse_amount(de.amount, local_args[i + 1]);
+
       if(!ok || 0 == de.amount)
       {
         fail_msg_writer() << tr("amount is wrong: ") << local_args[i] << ' ' << local_args[i + 1] <<
@@ -5896,11 +6160,12 @@ bool simple_wallet::transfer_main(Transfer transfer_type, const std::vector<std:
         return false;
       }
       de.original = local_args[i];
+
       i += 2;
     }
     else
     {
-      if (boost::starts_with(local_args[i], "sispop:"))
+      if (boost::starts_with(local_args[i], "SISPOPyr:"))
         fail_msg_writer() << tr("Invalid last argument: ") << local_args.back() << ": " << error;
       else
         fail_msg_writer() << tr("Invalid last argument: ") << local_args.back();
@@ -5913,15 +6178,15 @@ bool simple_wallet::transfer_main(Transfer transfer_type, const std::vector<std:
       return false;
     }
     de.addr = info.address;
+    de.dest_asset_type = dest_asset;
     de.is_subaddress = info.is_subaddress;
     de.is_integrated = info.has_payment_id;
-    num_subaddresses += info.is_subaddress;
 
     if (info.has_payment_id || !payment_id_uri.empty())
     {
       if (payment_id_seen)
       {
-        fail_msg_writer() << tr("a single transaction cannot use more than one payment id/integrated address");
+        fail_msg_writer() << tr("a single transaction cannot use more than one payment id");
         return false;
       }
 
@@ -5934,8 +6199,6 @@ bool simple_wallet::transfer_main(Transfer transfer_type, const std::vector<std:
       else if (tools::wallet2::parse_payment_id(payment_id_uri, payment_id))
       {
         LONG_PAYMENT_ID_SUPPORT_CHECK();
-        set_payment_id_to_tx_extra_nonce(extra_nonce, payment_id);
-        message_writer() << tr("Warning: Unencrypted payment IDs will harm your privacy: ask the recipient to use subaddresses instead");
       }
       else
       {
@@ -5962,26 +6225,25 @@ bool simple_wallet::transfer_main(Transfer transfer_type, const std::vector<std:
     std::vector<tools::wallet2::pending_tx> ptx_vector;
     uint64_t bc_height, unlock_block = 0;
     std::string err;
-    if (transfer_type == Transfer::Locked)
+    bc_height = get_daemon_blockchain_height(err);
+    switch (transfer_type)
     {
-      bc_height = get_daemon_blockchain_height(err);
-      if (!err.empty())
-      {
-        fail_msg_writer() << tr("failed to get blockchain height: ") << err;
-        return false;
-      }
-      unlock_block = bc_height + locked_blocks;
+      case TransferLocked:
+        if (!err.empty())
+        {
+          fail_msg_writer() << tr("failed to get blockchain height: ") << err;
+          return false;
+        }
+        unlock_block = bc_height + locked_blocks;
+        ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, fake_outs_count, unlock_block /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices);
+      break;
+      default:
+        LOG_ERROR("Unknown transfer method, using default");
+        /* FALLTHRU */
+      case Transfer:
+        ptx_vector = m_wallet->create_transactions_2(dsts, source_asset, fake_outs_count, 0 /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices);
+      break;
     }
-
-    boost::optional<uint8_t> hf_version = m_wallet->get_hard_fork_version();
-    if (!hf_version)
-    {
-      fail_msg_writer() << tools::ERR_MSG_NETWORK_VERSION_QUERY_FAILED;
-      return false;
-    }
-
-    sispop_construct_tx_params tx_params = tools::wallet2::construct_params(*hf_version, txtype::standard, priority);
-    ptx_vector = m_wallet->create_transactions_2(dsts, CRYPTONOTE_DEFAULT_TX_MIXIN, unlock_block, priority, extra, m_current_subaddress_account, subaddr_indices, tx_params);
 
     if (ptx_vector.empty())
     {
@@ -5989,8 +6251,236 @@ bool simple_wallet::transfer_main(Transfer transfer_type, const std::vector<std:
       return false;
     }
 
-    if (!confirm_and_send_tx(dsts_info, ptx_vector, priority == tools::tx_priority_blink, locked_blocks, unlock_block, called_by_mms))
+    // if we need to check for backlog, check the worst case tx
+    if (m_wallet->confirm_backlog())
+    {
+      std::stringstream prompt;
+      double worst_fee_per_byte = std::numeric_limits<double>::max();
+      for (size_t n = 0; n < ptx_vector.size(); ++n)
+      {
+        const uint64_t blob_size = cryptonote::tx_to_blob(ptx_vector[n].tx).size();
+        const double fee_per_byte = ptx_vector[n].fee / (double)blob_size;
+        if (fee_per_byte < worst_fee_per_byte)
+        {
+          worst_fee_per_byte = fee_per_byte;
+        }
+      }
+      try
+      {
+        std::vector<std::pair<uint64_t, uint64_t>> nblocks = m_wallet->estimate_backlog({std::make_pair(worst_fee_per_byte, worst_fee_per_byte)});
+        if (nblocks.size() != 1)
+        {
+          prompt << "Internal error checking for backlog. " << tr("Is this okay anyway?");
+        }
+        else
+        {
+          if (nblocks[0].first > m_wallet->get_confirm_backlog_threshold())
+            prompt << (boost::format(tr("There is currently a %u block backlog at that fee level. Is this okay?")) % nblocks[0].first).str();
+        }
+      }
+      catch (const std::exception &e)
+      {
+        prompt << tr("Failed to check for backlog: ") << e.what() << ENDL << tr("Is this okay anyway?");
+      }
+
+      std::string prompt_str = prompt.str();
+      if (!prompt_str.empty())
+      {
+        std::string accepted = input_line(prompt_str, true);
+        if (std::cin.eof())
+          return false;
+        if (!command_line::is_yes(accepted))
+        {
+          fail_msg_writer() << tr("transaction cancelled.");
+
+          return false; 
+        }
+      }
+    }
+
+    if (!prompt_if_old(source_asset, ptx_vector))
+    {
+      fail_msg_writer() << tr("transaction cancelled.");
       return false;
+    }
+
+    // if more than one tx necessary, prompt user to confirm
+    if (m_wallet->always_confirm_transfers() || ptx_vector.size() > 1)
+    {
+        uint64_t total_sent = 0;
+        uint64_t total_received = 0;
+        uint64_t total_fee = 0;
+        uint64_t dust_not_in_fee = 0;
+        uint64_t dust_in_fee = 0;
+        uint64_t change = 0;
+        for (size_t n = 0; n < ptx_vector.size(); ++n)
+        {
+          total_fee += ptx_vector[n].fee;
+          for (auto i: ptx_vector[n].selected_transfers)
+            total_sent += m_wallet->get_transfer_details(i).amount();
+          total_sent -= ptx_vector[n].change_dts.amount + ptx_vector[n].fee;
+          change += ptx_vector[n].change_dts.amount;
+
+          for (const auto& dt: ptx_vector[n].dests) {
+            total_received += dt.dest_amount;
+          }
+
+          if (ptx_vector[n].dust_added_to_fee)
+            dust_in_fee += ptx_vector[n].dust;
+          else
+            dust_not_in_fee += ptx_vector[n].dust;
+        }
+
+        std::stringstream prompt;
+        for (size_t n = 0; n < ptx_vector.size(); ++n)
+        {
+          prompt << tr("\nTransaction ") << (n + 1) << "/" << ptx_vector.size() << ":\n";
+          subaddr_indices.clear();
+          for (uint32_t i : ptx_vector[n].construction_data.subaddr_indices)
+            subaddr_indices.insert(i);
+          for (uint32_t i : subaddr_indices)
+            prompt << boost::format(tr("Spending from address index %d\n")) % i;
+          if (subaddr_indices.size() > 1)
+            prompt << tr("WARNING: Outputs of multiple addresses are being used together, which might potentially compromise your privacy.\n");
+        }
+
+        if (source_asset == dest_asset) {
+          prompt << boost::format(tr("Sending %s %s.\n")) % print_money(total_sent) % asset_display_name(source_asset);
+        } else {
+          switch (tx_type)
+          {
+          case tt::MINT_STABLE:
+            prompt << boost::format(tr("Minting %s SISPOPUSD from %s SISPOP.\n")) % print_money(total_received) % print_money(total_sent);
+            break;
+          case tt::REDEEM_STABLE:
+            prompt << boost::format(tr("Redeeming %s SISPOP from %s SISPOPUSD.\n")) % print_money(total_received) % print_money(total_sent);
+            break;
+          case tt::MINT_RESERVE:
+            prompt << boost::format(tr("Minting %s SISPOPRSV from %s SISPOP.\n")) % print_money(total_received) % print_money(total_sent);
+            break;
+          case tt::REDEEM_RESERVE:
+            prompt << boost::format(tr("Redeeming %s SISPOP from %s SISPOPRSV.\n")) % print_money(total_received) % print_money(total_sent);
+            break;
+          default:
+            break;
+          }
+        }
+
+        if (ptx_vector.size() > 1)
+        {
+          prompt << boost::format(tr("Your transaction needs to be split into %llu transactions.  "
+            "This will result in a transaction fee being applied to each transaction, for a total fee of %s")) %
+            ((unsigned long long)ptx_vector.size()) % print_money(total_fee);
+        }
+        else
+        {
+          prompt << boost::format(tr("The transaction fee is %s %s")) %
+            print_money(total_fee) % asset_display_name(source_asset);
+        }
+        if (dust_in_fee != 0) prompt << boost::format(tr(", of which %s is dust from change")) % print_money(dust_in_fee);
+        if (dust_not_in_fee != 0)  prompt << tr(".") << ENDL << boost::format(tr("A total of %s from dust change will be sent to dust address")) 
+                                                   % print_money(dust_not_in_fee);
+        if (transfer_type == TransferLocked)
+        {
+          float days = locked_blocks / 720.0f;
+          prompt << boost::format(tr(".\nThis transaction (including %s change) will unlock on block %llu, in approximately %s days (assuming 2 minutes per block)")) % cryptonote::print_money(change) % ((unsigned long long)unlock_block) % days;
+        }
+        if (!process_ring_members(ptx_vector, prompt, m_wallet->print_ring_members()))
+          return false;
+        bool default_ring_size = true;
+        for (const auto &ptx: ptx_vector)
+        {
+          for (const auto &vin: ptx.tx.vin)
+          {
+            if (vin.type() == typeid(txin_SISPOPyr_key))
+            {
+              const txin_SISPOPyr_key& in_to_key = boost::get<txin_SISPOPyr_key>(vin);
+              if (in_to_key.key_offsets.size() != min_ring_size)
+                default_ring_size = false;
+            }
+          }
+        }
+        if (m_wallet->confirm_non_default_ring_size() && !default_ring_size)
+        {
+          prompt << tr("WARNING: this is a non default ring size, which may harm your privacy. Default is recommended.");
+        }
+        prompt << ENDL << tr("Is this okay?");
+        
+        std::string accepted = input_line(prompt.str(), true);
+        if (std::cin.eof())
+          return false;
+        if (!command_line::is_yes(accepted))
+        {
+          fail_msg_writer() << tr("transaction cancelled.");
+
+          return false;
+        }
+    }
+
+    // actually commit the transactions
+    if (m_wallet->multisig() && called_by_mms)
+    {
+      std::string ciphertext = m_wallet->save_multisig_tx(ptx_vector);
+      if (!ciphertext.empty())
+      {
+        get_message_store().process_wallet_created_data(get_multisig_wallet_state(), mms::message_type::partially_signed_tx, ciphertext);
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to MMS");
+      }
+    }
+    else if (m_wallet->multisig())
+    {
+      bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_SISPOPyr_tx");
+      if (!r)
+      {
+        fail_msg_writer() << tr("Failed to write transaction(s) to file");
+        return false;
+      }
+      else
+      {
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_SISPOPyr_tx";
+      }
+    }
+    else if (m_wallet->get_account().get_device().has_tx_cold_sign())
+    {
+      try
+      {
+        tools::wallet2::signed_tx_set signed_tx;
+        if (!cold_sign_tx(ptx_vector, signed_tx, dsts_info, [&](const tools::wallet2::signed_tx_set &tx){ return accept_loaded_tx(tx); })){
+          fail_msg_writer() << tr("Failed to cold sign transaction with HW wallet");
+          return false;
+        }
+
+        commit_or_save(signed_tx.ptx, m_do_not_relay);
+      }
+      catch (const std::exception& e)
+      {
+        handle_transfer_exception(std::current_exception(), m_wallet->is_trusted_daemon());
+        return false;
+      }
+      catch (...)
+      {
+        LOG_ERROR("Unknown error");
+        fail_msg_writer() << tr("unknown error");
+        return false;
+      }
+    }
+    else if (m_wallet->watch_only())
+    {
+      bool r = m_wallet->save_tx(ptx_vector, "unsigned_SISPOPyr_tx");
+      if (!r)
+      {
+        fail_msg_writer() << tr("Failed to write transaction(s) to file");
+        return false;
+      }
+      else
+      {
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_SISPOPyr_tx";
+      }
+    }
+    else
+    {
+      commit_or_save(ptx_vector, m_do_not_relay);
+    }
   }
   catch (const std::exception &e)
   {
@@ -6009,19 +6499,36 @@ bool simple_wallet::transfer_main(Transfer transfer_type, const std::vector<std:
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::transfer(const std::vector<std::string> &args_)
 {
-  return transfer_main(Transfer::Normal, args_, false);
+  if (args_.size() < 1)
+  {
+    PRINT_USAGE(USAGE_TRANSFER);
+    return true;
+  }
+  transfer_main(Transfer, "SISPOP", "SISPOP", args_, false);
+  return true;
 }
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::locked_transfer(const std::vector<std::string> &args_)
 {
-  return transfer_main(Transfer::Locked, args_, false);
+  if (args_.size() < 1)
+  {
+    PRINT_USAGE(USAGE_LOCKED_TRANSFER);
+    return true;
+  }
+  transfer_main(TransferLocked, "SISPOP", "SISPOP", args_, false);
+  return true;
 }
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::locked_sweep_all(const std::vector<std::string> &args_)
 {
-  return sweep_main(0, Transfer::Locked, args_);
-}
-//----------------------------------------------------------------------------------------------------
+  if (args_.size() < 1)
+  {
+    PRINT_USAGE(USAGE_LOCKED_SWEEP_ALL);
+    return true;
+  }
+  sweep_main(m_current_subaddress_account, 0, true, "SISPOP", "SISPOP", args_);
+  return true;
+} //----------------------------------------------------------------------------------------------------
 bool simple_wallet::register_service_node(const std::vector<std::string> &args_)
 {
   if (!try_connect_to_daemon())
@@ -6997,48 +7504,125 @@ bool simple_wallet::sweep_main_internal(sweep_type_t sweep_type, std::vector<too
   return true;
 }
 
-bool simple_wallet::sweep_main(uint64_t below, Transfer transfer_type, const std::vector<std::string> &args_)
-{
-  auto print_usage = [below]()
+bool simple_wallet::sweep_main(
+  uint32_t account,
+  uint64_t below,
+  bool locked,
+  const std::string& source_asset,
+  const std::string& dest_asset,
+  const std::vector<std::string> &args_
+){
+  auto print_usage = [this, account, below, source_asset, dest_asset]()
   {
-    if (below)
-    {
-      PRINT_USAGE(USAGE_SWEEP_BELOW);
-    }
-    else
-    {
+    if (!below && account != m_current_subaddress_account) {
+      PRINT_USAGE(USAGE_SWEEP_ACCOUNT);
+    } else if (source_asset == dest_asset) {
+      if (source_asset == "SISPOPRSV") {
+        if (below) {
+          PRINT_USAGE(USAGE_RESERVE_SWEEP_BELOW);
+        } else {
+          PRINT_USAGE(USAGE_RESERVE_SWEEP_ALL);
+        }
+      } else if (source_asset == "SISPOPUSD") {
+        if (below) {
+          PRINT_USAGE(USAGE_STABLE_SWEEP_BELOW);
+        } else {
+          PRINT_USAGE(USAGE_STABLE_SWEEP_ALL);
+        }
+      } else {
+        if (below) {
+          PRINT_USAGE(USAGE_SWEEP_BELOW);
+        } else {
+          PRINT_USAGE(USAGE_SWEEP_ALL);
+        }
+      }
+    } else if (source_asset == "SISPOP" && dest_asset == "SISPOPUSD") {
+      PRINT_USAGE(USAGE_MINT_STABLE_SWEEP_ALL);
+    } else if (source_asset == "SISPOPUSD" && dest_asset == "SISPOP") {
+      PRINT_USAGE(USAGE_REDEEM_STABLE_SWEEP_ALL);
+    } else if (source_asset == "SISPOP" && dest_asset == "SISPOPRSV") {
+      PRINT_USAGE(USAGE_MINT_RESERVE_SWEEP_ALL);
+    } else if (source_asset == "SISPOPRSV" && dest_asset == "SISPOP") {
+      PRINT_USAGE(USAGE_REDEEM_RESERVE_SWEEP_ALL);
+    } else {
       PRINT_USAGE(USAGE_SWEEP_ALL);
     }
   };
-
+  if (args_.size() == 0)
+  {
+    fail_msg_writer() << tr("No address given");
+    print_usage();
+    return true;
+  }
 
   if (!try_connect_to_daemon())
     return true;
 
   std::vector<std::string> local_args = args_;
+
+  std::set<uint32_t> subaddr_indices;
+  if (local_args.size() > 0 && local_args[0].substr(0, 6) == "index=")
+  {
+    if (local_args[0] == "index=all")
+    {
+      for (uint32_t i = 0; i < m_wallet->get_num_subaddresses(m_current_subaddress_account); ++i)
+        subaddr_indices.insert(i);
+    }
+    else if (!parse_subaddress_indices(local_args[0], subaddr_indices))
+    {
+      print_usage();
+      return true;
+    }
+    local_args.erase(local_args.begin());
+  }
+
   uint32_t priority = 0;
-  std::set<uint32_t> subaddr_indices  = {};
-  if (!parse_subaddr_indices_and_priority(*m_wallet, local_args, subaddr_indices, priority)) return false;
+  if (local_args.size() > 0 && parse_priority(local_args[0], priority))
+    local_args.erase(local_args.begin());
+
+  priority = m_wallet->adjust_priority(priority);
+
+  size_t fake_outs_count = m_wallet->get_min_ring_size() - 1;
+  if(local_args.size() > 0) {
+    size_t ring_size;
+    if(!epee::string_tools::get_xtype_from_string(ring_size, local_args[0]))
+    {
+    }
+    else if (ring_size == 0)
+    {
+      fail_msg_writer() << tr("Ring size must not be 0");
+      return true;
+    }
+    else
+    {
+      fake_outs_count = ring_size - 1;
+      local_args.erase(local_args.begin());
+    }
+  }
+  uint64_t adjusted_fake_outs_count = m_wallet->adjust_mixin(fake_outs_count);
+  if (adjusted_fake_outs_count > fake_outs_count)
+  {
+    fail_msg_writer() << (boost::format(tr("ring size %u is too small, minimum is %u")) % (fake_outs_count+1) % (adjusted_fake_outs_count+1)).str();
+    return true;
+  }
+  if (adjusted_fake_outs_count < fake_outs_count)
+  {
+    fail_msg_writer() << (boost::format(tr("ring size %u is too large, maximum is %u")) % (fake_outs_count+1) % (adjusted_fake_outs_count+1)).str();
+    return true;
+  }
 
   uint64_t unlock_block = 0;
-  if (transfer_type == Transfer::Locked) {
-    if (priority == tools::tx_priority_blink) {
-      fail_msg_writer() << tr("blink priority cannot be used for locked transfers");
-      return false;
-    }
+  if (locked) {
     uint64_t locked_blocks = 0;
 
-    if (local_args.size() < 1) {
+    if (local_args.size() < 2) {
       fail_msg_writer() << tr("missing lockedblocks parameter");
       return true;
     }
 
     try
     {
-      if (local_args.size() == 1) 
-        locked_blocks = boost::lexical_cast<uint64_t>(local_args[0]);
-      else
-        locked_blocks = boost::lexical_cast<uint64_t>(local_args[1]);
+      locked_blocks = boost::lexical_cast<uint64_t>(local_args[1]);
     }
     catch (const std::exception &e)
     {
@@ -7047,7 +7631,7 @@ bool simple_wallet::sweep_main(uint64_t below, Transfer transfer_type, const std
     }
     if (locked_blocks > 1000000)
     {
-      fail_msg_writer() << tr("Locked blocks too high, max 1000000 (~4 yrs)");
+      fail_msg_writer() << tr("Locked blocks too high, max 1000000 (˜4 yrs)");
       return true;
     }
     std::string err;
@@ -7092,11 +7676,6 @@ bool simple_wallet::sweep_main(uint64_t below, Transfer transfer_type, const std
     if(r)
     {
       LONG_PAYMENT_ID_SUPPORT_CHECK();
-
-      std::string extra_nonce;
-      set_payment_id_to_tx_extra_nonce(extra_nonce, payment_id);
-      r = add_extra_nonce_to_tx_extra(extra, extra_nonce);
-      payment_id_seen = true;
     }
 
     if(!r && local_args.size() == 3)
@@ -7110,13 +7689,7 @@ bool simple_wallet::sweep_main(uint64_t below, Transfer transfer_type, const std
   }
 
   cryptonote::address_parse_info info;
-  std::string addr;
-  if (local_args.size() > 0)
-    addr = local_args[0];
-  else 
-    addr = m_wallet->get_subaddress_as_str({m_current_subaddress_account, 0});
-  
-  if (!cryptonote::get_account_address_from_str_or_url(info, m_wallet->nettype(), addr, oa_prompter))
+  if (!cryptonote::get_account_address_from_str_or_url(info, m_wallet->nettype(), local_args[0], oa_prompter))
   {
     fail_msg_writer() << tr("failed to parse address");
     print_usage();
@@ -7143,12 +7716,161 @@ bool simple_wallet::sweep_main(uint64_t below, Transfer transfer_type, const std
   }
 
   SCOPED_WALLET_UNLOCK();
+
   try
   {
-    auto ptx_vector = m_wallet->create_transactions_all(below, info.address, info.is_subaddress, outputs, CRYPTONOTE_DEFAULT_TX_MIXIN, unlock_block /* unlock_time */, priority, extra, m_current_subaddress_account, subaddr_indices);
-    sweep_main_internal(sweep_type_t::all_or_below, ptx_vector, info, priority == tools::tx_priority_blink);
+    // figure out what tx will be necessary
+    auto ptx_vector = m_wallet->create_transactions_all(below, source_asset, dest_asset, info.address, info.is_subaddress, outputs, fake_outs_count, unlock_block /* unlock_time */, priority, extra, account, subaddr_indices);
+
+    if (ptx_vector.empty())
+    {
+      fail_msg_writer() << tr("No outputs found, or daemon is not ready");
+      return true;
+    }
+
+    if (!prompt_if_old(source_asset, ptx_vector))
+    {
+      fail_msg_writer() << tr("transaction cancelled.");
+      return false;
+    }
+
+    // give user total and fee, and prompt to confirm
+    uint64_t total_fee = 0, total_sent = 0, total_received = 0;
+
+    for (size_t n = 0; n < ptx_vector.size(); ++n)
+    {
+      total_fee += ptx_vector[n].fee;
+      for (auto i: ptx_vector[n].selected_transfers)
+        total_sent += m_wallet->get_transfer_details(i).amount();
+
+      for (const auto& dt: ptx_vector[n].dests) {
+        total_received += dt.dest_amount;
+      }
+    }
+
+    std::ostringstream prompt;
+    for (size_t n = 0; n < ptx_vector.size(); ++n)
+    {
+      prompt << tr("\nTransaction ") << (n + 1) << "/" << ptx_vector.size() << ":\n";
+      subaddr_indices.clear();
+      for (uint32_t i : ptx_vector[n].construction_data.subaddr_indices)
+        subaddr_indices.insert(i);
+      for (uint32_t i : subaddr_indices)
+        prompt << boost::format(tr("Spending from address index %d\n")) % i;
+      if (subaddr_indices.size() > 1)
+        prompt << tr("WARNING: Outputs of multiple addresses are being used together, which might potentially compromise your privacy.\n");
+    }
+    if (!process_ring_members(ptx_vector, prompt, m_wallet->print_ring_members()))
+      return true;
+    if (ptx_vector.size() > 1) {
+      prompt << boost::format(tr("Sweeping %s %s in %llu transactions for a total fee of %s %s.  Is this okay?")) %
+        print_money(total_sent) %
+        asset_display_name(source_asset) %
+        ((unsigned long long)ptx_vector.size()) %
+        print_money(total_fee) %
+        asset_display_name(source_asset);
+    }
+    else {
+      if (source_asset == dest_asset) {
+          prompt << boost::format(tr("Sweeping %s %s for a total fee of %s %s.  Is this okay?")) %
+            print_money(total_sent) %
+            asset_display_name(source_asset) %
+            print_money(total_fee) %
+            asset_display_name(source_asset);
+        } else {
+          using tt = cryptonote::transaction_type;
+          tt tx_type;
+          if(!get_tx_type(source_asset, dest_asset, tx_type)) {
+            fail_msg_writer() << tr("failed to get tx asset types.");
+            return false;
+          }
+          switch (tx_type)
+          {
+            case tt::MINT_STABLE:
+              prompt << boost::format(tr("Minting %s SISPOPUSD from %s SISPOP. Total fee is %s %s.\n  Is this okay")) % print_money(total_received) % print_money(total_sent) % print_money(total_fee) % asset_display_name(source_asset);
+              break;
+            case tt::REDEEM_STABLE:
+              prompt << boost::format(tr("Redeeming %s SISPOP from %s SISPOPUSD. Total fee is %s %s.\n  Is this okay?")) % print_money(total_received) % print_money(total_sent) % print_money(total_fee) % asset_display_name(source_asset);
+              break;
+            case tt::MINT_RESERVE:
+              prompt << boost::format(tr("Minting %s SISPOPRSV from %s SISPOP. Total fee is %s %s.\n  Is this okay?")) % print_money(total_received) % print_money(total_sent) % print_money(total_fee) % asset_display_name(source_asset);
+              break;
+            case tt::REDEEM_RESERVE:
+              prompt << boost::format(tr("Redeeming %s SISPOP from %s SISPOPRSV. Total fee is %s %s.\n  Is this okay?")) % print_money(total_received) % print_money(total_sent) % print_money(total_fee) % asset_display_name(source_asset);
+              break;
+            default:
+              fail_msg_writer() << tr("Unknown transaction type.");
+              return false;
+          }
+        }
+    }
+    std::string accepted = input_line(prompt.str(), true);
+    if (std::cin.eof())
+      return true;
+    if (!command_line::is_yes(accepted))
+    {
+      fail_msg_writer() << tr("transaction cancelled.");
+
+      return true;
+    }
+
+    // actually commit the transactions
+    if (m_wallet->multisig())
+    {
+      CHECK_MULTISIG_ENABLED();
+      bool r = m_wallet->save_multisig_tx(ptx_vector, "multisig_sispop_tx");
+      if (!r)
+      {
+        fail_msg_writer() << tr("Failed to write transaction(s) to file");
+      }
+      else
+      {
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "multisig_sispop_tx";
+      }
+    }
+    else if (m_wallet->get_account().get_device().has_tx_cold_sign())
+    {
+      try
+      {
+        tools::wallet2::signed_tx_set signed_tx;
+        std::vector<cryptonote::address_parse_info> dsts_info;
+        dsts_info.push_back(info);
+
+        if (!cold_sign_tx(ptx_vector, signed_tx, dsts_info, [&](const tools::wallet2::signed_tx_set &tx){ return accept_loaded_tx(tx); })){
+          fail_msg_writer() << tr("Failed to cold sign transaction with HW wallet");
+          return true;
+        }
+
+        commit_or_save(signed_tx.ptx, m_do_not_relay);
+      }
+      catch (const std::exception& e)
+      {
+        handle_transfer_exception(std::current_exception(), m_wallet->is_trusted_daemon());
+      }
+      catch (...)
+      {
+        LOG_ERROR("Unknown error");
+        fail_msg_writer() << tr("unknown error");
+      }
+    }
+    else if (m_wallet->watch_only())
+    {
+      bool r = m_wallet->save_tx(ptx_vector, "unsigned_sispop_tx");
+      if (!r)
+      {
+        fail_msg_writer() << tr("Failed to write transaction(s) to file");
+      }
+      else
+      {
+        success_msg_writer(true) << tr("Unsigned transaction(s) successfully written to file: ") << "unsigned_sispop_tx";
+      }
+    }
+    else
+    {
+      commit_or_save(ptx_vector, m_do_not_relay);
+    }
   }
-  catch (const std::exception &e)
+  catch (const std::exception& e)
   {
     handle_transfer_exception(std::current_exception(), m_wallet->is_trusted_daemon());
   }
@@ -7280,7 +8002,28 @@ bool simple_wallet::sweep_single(const std::vector<std::string> &args_)
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::sweep_all(const std::vector<std::string> &args_)
 {
-  return sweep_main(0, Transfer::Normal, args_);
+  sweep_main(m_current_subaddress_account, 0, false, "SISPOP", "SISPOP", args_);
+  return true;
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::sweep_account(const std::vector<std::string> &args_)
+{
+  auto local_args = args_;
+  if (local_args.empty())
+  {
+    PRINT_USAGE(USAGE_SWEEP_ACCOUNT);
+    return true;
+  }
+  uint32_t account = 0;
+  if (!epee::string_tools::get_xtype_from_string(account, local_args[0]))
+  {
+    fail_msg_writer() << tr("Invalid account");
+    return true;
+  }
+  local_args.erase(local_args.begin());
+
+  sweep_main(account, 0, false, "SISPOP", "SISPOP", local_args);
+  return true;
 }
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::sweep_below(const std::vector<std::string> &args_)
@@ -7289,6 +8032,7 @@ bool simple_wallet::sweep_below(const std::vector<std::string> &args_)
   if (args_.size() < 1)
   {
     fail_msg_writer() << tr("missing threshold amount");
+    PRINT_USAGE(USAGE_SWEEP_BELOW);
     return true;
   }
   if (!cryptonote::parse_amount(below, args_[0]))
@@ -7296,7 +8040,72 @@ bool simple_wallet::sweep_below(const std::vector<std::string> &args_)
     fail_msg_writer() << tr("invalid amount threshold");
     return true;
   }
-  return sweep_main(below, Transfer::Normal, std::vector<std::string>(++args_.begin(), args_.end()));
+  sweep_main(m_current_subaddress_account, below, false, "SISPOP", "SISPOP", std::vector<std::string>(++args_.begin(), args_.end()));
+  return true;
+}
+
+bool simple_wallet::stable_sweep_all(const std::vector<std::string> &args_)
+{
+  return sweep_main(m_current_subaddress_account, 0, false, "SISPOPUSD", "SISPOPUSD", args_);
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::stable_sweep_below(const std::vector<std::string> &args_)
+{
+  uint64_t below = 0;
+  if (args_.size() < 1)
+  {
+    fail_msg_writer() << tr("missing threshold amount");
+    PRINT_USAGE(USAGE_STABLE_SWEEP_BELOW);
+    return true;
+  }
+  if (!cryptonote::parse_amount(below, args_[0]))
+  {
+    fail_msg_writer() << tr("invalid amount threshold");
+    return true;
+  }
+  return sweep_main(m_current_subaddress_account, below, false, "SISPOPUSD", "SISPOPUSD", std::vector<std::string>(++args_.begin(), args_.end()));
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::reserve_sweep_all(const std::vector<std::string> &args_)
+{
+  return sweep_main(m_current_subaddress_account, 0, false, "SISPOPRSV", "SISPOPRSV", args_);
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::reserve_sweep_below(const std::vector<std::string> &args_)
+{
+  uint64_t below = 0;
+  if (args_.size() < 1)
+  {
+    fail_msg_writer() << tr("missing threshold amount");
+    PRINT_USAGE(USAGE_RESERVE_SWEEP_BELOW);
+    return true;
+  }
+  if (!cryptonote::parse_amount(below, args_[0]))
+  {
+    fail_msg_writer() << tr("invalid amount threshold");
+    return true;
+  }
+  return sweep_main(m_current_subaddress_account, below, false, "SISPOPRSV", "SISPOPRSV", std::vector<std::string>(++args_.begin(), args_.end()));
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::mint_stable_sweep_all(const std::vector<std::string> &args_)
+{
+  return sweep_main(m_current_subaddress_account, 0, false, "SISPOP", "SISPOPUSD", args_);
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::redeem_stable_sweep_all(const std::vector<std::string> &args_)
+{
+  return sweep_main(m_current_subaddress_account, 0, false, "SISPOPUSD", "SISPOP", args_);
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::mint_reserve_sweep_all(const std::vector<std::string> &args_)
+{
+  return sweep_main(m_current_subaddress_account, 0, false, "SISPOP", "SISPOPRSV", args_);
+}
+//----------------------------------------------------------------------------------------------------
+bool simple_wallet::redeem_reserve_sweep_all(const std::vector<std::string> &args_)
+{
+  return sweep_main(m_current_subaddress_account, 0, false, "SISPOPRSV", "SISPOP", args_);
 }
 //----------------------------------------------------------------------------------------------------
 bool simple_wallet::accept_loaded_tx(const std::function<size_t()> get_num_txes, const std::function<const tools::wallet2::tx_construction_data&(size_t)> &get_tx, const std::string &extra_message)
@@ -10404,7 +11213,7 @@ void simple_wallet::mms_sync(const std::vector<std::string> &args)
 void simple_wallet::mms_transfer(const std::vector<std::string> &args)
 {
   // It's too complicated to check any arguments here, just let 'transfer_main' do the whole job
-  transfer_main(Transfer::Normal, args, true);
+  transfer_main(Transfer, "SISPOP", "SISPOP", args, true);
 }
 
 void simple_wallet::mms_delete(const std::vector<std::string> &args)

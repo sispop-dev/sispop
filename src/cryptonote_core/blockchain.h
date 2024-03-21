@@ -263,6 +263,23 @@ namespace cryptonote
      *
      * @return true if the tx exists, else false
      */
+    bool get_pricing_record(oracle::pricing_record &pr, uint64_t timestamp);
+
+    /**
+     * @brief gets the latest pricing record that was in the last 10 block.
+     * If no pricing record found in the past 10 block, fails.
+     *
+     * @return false if method failed to obtain pricing, otherwise true
+     */
+    bool get_latest_acceptable_pr(oracle::pricing_record &pr) const;
+
+    /**
+     * @brief search the blockchain for a transaction by hash
+     *
+     * @param id the hash to search for
+     *
+     * @return true if the tx exists, else false
+     */
     bool have_tx(const crypto::hash &id) const;
 
     /**

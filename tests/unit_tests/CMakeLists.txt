@@ -26,6 +26,13 @@
 # STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 # THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+# Locate Google Test
+find_package(GTest REQUIRED)
+include_directories(${GTEST_INCLUDE_DIRS})
+
+# Link against Google Test
+target_link_libraries(your_target_name ${GTEST_LIBRARIES})
+
 add_executable(unit_tests
   account.cpp
   apply_permutation.cpp

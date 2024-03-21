@@ -68,6 +68,7 @@
 #include "wallet_light_rpc.h"
 
 #include "common/sispop_integration_test_hooks.h"
+#include "oracle/pricing_record.h"
 
 #undef SISPOP_DEFAULT_LOG_CATEGORY
 #define SISPOP_DEFAULT_LOG_CATEGORY "wallet.wallet2"
@@ -972,6 +973,21 @@ private:
     bool load_tx(const std::string &signed_filename, std::vector<tools::wallet2::pending_tx> &ptx, std::function<bool(const signed_tx_set&)> accept_func = NULL);
     bool parse_tx_from_str(const std::string &signed_tx_st, std::vector<tools::wallet2::pending_tx> &ptx, std::function<bool(const signed_tx_set &)> accept_func);
     std::vector<wallet2::pending_tx> create_transactions_2(std::vector<cryptonote::tx_destination_entry> dsts, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra_base, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices, cryptonote::sispop_construct_tx_params &tx_params);
+
+    void get_reserve_info(
+        const oracle::pricing_record &pricing_record,
+        boost::multiprecision::uint128_t &sispop_reserve,
+        boost::multiprecision::uint128_t &num_stables,
+        boost::multiprecision::uint128_t &num_reserves,
+        boost::multiprecision::uint128_t &assets,
+        boost::multiprecision::uint128_t &assets_ma,
+        boost::multiprecision::uint128_t &liabilities,
+        boost::multiprecision::uint128_t &equity,
+        boost::multiprecision::uint128_t &equity_ma,
+        double &reserve_ratio,
+        double &reserve_ratio_ma);
+    double get_spot_reserve_ratio(const oracle::pricing_record &pricing_record);
+    double get_ma_reserve_ratio(const oracle::pricing_record &pricing_record);
 
     std::vector<wallet2::pending_tx> create_transactions_all(uint64_t below, const cryptonote::account_public_address &address, bool is_subaddress, const size_t outputs, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra, uint32_t subaddr_account, std::set<uint32_t> subaddr_indices, cryptonote::txtype tx_type = cryptonote::txtype::standard);
     std::vector<wallet2::pending_tx> create_transactions_single(const crypto::key_image &ki, const cryptonote::account_public_address &address, bool is_subaddress, const size_t outputs, const size_t fake_outs_count, const uint64_t unlock_time, uint32_t priority, const std::vector<uint8_t>& extra, cryptonote::txtype tx_type = cryptonote::txtype::standard);
