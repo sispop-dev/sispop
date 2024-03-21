@@ -165,6 +165,8 @@ static_assert(STAKING_PORTIONS % 12 == 0, "Use a multiple of twelve, so that it 
 #define HF_VERSION_FEE_BURNING                  cryptonote::network_version_14_blink
 #define HF_VERSION_BLINK                        cryptonote::network_version_14_blink
 
+#define HF_VERSION_DJED                         3
+
 #define PER_KB_FEE_QUANTIZATION_DECIMALS        8
 
 #define HASH_OF_HASHES_STEP                     256

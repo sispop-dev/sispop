@@ -1,21 +1,21 @@
 // Copyright (c) 2014-2019, The Monero Project
-// 
+//
 // All rights reserved.
-// 
+//
 // Redistribution and use in source and binary forms, with or without modification, are
 // permitted provided that the following conditions are met:
-// 
+//
 // 1. Redistributions of source code must retain the above copyright notice, this list of
 //    conditions and the following disclaimer.
-// 
+//
 // 2. Redistributions in binary form must reproduce the above copyright notice, this list
 //    of conditions and the following disclaimer in the documentation and/or other
 //    materials provided with the distribution.
-// 
+//
 // 3. Neither the name of the copyright holder nor the names of its contributors may be
 //    used to endorse or promote products derived from this software without specific
 //    prior written permission.
-// 
+//
 // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY
 // EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
 // MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
@@ -25,7 +25,7 @@
 // INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-// 
+//
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include <unordered_set>
@@ -51,13 +51,13 @@ using namespace crypto;
 namespace cryptonote
 {
   //---------------------------------------------------------------
-  static void classify_addresses(const std::vector<tx_destination_entry> &destinations, const boost::optional<cryptonote::tx_destination_entry>& change_addr, size_t &num_stdaddresses, size_t &num_subaddresses, account_public_address &single_dest_subaddress)
+  static void classify_addresses(const std::vector<tx_destination_entry> &destinations, const boost::optional<cryptonote::tx_destination_entry> &change_addr, size_t &num_stdaddresses, size_t &num_subaddresses, account_public_address &single_dest_subaddress)
   {
     num_stdaddresses = 0;
     num_subaddresses = 0;
     std::unordered_set<cryptonote::account_public_address> unique_dst_addresses;
     bool change_found = false;
-    for(const tx_destination_entry& dst_entr: destinations)
+    for (const tx_destination_entry &dst_entr : destinations)
     {
       if (change_addr && *change_addr == dst_entr && !change_found)
       {
@@ -85,15 +85,15 @@ namespace cryptonote
   {
     keypair k;
 
-    ec_scalar& sec = k.sec;
+    ec_scalar &sec = k.sec;
 
-    for (int i=0; i < 8; i++)
+    for (int i = 0; i < 8; i++)
     {
-      uint64_t height_byte = height & ((uint64_t)0xFF << (i*8));
-      uint8_t byte = height_byte >> i*8;
+      uint64_t height_byte = height & ((uint64_t)0xFF << (i * 8));
+      uint8_t byte = height_byte >> i * 8;
       sec.data[i] = byte;
     }
-    for (int i=8; i < 32; i++)
+    for (int i = 8; i < 32; i++)
     {
       sec.data[i] = 0x00;
     }
@@ -103,7 +103,7 @@ namespace cryptonote
     return k;
   }
 
-  bool get_deterministic_output_key(const account_public_address& address, const keypair& tx_key, size_t output_index, crypto::public_key& output_key)
+  bool get_deterministic_output_key(const account_public_address &address, const keypair &tx_key, size_t output_index, crypto::public_key &output_key)
   {
 
     crypto::key_derivation derivation{};
@@ -111,12 +111,12 @@ namespace cryptonote
     CHECK_AND_ASSERT_MES(r, false, "failed to generate_key_derivation(" << address.m_view_public_key << ", " << tx_key.sec << ")");
 
     r = crypto::derive_public_key(derivation, output_index, address.m_spend_public_key, output_key);
-    CHECK_AND_ASSERT_MES(r, false, "failed to derive_public_key(" << derivation << ", " << output_index << ", "<< address.m_spend_public_key << ")");
+    CHECK_AND_ASSERT_MES(r, false, "failed to derive_public_key(" << derivation << ", " << output_index << ", " << address.m_spend_public_key << ")");
 
     return true;
   }
 
-  bool validate_governance_reward_key(uint64_t height, const std::string& governance_wallet_address_str, size_t output_index, const crypto::public_key& output_key, const cryptonote::network_type nettype)
+  bool validate_governance_reward_key(uint64_t height, const std::string &governance_wallet_address_str, size_t output_index, const crypto::public_key &output_key, const cryptonote::network_type nettype)
   {
     keypair gov_key = get_deterministic_keypair_from_height(height);
 
@@ -135,10 +135,9 @@ namespace cryptonote
 
   uint64_t governance_reward_formula(uint64_t base_reward, uint8_t hf_version)
   {
-    return hf_version >= network_version_17     ? FOUNDATION_REWARD_HF17 :
-           hf_version >= network_version_16     ? FOUNDATION_REWARD_HF16 :
-           hf_version >= network_version_15_lns ? FOUNDATION_REWARD_HF15 :
-           base_reward / 20;
+    return hf_version >= network_version_17 ? FOUNDATION_REWARD_HF17 : hf_version >= network_version_16   ? FOUNDATION_REWARD_HF16
+                                                                   : hf_version >= network_version_15_lns ? FOUNDATION_REWARD_HF15
+                                                                                                          : base_reward / 20;
   }
 
   bool block_has_governance_output(network_type nettype, cryptonote::block const &block)
@@ -169,9 +168,9 @@ namespace cryptonote
     if (hf_version >= 15)
       return governance_reward_formula(0, hf_version);
 
-    uint64_t result       = 0;
+    uint64_t result = 0;
     uint64_t snode_reward = 0;
-    size_t vout_end     = block.miner_tx.vout.size();
+    size_t vout_end = block.miner_tx.vout.size();
 
     if (block_has_governance_output(nettype, block))
       --vout_end; // skip the governance output, the governance may be the batched amount. we want the original base reward
@@ -182,17 +181,18 @@ namespace cryptonote
       snode_reward += output.amount;
     }
 
-    uint64_t base_reward  = snode_reward * 2; // pre-HF15, SN reward = half of base reward
-    uint64_t governance   = governance_reward_formula(base_reward, hf_version);
+    uint64_t base_reward = snode_reward * 2; // pre-HF15, SN reward = half of base reward
+    uint64_t governance = governance_reward_formula(base_reward, hf_version);
     uint64_t block_reward = base_reward - governance;
 
     uint64_t actual_reward = 0; // sanity check
-    for (tx_out const &output : block.miner_tx.vout) actual_reward += output.amount;
+    for (tx_out const &output : block.miner_tx.vout)
+      actual_reward += output.amount;
 
     CHECK_AND_ASSERT_MES(block_reward <= actual_reward, false,
-        "Rederiving the base block reward from the service node reward "
-        "exceeded the actual amount paid in the block, derived block reward: "
-        << block_reward << ", actual reward: " << actual_reward);
+                         "Rederiving the base block reward from the service node reward "
+                         "exceeded the actual amount paid in the block, derived block reward: "
+                             << block_reward << ", actual reward: " << actual_reward);
 
     result = governance;
     return result;
@@ -200,12 +200,11 @@ namespace cryptonote
 
   uint64_t service_node_reward_formula(uint64_t base_reward, uint8_t hard_fork_version)
   {
-    return
-      hard_fork_version >= network_version_17              ? SN_REWARD_HF17 :
-      hard_fork_version >= network_version_16              ? SN_REWARD_HF16 :
-      hard_fork_version >= network_version_15_lns          ? SN_REWARD_HF15 :
-      hard_fork_version >= network_version_9_service_nodes ? base_reward / 2 : // 50% of base reward up until HF15's fixed payout
-      0;
+    return hard_fork_version >= network_version_17 ? SN_REWARD_HF17 : hard_fork_version >= network_version_16            ? SN_REWARD_HF16
+                                                                  : hard_fork_version >= network_version_15_lns          ? SN_REWARD_HF15
+                                                                  : hard_fork_version >= network_version_9_service_nodes ? base_reward / 2
+                                                                                                                         : // 50% of base reward up until HF15's fixed payout
+                                                                      0;
   }
 
   uint64_t get_portion_of_reward(uint64_t portions, uint64_t total_service_node_reward)
@@ -216,7 +215,7 @@ namespace cryptonote
     return rewardlo;
   }
 
-  static uint64_t calculate_sum_of_portions(const std::vector<service_nodes::payout_entry>& payouts, uint64_t total_service_node_reward)
+  static uint64_t calculate_sum_of_portions(const std::vector<service_nodes::payout_entry> &payouts, uint64_t total_service_node_reward)
   {
     uint64_t reward = 0;
     for (size_t i = 0; i < payouts.size(); i++)
@@ -231,8 +230,8 @@ namespace cryptonote
       size_t current_block_weight,
       uint64_t fee,
       const account_public_address &miner_address,
-      transaction& tx,
-      const blobdata& extra_nonce,
+      transaction &tx,
+      const blobdata &extra_nonce,
       uint8_t hard_fork_version,
       const sispop_miner_tx_context &miner_tx_context)
   {
@@ -242,16 +241,16 @@ namespace cryptonote
     tx.vout.clear();
     tx.extra.clear();
     tx.output_unlock_times.clear();
-    tx.type    = txtype::standard;
+    tx.type = txtype::standard;
     tx.version = transaction::get_max_version_for_hf(hard_fork_version);
 
-    const crypto::public_key &service_node_key                        = miner_tx_context.block_winner.key;
+    const crypto::public_key &service_node_key = miner_tx_context.block_winner.key;
     const std::vector<service_nodes::payout_entry> &service_node_info = miner_tx_context.block_winner.payouts;
 
     keypair txkey = keypair::generate(hw::get_device("default"));
     add_tx_pub_key_to_extra(tx, txkey.pub);
-    if(!extra_nonce.empty())
-      if(!add_extra_nonce_to_tx_extra(tx.extra, extra_nonce))
+    if (!extra_nonce.empty())
+      if (!add_extra_nonce_to_tx_extra(tx.extra, extra_nonce))
         return false;
     if (!sort_tx_extra(tx.extra, tx.extra))
       return false;
@@ -268,13 +267,13 @@ namespace cryptonote
     in.height = height;
 
     sispop_block_reward_context block_reward_context = {};
-    block_reward_context.fee                       = fee;
-    block_reward_context.height                    = height;
-    block_reward_context.service_node_payouts      = miner_tx_context.block_winner.payouts;
-    block_reward_context.batched_governance        = miner_tx_context.batched_governance;
+    block_reward_context.fee = fee;
+    block_reward_context.height = height;
+    block_reward_context.service_node_payouts = miner_tx_context.block_winner.payouts;
+    block_reward_context.batched_governance = miner_tx_context.batched_governance;
 
     block_reward_parts reward_parts;
-    if(!get_sispop_block_reward(median_weight, current_block_weight, already_generated_coins, hard_fork_version, reward_parts, block_reward_context))
+    if (!get_sispop_block_reward(median_weight, current_block_weight, already_generated_coins, hard_fork_version, reward_parts, block_reward_context))
     {
       LOG_PRINT_L0("Failed to calculate block reward");
       return false;
@@ -289,7 +288,7 @@ namespace cryptonote
       CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << miner_address.m_view_public_key << ", " << txkey.sec << ")");
 
       r = crypto::derive_public_key(derivation, 0, miner_address.m_spend_public_key, out_eph_public_key);
-      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << 0 << ", "<< miner_address.m_spend_public_key << ")");
+      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << 0 << ", " << miner_address.m_spend_public_key << ")");
 
       txout_to_key tk;
       tk.key = out_eph_public_key;
@@ -310,8 +309,8 @@ namespace cryptonote
         crypto::public_key out_eph_public_key{};
         bool r = crypto::generate_key_derivation(payout.address.m_view_public_key, gov_key.sec, derivation);
         CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << payout.address.m_view_public_key << ", " << gov_key.sec << ")");
-        r = crypto::derive_public_key(derivation, 1+i, payout.address.m_spend_public_key, out_eph_public_key);
-        CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << (1+i) << ", "<< payout.address.m_spend_public_key << ")");
+        r = crypto::derive_public_key(derivation, 1 + i, payout.address.m_spend_public_key, out_eph_public_key);
+        CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << (1 + i) << ", " << payout.address.m_spend_public_key << ")");
 
         txout_to_key tk;
         tk.key = out_eph_public_key;
@@ -357,12 +356,157 @@ namespace cryptonote
     uint64_t expected_amount = reward_parts.miner_reward() + reward_parts.governance_paid + reward_parts.service_node_paid;
     CHECK_AND_ASSERT_MES(summary_amounts == expected_amount, false, "Failed to construct miner tx, summary_amounts = " << summary_amounts << " not equal total block_reward = " << expected_amount);
 
-    //lock
+    // lock
     tx.unlock_time = height + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
     tx.vin.push_back(in);
     tx.invalidate_hashes();
 
-    //LOG_PRINT("MINER_TX generated ok, block_reward=" << print_money(block_reward) << "("  << print_money(block_reward - fee) << "+" << print_money(fee)
+    // LOG_PRINT("MINER_TX generated ok, block_reward=" << print_money(block_reward) << "("  << print_money(block_reward - fee) << "+" << print_money(fee)
+    //   << "), current_block_size=" << current_block_size << ", already_generated_coins=" << already_generated_coins << ", tx_id=" << get_transaction_hash(tx), LOG_LEVEL_2);
+    return true;
+  }
+
+  bool construct_miner_tx(size_t height, size_t median_weight, uint64_t already_generated_coins, size_t current_block_weight, std::map<std::string, uint64_t> fee_map, const account_public_address &miner_address, transaction &tx, const blobdata &extra_nonce, size_t max_outs, uint8_t hard_fork_version, cryptonote::network_type nettype)
+  {
+    tx.vin.clear();
+    tx.vout.clear();
+    tx.extra.clear();
+
+    keypair txkey = keypair::generate(hw::get_device("default"));
+    add_tx_pub_key_to_extra(tx, txkey.pub);
+    if (!extra_nonce.empty())
+      if (!add_extra_nonce_to_tx_extra(tx.extra, extra_nonce))
+        return false;
+    if (!sort_tx_extra(tx.extra, tx.extra))
+      return false;
+
+    keypair gov_key = get_deterministic_keypair_from_height(height);
+
+    txin_gen in;
+    in.height = height;
+
+    uint64_t block_reward;
+    if (!get_block_reward(median_weight, current_block_weight, already_generated_coins, block_reward, hard_fork_version))
+    {
+      LOG_PRINT_L0("Block is too big");
+      return false;
+    }
+
+#if defined(DEBUG_CREATE_BLOCK_TEMPLATE)
+    LOG_PRINT_L1("Creating block template: reward " << block_reward << ", fee " << fee);
+#endif
+
+    uint64_t governance_reward = 0;
+    uint64_t reserve_reward = 0;
+    if (already_generated_coins != 0)
+    {
+      governance_reward = get_governance_reward(block_reward);
+      if (hard_fork_version >= HF_VERSION_DJED)
+      {
+        reserve_reward = get_reserve_reward(block_reward);
+      }
+
+      block_reward -= reserve_reward;
+      block_reward -= governance_reward;
+
+      LOG_PRINT_L1("CREATING BLOCK reserve_reward " << reserve_reward << " height: " << height);
+    }
+
+    block_reward += fee_map["SISPOP"];
+    uint64_t summary_amounts = 0;
+    CHECK_AND_ASSERT_MES(1 <= max_outs, false, "max_out must be non-zero");
+
+    crypto::key_derivation derivation = AUTO_VAL_INIT(derivation);
+    crypto::public_key out_eph_public_key = AUTO_VAL_INIT(out_eph_public_key);
+    bool r = crypto::generate_key_derivation(miner_address.m_view_public_key, txkey.sec, derivation);
+    CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << miner_address.m_view_public_key << ", " << txkey.sec << ")");
+
+    r = crypto::derive_public_key(derivation, 0, miner_address.m_spend_public_key, out_eph_public_key);
+    CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << 0 << ", " << miner_address.m_spend_public_key << ")");
+
+    uint64_t amount = block_reward;
+    summary_amounts += amount;
+
+    bool use_view_tags = true;
+    crypto::view_tag view_tag;
+    if (use_view_tags)
+      crypto::derive_view_tag(derivation, 0, view_tag);
+
+    tx_out out;
+    cryptonote::set_tx_out("SISPOP", amount, out_eph_public_key, use_view_tags, view_tag, out);
+    tx.vout.push_back(out);
+
+    cryptonote::address_parse_info governance_wallet_address;
+    if (already_generated_coins != 0)
+    {
+      add_tx_pub_key_to_extra(tx, gov_key.pub);
+      cryptonote::get_account_address_from_str(governance_wallet_address, nettype, get_governance_address(nettype));
+
+      crypto::key_derivation derivation = AUTO_VAL_INIT(derivation);
+      crypto::public_key out_eph_public_key = AUTO_VAL_INIT(out_eph_public_key);
+      if (!get_deterministic_output_key(governance_wallet_address.address, gov_key, 1 /* second output in miner tx */, out_eph_public_key, derivation))
+      {
+        MERROR("Failed to generate deterministic output key for governance wallet output creation");
+        return false;
+      }
+
+      crypto::view_tag view_tag;
+      if (use_view_tags)
+        crypto::derive_view_tag(derivation, 1, view_tag);
+
+      tx_out out;
+      cryptonote::set_tx_out("SISPOP", governance_reward, out_eph_public_key, use_view_tags, view_tag, out);
+
+      summary_amounts += governance_reward;
+
+      tx.vout.push_back(out);
+      CHECK_AND_ASSERT_MES(summary_amounts == (block_reward + governance_reward), false, "Failed to construct miner tx, summary_amounts = " << summary_amounts << " not equal total block_reward = " << (block_reward + governance_reward));
+    }
+
+    if (hard_fork_version >= HF_VERSION_DJED)
+    {
+      uint64_t idx = 2;
+      for (auto &fee_map_entry : fee_map)
+      {
+        if (fee_map_entry.first == "SISPOP" || fee_map_entry.second == 0)
+          continue;
+        crypto::key_derivation derivation = AUTO_VAL_INIT(derivation);
+        crypto::public_key out_eph_public_key = AUTO_VAL_INIT(out_eph_public_key);
+        bool r = crypto::generate_key_derivation(miner_address.m_view_public_key, txkey.sec, derivation);
+        CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << miner_address.m_view_public_key << ", " << txkey.sec << ")");
+
+        r = crypto::derive_public_key(derivation, idx, miner_address.m_spend_public_key, out_eph_public_key);
+        CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << idx << ", " << miner_address.m_spend_public_key << ")");
+
+        bool use_view_tags = true;
+        crypto::view_tag view_tag;
+        if (use_view_tags)
+          crypto::derive_view_tag(derivation, idx, view_tag);
+
+        tx_out out;
+        cryptonote::set_tx_out(fee_map_entry.first, fee_map_entry.second, out_eph_public_key, use_view_tags, view_tag, out);
+        tx.vout.push_back(out);
+        idx++;
+      }
+    }
+
+    if (hard_fork_version >= HF_VERSION_DJED)
+    {
+      tx.version = 3;
+    }
+    else
+    {
+      tx.version = 2;
+    }
+
+    // lock
+    tx.unlock_time = height + CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW;
+    tx.vin.push_back(in);
+
+    tx.invalidate_hashes();
+
+    // LOG_PRINT_L1("miner tx CREATED: " << get_transaction_hash(tx) << ENDL << obj_to_json_str(tx));
+    // LOG_PRINT("MINER_TX generated ok, block_reward=" << print_money(block_reward) << "("  << print_money(block_reward - fee) << "+" << print_money(fee)
     //  << "), current_block_size=" << current_block_size << ", already_generated_coins=" << already_generated_coins << ", tx_id=" << get_transaction_hash(tx), LOG_LEVEL_2);
     return true;
   }
@@ -396,15 +540,15 @@ namespace cryptonote
         hard_fork_version >= network_version_13_enforce_checkpoints ? base_reward_unpenalized : base_reward;
 
     result.service_node_total = service_node_reward_formula(result.original_base_reward, hard_fork_version);
-    result.service_node_paid  = calculate_sum_of_portions(sispop_context.service_node_payouts, result.service_node_total);
+    result.service_node_paid = calculate_sum_of_portions(sispop_context.service_node_payouts, result.service_node_total);
 
     // There is a goverance fee due every block.  Beginning in hardfork 10 this is still subtracted
     // from the block reward as if it was paid, but the actual payments get batched into rare, large
     // accumulated payments.  (Before hardfork 10 they are included in every block, unbatched).
-    result.governance_due  = governance_reward_formula(result.original_base_reward, hard_fork_version);
+    result.governance_due = governance_reward_formula(result.original_base_reward, hard_fork_version);
     result.governance_paid = hard_fork_version >= network_version_10_bulletproofs
-        ? sispop_context.batched_governance
-        : result.governance_due;
+                                 ? sispop_context.batched_governance
+                                 : result.governance_due;
 
     // The base_miner amount is everything left in the base reward after subtracting off the service
     // node and governance fee amounts (the due amount in the latter case).  (Any penalty for
@@ -416,7 +560,7 @@ namespace cryptonote
     return true;
   }
 
-  crypto::public_key get_destination_view_key_pub(const std::vector<tx_destination_entry> &destinations, const boost::optional<cryptonote::tx_destination_entry>& change_addr)
+  crypto::public_key get_destination_view_key_pub(const std::vector<tx_destination_entry> &destinations, const boost::optional<cryptonote::tx_destination_entry> &change_addr)
   {
     account_public_address addr = {null_pkey, null_pkey};
     size_t count = 0;
@@ -442,7 +586,27 @@ namespace cryptonote
     return addr.m_view_public_key;
   }
   //---------------------------------------------------------------
-  bool construct_tx_with_tx_key(const account_keys& sender_account_keys, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, std::vector<tx_source_entry>& sources, std::vector<tx_destination_entry>& destinations, const boost::optional<tx_destination_entry>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time, const crypto::secret_key &tx_key, const std::vector<crypto::secret_key> &additional_tx_keys, const rct::RCTConfig &rct_config, rct::multisig_out *msout, bool shuffle_outs, sispop_construct_tx_params const &tx_params)
+  bool construct_tx_with_tx_key(
+      const account_keys &sender_account_keys,
+      const std::unordered_map<crypto::public_key, subaddress_index> &subaddresses,
+      std::vector<tx_source_entry> &sources,
+      std::vector<tx_destination_entry> &destinations,
+      const boost::optional<cryptonote::account_public_address> &change_addr,
+      const std::vector<uint8_t> &extra,
+      transaction &tx,
+      const std::string &source_asset,
+      const std::string &dest_asset,
+      const uint64_t current_height,
+      const uint8_t hf_version,
+      const oracle::pricing_record &pr,
+      const std::vector<std::pair<std::string, std::string>> circ_amounts,
+      uint64_t unlock_time,
+      const crypto::secret_key &tx_key,
+      const std::vector<crypto::secret_key> &additional_tx_keys,
+      bool rct,
+      const rct::RCTConfig &rct_config,
+      bool shuffle_outs,
+      bool use_view_tags)
   {
     hw::device &hwdev = sender_account_keys.get_device();
 
@@ -461,7 +625,7 @@ namespace cryptonote
     }
 
     tx.version = transaction::get_max_version_for_hf(tx_params.hf_version);
-    tx.type    = tx_params.tx_type;
+    tx.type = tx_params.tx_type;
     if (tx.version <= txversion::v2_ringct)
       tx.unlock_time = unlock_time;
 
@@ -567,47 +731,47 @@ namespace cryptonote
     std::vector<input_generation_context_data> in_contexts;
 
     uint64_t summary_inputs_money = 0;
-    //fill inputs
+    // fill inputs
     int idx = -1;
-    for(const tx_source_entry& src_entr:  sources)
+    for (const tx_source_entry &src_entr : sources)
     {
       ++idx;
-      if(src_entr.real_output >= src_entr.outputs.size())
+      if (src_entr.real_output >= src_entr.outputs.size())
       {
         LOG_ERROR("real_output index (" << src_entr.real_output << ")bigger than output_keys.size()=" << src_entr.outputs.size());
         return false;
       }
       summary_inputs_money += src_entr.amount;
 
-      //key_derivation recv_derivation;
+      // key_derivation recv_derivation;
       in_contexts.push_back(input_generation_context_data());
-      keypair& in_ephemeral = in_contexts.back().in_ephemeral;
+      keypair &in_ephemeral = in_contexts.back().in_ephemeral;
       crypto::key_image img;
-      const auto& out_key = reinterpret_cast<const crypto::public_key&>(src_entr.outputs[src_entr.real_output].second.dest);
-      if(!generate_key_image_helper(sender_account_keys, subaddresses, out_key, src_entr.real_out_tx_key, src_entr.real_out_additional_tx_keys, src_entr.real_output_in_tx_index, in_ephemeral,img, hwdev))
+      const auto &out_key = reinterpret_cast<const crypto::public_key &>(src_entr.outputs[src_entr.real_output].second.dest);
+      if (!generate_key_image_helper(sender_account_keys, subaddresses, out_key, src_entr.real_out_tx_key, src_entr.real_out_additional_tx_keys, src_entr.real_output_in_tx_index, in_ephemeral, img, hwdev))
       {
         LOG_ERROR("Key image generation failed!");
         return false;
       }
 
-      //check that derivated key is equal with real output key (if non multisig)
-      if(!msout && !(in_ephemeral.pub == src_entr.outputs[src_entr.real_output].second.dest) )
+      // check that derivated key is equal with real output key (if non multisig)
+      if (!msout && !(in_ephemeral.pub == src_entr.outputs[src_entr.real_output].second.dest))
       {
-        LOG_ERROR("derived public key mismatch with output public key at index " << idx << ", real out " << src_entr.real_output << "! "<< ENDL << "derived_key:"
-          << string_tools::pod_to_hex(in_ephemeral.pub) << ENDL << "real output_public_key:"
-          << string_tools::pod_to_hex(src_entr.outputs[src_entr.real_output].second.dest) );
+        LOG_ERROR("derived public key mismatch with output public key at index " << idx << ", real out " << src_entr.real_output << "! " << ENDL << "derived_key:"
+                                                                                 << string_tools::pod_to_hex(in_ephemeral.pub) << ENDL << "real output_public_key:"
+                                                                                 << string_tools::pod_to_hex(src_entr.outputs[src_entr.real_output].second.dest));
         LOG_ERROR("amount " << src_entr.amount << ", rct " << src_entr.rct);
         LOG_ERROR("tx pubkey " << src_entr.real_out_tx_key << ", real_output_in_tx_index " << src_entr.real_output_in_tx_index);
         return false;
       }
 
-      //put key image into tx input
+      // put key image into tx input
       txin_to_key input_to_key;
       input_to_key.amount = src_entr.amount;
       input_to_key.k_image = msout ? rct::rct2ki(src_entr.multisig_kLRki.ki) : img;
 
-      //fill outputs array and use relative offsets
-      for(const tx_source_entry::output_entry& out_entry: src_entr.outputs)
+      // fill outputs array and use relative offsets
+      for (const tx_source_entry::output_entry &out_entry : src_entr.outputs)
         input_to_key.key_offsets.push_back(out_entry.first);
 
       input_to_key.key_offsets = absolute_output_offsets_to_relative(input_to_key.key_offsets);
@@ -623,16 +787,16 @@ namespace cryptonote
     std::vector<size_t> ins_order(sources.size());
     for (size_t n = 0; n < sources.size(); ++n)
       ins_order[n] = n;
-    std::sort(ins_order.begin(), ins_order.end(), [&](const size_t i0, const size_t i1) {
+    std::sort(ins_order.begin(), ins_order.end(), [&](const size_t i0, const size_t i1)
+              {
       const txin_to_key &tk0 = boost::get<txin_to_key>(tx.vin[i0]);
       const txin_to_key &tk1 = boost::get<txin_to_key>(tx.vin[i1]);
-      return memcmp(&tk0.k_image, &tk1.k_image, sizeof(tk0.k_image)) > 0;
-    });
-    tools::apply_permutation(ins_order, [&] (size_t i0, size_t i1) {
+      return memcmp(&tk0.k_image, &tk1.k_image, sizeof(tk0.k_image)) > 0; });
+    tools::apply_permutation(ins_order, [&](size_t i0, size_t i1)
+                             {
       std::swap(tx.vin[i0], tx.vin[i1]);
       std::swap(in_contexts[i0], in_contexts[i1]);
-      std::swap(sources[i0], sources[i1]);
-    });
+      std::swap(sources[i0], sources[i1]); });
 
     // figure out if we need to make additional tx pubkeys
     size_t num_stdaddresses = 0;
@@ -662,12 +826,12 @@ namespace cryptonote
       CHECK_AND_ASSERT_MES(destinations.size() == additional_tx_keys.size(), false, "Wrong amount of additional tx keys");
 
     uint64_t summary_outs_money = 0;
-    //fill outputs
+    // fill outputs
     size_t output_index = 0;
 
     tx_extra_tx_key_image_proofs key_image_proofs;
     bool found_change_already = false;
-    for(const tx_destination_entry& dst_entr: destinations)
+    for (const tx_destination_entry &dst_entr : destinations)
     {
       CHECK_AND_ASSERT_MES(dst_entr.amount > 0 || tx.version >= txversion::v2_ringct, false, "Destination with wrong amount: " << dst_entr.amount);
       crypto::public_key out_eph_public_key;
@@ -694,22 +858,22 @@ namespace cryptonote
       if (tx.type == txtype::stake)
       {
         CHECK_AND_ASSERT_MES(dst_entr.addr == sender_account_keys.m_account_address, false, "A staking contribution must return back to the original sendee otherwise the pre-calculated key image is incorrect");
-        CHECK_AND_ASSERT_MES(dst_entr.is_subaddress == false, false, "Staking back to a subaddress is not allowed"); // TODO(sispop): Maybe one day, revisit this
+        CHECK_AND_ASSERT_MES(dst_entr.is_subaddress == false, false, "Staking back to a subaddress is not allowed");      // TODO(sispop): Maybe one day, revisit this
         CHECK_AND_ASSERT_MES(need_additional_txkeys == false, false, "Staking TX's can not required additional TX Keys"); // TODO(sispop): Maybe one day, revisit this
 
         if (!(change_addr && *change_addr == dst_entr))
         {
           tx_extra_tx_key_image_proofs::proof proof = {};
-          keypair                ephemeral_keys = {};
+          keypair ephemeral_keys = {};
           const subaddress_index zeroth_address = {};
-          if(!generate_key_image_helper(sender_account_keys, subaddresses, out_eph_public_key, txkey_pub, additional_tx_public_keys, output_index, ephemeral_keys, proof.key_image, hwdev))
+          if (!generate_key_image_helper(sender_account_keys, subaddresses, out_eph_public_key, txkey_pub, additional_tx_public_keys, output_index, ephemeral_keys, proof.key_image, hwdev))
           {
             LOG_ERROR("Key image generation failed for staking TX!");
             return false;
           }
 
           crypto::public_key const *out_eph_public_key_ptr = &out_eph_public_key;
-          crypto::generate_ring_signature((const crypto::hash&)proof.key_image, proof.key_image, &out_eph_public_key_ptr, 1, ephemeral_keys.sec, 0, &proof.signature);
+          crypto::generate_ring_signature((const crypto::hash &)proof.key_image, proof.key_image, &out_eph_public_key_ptr, 1, ephemeral_keys.sec, 0, &proof.signature);
           key_image_proofs.proofs.push_back(proof);
         }
       }
@@ -750,10 +914,10 @@ namespace cryptonote
 
     CHECK_AND_ASSERT_MES(tx.extra.size() <= MAX_TX_EXTRA_SIZE, false, "TX extra size (" << tx.extra.size() << ") is greater than max allowed (" << MAX_TX_EXTRA_SIZE << ")");
 
-    //check money
-    if(summary_outs_money > summary_inputs_money )
+    // check money
+    if (summary_outs_money > summary_inputs_money)
     {
-      LOG_ERROR("Transaction inputs money ("<< summary_inputs_money << ") less than outputs money (" << summary_outs_money << ")");
+      LOG_ERROR("Transaction inputs money (" << summary_inputs_money << ") less than outputs money (" << summary_outs_money << ")");
       return false;
     }
 
@@ -768,19 +932,19 @@ namespace cryptonote
 
     if (tx.version == txversion::v1)
     {
-      //generate ring signatures
+      // generate ring signatures
       crypto::hash tx_prefix_hash;
       get_transaction_prefix_hash(tx, tx_prefix_hash);
 
       std::stringstream ss_ring_s;
       size_t i = 0;
-      for(const tx_source_entry& src_entr:  sources)
+      for (const tx_source_entry &src_entr : sources)
       {
         ss_ring_s << "pub_keys:" << ENDL;
-        std::vector<const crypto::public_key*> keys_ptrs;
+        std::vector<const crypto::public_key *> keys_ptrs;
         std::vector<crypto::public_key> keys(src_entr.outputs.size());
         size_t ii = 0;
-        for(const tx_source_entry::output_entry& o: src_entr.outputs)
+        for (const tx_source_entry::output_entry &o : src_entr.outputs)
         {
           keys[ii] = rct2pk(o.second.dest);
           keys_ptrs.push_back(&keys[ii]);
@@ -789,12 +953,13 @@ namespace cryptonote
         }
 
         tx.signatures.push_back(std::vector<crypto::signature>());
-        std::vector<crypto::signature>& sigs = tx.signatures.back();
+        std::vector<crypto::signature> &sigs = tx.signatures.back();
         sigs.resize(src_entr.outputs.size());
         if (!zero_secret_key)
           crypto::generate_ring_signature(tx_prefix_hash, boost::get<txin_to_key>(tx.vin[i]).k_image, keys_ptrs, in_contexts[i].in_ephemeral.sec, src_entr.real_output, sigs.data());
         ss_ring_s << "signatures:" << ENDL;
-        std::for_each(sigs.begin(), sigs.end(), [&](const crypto::signature& s){ss_ring_s << s << ENDL;});
+        std::for_each(sigs.begin(), sigs.end(), [&](const crypto::signature &s)
+                      { ss_ring_s << s << ENDL; });
         ss_ring_s << "prefix_hash:" << tx_prefix_hash << ENDL << "in_ephemeral_key: " << in_contexts[i].in_ephemeral.sec << ENDL << "real_output: " << src_entr.real_output << ENDL;
         i++;
       }
@@ -812,9 +977,9 @@ namespace cryptonote
       if (!use_simple_rct)
       {
         // non simple ringct requires all real inputs to be at the same index for all inputs
-        for(const tx_source_entry& src_entr:  sources)
+        for (const tx_source_entry &src_entr : sources)
         {
-          if(src_entr.real_output != sources.begin()->real_output)
+          if (src_entr.real_output != sources.begin()->real_output)
           {
             LOG_ERROR("All inputs must have the same index for non-simple ringct");
             return false;
@@ -822,8 +987,10 @@ namespace cryptonote
         }
 
         // enforce same mixin for all outputs
-        for (size_t i = 1; i < sources.size(); ++i) {
-          if (n_total_outs != sources[i].outputs.size()) {
+        for (size_t i = 1; i < sources.size(); ++i)
+        {
+          if (n_total_outs != sources[i].outputs.size())
+          {
             LOG_ERROR("Non-simple ringct transaction has varying ring size");
             return false;
           }
@@ -934,52 +1101,823 @@ namespace cryptonote
 
     return true;
   }
+
+  std::string get_governance_address(network_type nettype)
+  {
+    if (nettype == TESTNET)
+    {
+      return ::config::testnet::GOVERNANCE_WALLET_ADDRESS;
+    }
+    else if (nettype == STAGENET)
+    {
+      return ::config::stagenet::GOVERNANCE_WALLET_ADDRESS;
+    }
+    else
+    {
+      return ::config::GOVERNANCE_WALLET_ADDRESS;
+    }
+  }
+
+  bool get_tx_asset_types(const transaction &tx, const crypto::hash &txid, std::string &source, std::string &destination, const bool is_miner_tx)
+  {
+
+    // Clear the source
+    std::set<std::string> source_asset_types;
+    source = "";
+    for (size_t i = 0; i < tx.vin.size(); i++)
+    {
+      if (tx.vin[i].type() == typeid(txin_gen))
+      {
+        if (!is_miner_tx)
+        {
+          LOG_ERROR("txin_gen detected in non-miner TX. Rejecting..");
+          return false;
+        }
+        source_asset_types.insert("SISPOP");
+      }
+      else if (tx.vin[i].type() == typeid(txin_sispop_key))
+      {
+        source_asset_types.insert(boost::get<txin_sispop_key>(tx.vin[i]).asset_type);
+      }
+      else
+      {
+        LOG_ERROR("txin_to_script / txin_to_scripthash detected. Rejecting..");
+        return false;
+      }
+    }
+
+    std::vector<std::string> sat;
+    sat.reserve(source_asset_types.size());
+    std::copy(source_asset_types.begin(), source_asset_types.end(), std::back_inserter(sat));
+
+    // Sanity check that we only have 1 source asset type
+    if (sat.size() != 1)
+    {
+      LOG_ERROR("Multiple Source Asset types detected. Rejecting..");
+      return false;
+    }
+    source = sat[0];
+
+    // Clear the destination
+    std::set<std::string> destination_asset_types;
+    destination = "";
+    for (const auto &out : tx.vout)
+    {
+      std::string output_asset_type;
+      bool ok = cryptonote::get_output_asset_type(out, output_asset_type);
+      if (!ok)
+      {
+        LOG_ERROR("Unexpected output target type found: " << out.target.type().name());
+        return false;
+      }
+      destination_asset_types.insert(output_asset_type);
+    }
+
+    std::vector<std::string> dat;
+    dat.reserve(destination_asset_types.size());
+    std::copy(destination_asset_types.begin(), destination_asset_types.end(), std::back_inserter(dat));
+
+    // Check that we have at least 1 destination_asset_type
+    if (!dat.size())
+    {
+      LOG_ERROR("No supported destinations asset types detected. Rejecting..");
+      return false;
+    }
+
+    // Handle miner_txs differently - full validation is performed in validate_miner_transaction()
+    if (is_miner_tx)
+    {
+      destination = "SISPOP";
+    }
+    else
+    {
+
+      // Sanity check that we only have 1 or 2 destination asset types
+      if (dat.size() > 2)
+      {
+        LOG_ERROR("Too many (" << dat.size() << ") destination asset types detected in non-miner TX. Rejecting..");
+        return false;
+      }
+      else if (dat.size() == 1)
+      {
+        if (dat[0] != source)
+        {
+          LOG_ERROR("Conversion without change detected ([" << source << "] -> [" << dat[0] << "]). Rejecting..");
+          return false;
+        }
+        destination = source;
+      }
+      else
+      {
+        if (dat[0] == source)
+        {
+          destination = dat[1];
+        }
+        else if (dat[1] == source)
+        {
+          destination = dat[0];
+        }
+        else
+        {
+          LOG_ERROR("Conversion outputs are incorrect asset types (source asset type not found - [" << source << "] -> [" << dat[0] << "," << dat[1] << "]). Rejecting..");
+          return false;
+        }
+      }
+    }
+
+    // check both strSource and strDest are supported.
+    if (std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), source) == oracle::ASSET_TYPES.end())
+    {
+      LOG_ERROR("Source Asset type " << source << " is not supported! Rejecting..");
+      return false;
+    }
+    if (std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), destination) == oracle::ASSET_TYPES.end())
+    {
+      LOG_ERROR("Destination Asset type " << destination << " is not supported! Rejecting..");
+      return false;
+    }
+
+    return true;
+  }
   //---------------------------------------------------------------
-  bool construct_tx_and_get_tx_key(const account_keys& sender_account_keys, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, std::vector<tx_source_entry>& sources, std::vector<tx_destination_entry>& destinations, const boost::optional<cryptonote::tx_destination_entry>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time, crypto::secret_key &tx_key, std::vector<crypto::secret_key> &additional_tx_keys, const rct::RCTConfig &rct_config, rct::multisig_out *msout, sispop_construct_tx_params const &tx_params)
+  bool get_tx_type(const std::string &source, const std::string &destination, transaction_type &type)
+  {
+
+    // check both source and destination are supported.
+    if (std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), source) == oracle::ASSET_TYPES.end())
+    {
+      LOG_ERROR("Source Asset type " << source << " is not supported! Rejecting..");
+      return false;
+    }
+    if (std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), destination) == oracle::ASSET_TYPES.end())
+    {
+      LOG_ERROR("Destination Asset type " << destination << " is not supported! Rejecting..");
+      return false;
+    }
+
+    // Find the tx type
+    if (source == destination)
+    {
+      if (source == "SISPOP")
+      {
+        type = transaction_type::TRANSFER;
+      }
+      else if (source == "SISPOPUSD")
+      {
+        type = transaction_type::STABLE_TRANSFER;
+      }
+      else if (source == "SISPOPRSV")
+      {
+        type = transaction_type::RESERVE_TRANSFER;
+      }
+      else
+      {
+        LOG_ERROR("Invalid conversion from " << source << "to" << destination << ". Rejecting..");
+        return false;
+      }
+    }
+    else
+    {
+      if (source == "SISPOP" && destination == "SISPOPUSD")
+      {
+        type = transaction_type::MINT_STABLE;
+      }
+      else if (source == "SISPOPUSD" && destination == "SISPOP")
+      {
+        type = transaction_type::REDEEM_STABLE;
+      }
+      else if (source == "SISPOP" && destination == "SISPOPRSV")
+      {
+        type = transaction_type::MINT_RESERVE;
+      }
+      else if (source == "SISPOPRSV" && destination == "SISPOP")
+      {
+        type = transaction_type::REDEEM_RESERVE;
+      }
+      else
+      {
+        LOG_ERROR("Invalid conversion from " << source << "to" << destination << ". Rejecting..");
+        return false;
+      }
+    }
+
+    // Return success to caller
+    return true;
+  }
+  //---------------------------------------------------------------
+  void get_circulating_asset_amounts(const std::vector<std::pair<std::string, std::string>> &circ_amounts, multiprecision::uint128_t &sispop_reserve, multiprecision::uint128_t &num_stables, multiprecision::uint128_t &num_reserves)
+  {
+    sispop_reserve = 0;
+    for (auto circ_amount : circ_amounts)
+    {
+      if (circ_amount.first == "SISPOP")
+      {
+        sispop_reserve = multiprecision::uint128_t(circ_amount.second);
+        break;
+      }
+    }
+
+    num_stables = 0;
+    for (auto circ_amount : circ_amounts)
+    {
+      if (circ_amount.first == "SISPOPUSD")
+      {
+        num_stables = multiprecision::uint128_t(circ_amount.second);
+        break;
+      }
+    }
+    num_reserves = 0;
+    for (auto circ_amount : circ_amounts)
+    {
+      if (circ_amount.first == "SISPOPRSV")
+      {
+        num_reserves = multiprecision::uint128_t(circ_amount.second);
+        break;
+      }
+    }
+  }
+  //---------------------------------------------------------------
+  void get_reserve_info(
+      const std::vector<std::pair<std::string, std::string>> &circ_amounts,
+      const oracle::pricing_record &pr,
+      multiprecision::uint128_t &sispop_reserve,
+      multiprecision::uint128_t &num_stables,
+      multiprecision::uint128_t &num_reserves,
+      multiprecision::uint128_t &assets,
+      multiprecision::uint128_t &assets_ma,
+      multiprecision::uint128_t &liabilities,
+      multiprecision::uint128_t &equity,
+      multiprecision::uint128_t &equity_ma,
+      double &reserve_ratio,
+      double &reserve_ratio_ma)
+  {
+    get_circulating_asset_amounts(circ_amounts, sispop_reserve, num_stables, num_reserves);
+
+    multiprecision::cpp_bin_float_quad assets_float = sispop_reserve.convert_to<multiprecision::cpp_bin_float_quad>() * pr.spot;
+    multiprecision::cpp_bin_float_quad assets_ma_float = sispop_reserve.convert_to<multiprecision::cpp_bin_float_quad>() * pr.moving_average;
+    multiprecision::cpp_bin_float_quad liabilities_float = num_stables.convert_to<multiprecision::cpp_bin_float_quad>();
+
+    if ((assets_float == 0 || assets_ma_float == 0) && liabilities_float == 0)
+    {
+      assets = 0;
+      assets_ma = 0;
+      liabilities = 0;
+      equity = 0;
+      equity_ma = 0;
+      reserve_ratio = 0;
+      reserve_ratio_ma = 0;
+      return;
+    }
+
+    multiprecision::cpp_bin_float_quad reserve_ratio_128 = assets_float / liabilities_float;
+    multiprecision::cpp_bin_float_quad reserve_ratio_ma_128 = assets_ma_float / liabilities_float;
+
+    assets_float /= COIN;
+    assets_ma_float /= COIN;
+    assets = assets_float.convert_to<multiprecision::uint128_t>();
+    assets_ma = assets_ma_float.convert_to<multiprecision::uint128_t>();
+    liabilities = liabilities_float.convert_to<multiprecision::uint128_t>();
+    equity = assets > liabilities ? assets - liabilities : 0;
+    equity_ma = assets_ma > liabilities ? assets_ma - liabilities : 0;
+
+    reserve_ratio_128 /= COIN;
+    reserve_ratio_ma_128 /= COIN;
+    reserve_ratio = reserve_ratio_128.convert_to<double>();
+    reserve_ratio_ma = reserve_ratio_ma_128.convert_to<double>();
+    return;
+  }
+  double get_spot_reserve_ratio(const std::vector<std::pair<std::string, std::string>> &circ_amounts, const oracle::pricing_record &pr)
+  {
+    return get_reserve_ratio(circ_amounts, pr.spot);
+  }
+  double get_ma_reserve_ratio(const std::vector<std::pair<std::string, std::string>> &circ_amounts, const oracle::pricing_record &pr)
+  {
+    return get_reserve_ratio(circ_amounts, pr.moving_average);
+  }
+  double get_reserve_ratio(const std::vector<std::pair<std::string, std::string>> &circ_amounts, const uint64_t oracle_price)
+  {
+    multiprecision::uint128_t sispop_reserve, num_stables, num_reserves;
+    get_circulating_asset_amounts(circ_amounts, sispop_reserve, num_stables, num_reserves);
+
+    multiprecision::cpp_bin_float_quad assets = sispop_reserve.convert_to<multiprecision::cpp_bin_float_quad>() * oracle_price;
+    multiprecision::cpp_bin_float_quad liabilities = num_stables.convert_to<multiprecision::cpp_bin_float_quad>();
+    if (assets == 0 && liabilities == 0)
+      return 0;
+
+    multiprecision::cpp_bin_float_quad reserve_ratio = assets / liabilities;
+    reserve_ratio /= COIN;
+    if (reserve_ratio > std::numeric_limits<double>::max())
+      return std::numeric_limits<double>::infinity();
+    return (double)reserve_ratio;
+  }
+  //---------------------------------------------------------------
+  bool reserve_ratio_satisfied(const std::vector<std::pair<std::string, std::string>> &circ_amounts, const oracle::pricing_record &pr, const transaction_type &tx_type, multiprecision::int128_t tally_sispop, multiprecision::int128_t tally_stables, multiprecision::int128_t tally_reserves)
+  {
+    std::string error_reason;
+    return reserve_ratio_satisfied(circ_amounts, pr, tx_type, tally_sispop, tally_stables, tally_reserves, error_reason);
+  }
+  //---------------------------------------------------------------
+  bool reserve_ratio_satisfied(const std::vector<std::pair<std::string, std::string>> &circ_amounts, const oracle::pricing_record &pr, const transaction_type &tx_type, multiprecision::int128_t tally_sispop, multiprecision::int128_t tally_stables, multiprecision::int128_t tally_reserves, std::string &error_reason)
+  {
+    if (pr.has_missing_rates())
+    {
+      error_reason = "Reserve ratio cannot be calculated. Pricing record is missing rates.";
+      LOG_ERROR(error_reason);
+      return false;
+    }
+
+    multiprecision::uint128_t sispop_reserve, num_stables, num_reserves;
+    get_circulating_asset_amounts(circ_amounts, sispop_reserve, num_stables, num_reserves);
+
+    // Early exit if no SISPOP in the reserve
+    if (sispop_reserve == 0)
+    {
+      if (tx_type == transaction_type::MINT_RESERVE)
+      {
+        return true;
+      }
+      error_reason = "Reserve ratio not satisfied. No SISPOP in the reserve.";
+      LOG_ERROR(error_reason);
+      return false;
+    }
+
+    multiprecision::cpp_bin_float_quad assets = sispop_reserve.convert_to<multiprecision::cpp_bin_float_quad>() + tally_sispop.convert_to<multiprecision::cpp_bin_float_quad>();
+    if (assets < 0)
+    {
+      error_reason = "Reserve ratio not satisfied. SISPOP reserve would be negative.";
+      LOG_ERROR(error_reason);
+      return false;
+    }
+
+    multiprecision::cpp_bin_float_quad liabilities = num_stables.convert_to<multiprecision::cpp_bin_float_quad>() + tally_stables.convert_to<multiprecision::cpp_bin_float_quad>();
+    if (liabilities < 0)
+    {
+      error_reason = "Reserve ratio not satisfied. Liabilities would be negative.";
+      LOG_ERROR(error_reason);
+      return false;
+    }
+
+    multiprecision::cpp_bin_float_quad total_reserve_coins = num_reserves.convert_to<multiprecision::cpp_bin_float_quad>() + tally_reserves.convert_to<multiprecision::cpp_bin_float_quad>();
+    if (total_reserve_coins < 0)
+    {
+      error_reason = "Reserve ratio not satisfied. Total reserve coins would be negative.";
+      LOG_ERROR(error_reason);
+      return false;
+    }
+
+    if (assets == 0 && liabilities == 0)
+    {
+      error_reason = "Reserve ratio not satisfied. Assets and liabilities are both zero.";
+      LOG_ERROR(error_reason);
+      return false;
+    }
+
+    multiprecision::cpp_bin_float_quad assets_spot = assets * pr.spot;
+    multiprecision::cpp_bin_float_quad assets_MA = assets * pr.moving_average;
+    if (assets != 0 && (assets_spot == 0 || assets_MA == 0))
+    {
+      error_reason = "Reserve ratio not satisfied. Error calculating assets.";
+      LOG_ERROR(error_reason);
+      return false;
+    }
+
+    multiprecision::cpp_bin_float_quad reserve_ratio_spot = assets_spot / liabilities;
+    multiprecision::cpp_bin_float_quad reserve_ratio_MA = assets_MA / liabilities;
+
+    reserve_ratio_spot /= COIN;
+    reserve_ratio_MA /= COIN;
+
+    if (boost::math::isnan(reserve_ratio_spot) || boost::math::isnan(reserve_ratio_MA))
+    {
+      error_reason = "Reserve ratio not satisfied. Error calculating reserve ratio.";
+      LOG_ERROR(error_reason);
+      return false;
+    }
+    if (reserve_ratio_spot < 0 || reserve_ratio_MA < 0)
+    {
+      error_reason = "Reserve ratio not satisfied. Reserve ratio would be negative.";
+      LOG_ERROR(error_reason);
+      return false;
+    }
+
+    if (tx_type == transaction_type::MINT_STABLE)
+    {
+      // Make sure the reserve ratio is at least 4.0
+      if (reserve_ratio_spot < 4.0)
+      {
+        error_reason = "Spot reserve ratio not satisfied. New reserve ratio would be " + std::to_string((double)reserve_ratio_spot) + " which is less than minimum 4.0";
+        LOG_ERROR(error_reason);
+        return false;
+      }
+      if (reserve_ratio_MA < 4.0)
+      {
+        error_reason = "MA reserve ratio not satisfied. New reserve ratio would be " + std::to_string((double)reserve_ratio_MA) + " which is less than minimum 4.0";
+        LOG_ERROR(error_reason);
+        return false;
+      }
+      return true;
+    }
+
+    if (tx_type == transaction_type::REDEEM_STABLE)
+    {
+      if (assets == 0)
+      {
+        error_reason = "Reserve ratio not satisfied. Assets are zero.";
+        LOG_ERROR(error_reason);
+        return false;
+      }
+      return true;
+    }
+
+    if (tx_type == transaction_type::MINT_RESERVE)
+    {
+      // If there is less than 100 circulating stablecoins, then reserve coin minting is allowed
+      const uint64_t threshold_num_stables = 100 * COIN;
+      if (liabilities < threshold_num_stables)
+      {
+        return true;
+      }
+      // Make sure the reserve ratio has not exceeded max of 8.0
+      if (reserve_ratio_spot >= 8.0)
+      {
+        error_reason = "Spot reserve ratio not satisfied. New reserve ratio would be " + std::to_string((double)reserve_ratio_spot) + " which is above the maximum 8.0";
+        LOG_ERROR(error_reason);
+        return false;
+      }
+      if (reserve_ratio_MA >= 8.0)
+      {
+        error_reason = "MA reserve ratio not satisfied. New reserve ratio would be " + std::to_string((double)reserve_ratio_MA) + " which is above the maximum 8.0";
+        LOG_ERROR(error_reason);
+        return false;
+      }
+      return true;
+    }
+
+    if (tx_type == transaction_type::REDEEM_RESERVE)
+    {
+      // Make sure the reserve ratio is at least 4.0
+      if (reserve_ratio_spot < 4.0)
+      {
+        error_reason = "Reserve ratio not satisfied. New reserve ratio would be " + std::to_string((double)reserve_ratio_spot) + " which is less than the minimum 4.0";
+        LOG_ERROR(error_reason);
+        return false;
+      }
+      if (reserve_ratio_MA < 4.0)
+      {
+        error_reason = "Reserve ratio not satisfied. New reserve ratio would be " + std::to_string((double)reserve_ratio_MA) + " which is less than the minimum 4.0";
+        LOG_ERROR(error_reason);
+        return false;
+      }
+      return true;
+    }
+
+    error_reason = "Reserve ratios not satisfied. Spot: " + std::to_string((double)reserve_ratio_spot) + " | MA: " + std::to_string((double)reserve_ratio_MA);
+    LOG_ERROR(error_reason);
+    return false;
+  }
+  //---------------------------------------------------------------
+  uint64_t get_stable_coin_price(const std::vector<std::pair<std::string, std::string>> &circ_amounts, uint64_t oracle_price)
+  {
+    if (oracle_price <= 0)
+      return 0;
+
+    multiprecision::uint128_t rate_128 = COIN;
+    rate_128 *= COIN;
+    rate_128 /= oracle_price;
+    rate_128 -= (rate_128 % 10000);
+
+    if (rate_128 > std::numeric_limits<uint64_t>::max())
+    {
+      MWARNING("overflow detected in stable coin price calculation.");
+      rate_128 = 0;
+    }
+    uint64_t rate = rate_128.convert_to<uint64_t>();
+
+    multiprecision::uint128_t sispop_reserve, num_stables, num_reserves;
+    get_circulating_asset_amounts(circ_amounts, sispop_reserve, num_stables, num_reserves);
+
+    if (num_stables == 0)
+    {
+      return rate;
+    }
+
+    // Calculate the reserve ratio
+    multiprecision::cpp_bin_float_quad assets = sispop_reserve.convert_to<multiprecision::cpp_bin_float_quad>();
+    assets *= oracle_price;
+    multiprecision::cpp_bin_float_quad reserve_ratio_atomized = assets / num_stables.convert_to<multiprecision::cpp_bin_float_quad>();
+    multiprecision::cpp_bin_float_quad reserve_ratio = reserve_ratio_atomized / COIN;
+
+    if (reserve_ratio < 1.0)
+    {
+      sispop_reserve *= COIN;
+      multiprecision::uint128_t worst_case_stable_rate = sispop_reserve / num_stables;
+      worst_case_stable_rate -= (worst_case_stable_rate % 10000);
+      if (worst_case_stable_rate > std::numeric_limits<uint64_t>::max())
+      {
+        MWARNING("overflow detected in stablecoin price calculation.");
+        worst_case_stable_rate = 0;
+      }
+      return worst_case_stable_rate.convert_to<uint64_t>();
+    }
+
+    return rate;
+  }
+  //---------------------------------------------------------------
+  uint64_t get_reserve_coin_price(const std::vector<std::pair<std::string, std::string>> &circ_amounts, uint64_t exchange_rate)
+  {
+    if (exchange_rate <= 0)
+      return 0;
+
+    multiprecision::uint128_t sispop_reserve, num_stables, num_reserves;
+    get_circulating_asset_amounts(circ_amounts, sispop_reserve, num_stables, num_reserves);
+
+    uint64_t price_r_min = 500000000000;
+    if (num_reserves == 0)
+    {
+      MDEBUG("No reserve amount detected. Using price_r_min..");
+      return price_r_min;
+    }
+
+    multiprecision::cpp_bin_float_quad assets = sispop_reserve.convert_to<multiprecision::cpp_bin_float_quad>();
+    multiprecision::cpp_bin_float_quad liabilities = num_stables.convert_to<multiprecision::cpp_bin_float_quad>();
+
+    liabilities *= COIN;
+    liabilities /= exchange_rate;
+
+    multiprecision::cpp_bin_float_quad equity = assets - liabilities;
+
+    if (equity < 0)
+    {
+      return price_r_min;
+    }
+
+    equity *= COIN;
+    multiprecision::cpp_bin_float_quad reserve_coin_price_float = equity / num_reserves.convert_to<multiprecision::cpp_bin_float_quad>();
+
+    if (reserve_coin_price_float > std::numeric_limits<uint64_t>::max())
+    {
+      MWARNING("overflow detected in reserve coin price calculation.");
+      return 0;
+    }
+
+    uint64_t reserve_coin_price = reserve_coin_price_float.convert_to<uint64_t>();
+    reserve_coin_price -= (reserve_coin_price % 10000);
+
+    return std::max(reserve_coin_price, price_r_min);
+  }
+  //---------------------------------------------------------------
+  // SISPOP -> SISPOPRSV
+  uint64_t sispop_to_sispoprsv(const uint64_t amount, const oracle::pricing_record &pr)
+  {
+    multiprecision::uint128_t amount_128 = amount;
+    multiprecision::uint128_t reserve_coin_price = std::max(pr.reserve, pr.reserve_ma);
+
+    // for rct precision
+    multiprecision::uint128_t rate_128 = COIN;
+    rate_128 *= COIN;
+    rate_128 /= reserve_coin_price;
+    rate_128 -= (rate_128 % 10000);
+
+    multiprecision::uint128_t reserve_amount_128 = amount_128 * rate_128;
+    reserve_amount_128 /= COIN;
+
+    if (reserve_amount_128 > std::numeric_limits<uint64_t>::max())
+    {
+      MWARNING("overflow detected in reserve amount calculation.");
+      reserve_amount_128 = 0;
+    }
+
+    return reserve_amount_128.convert_to<uint64_t>();
+  }
+  //---------------------------------------------------------------
+  // SISPOPRSV -> SISPOP
+  uint64_t sispoprsv_to_sispop(const uint64_t amount, const oracle::pricing_record &pr)
+  {
+    multiprecision::uint128_t amount_128 = amount;
+    multiprecision::uint128_t reserve_coin_price = std::min(pr.reserve, pr.reserve_ma);
+    multiprecision::uint128_t conversion_fee = (reserve_coin_price * 2) / 100; // 2% fee
+    reserve_coin_price -= conversion_fee;
+    reserve_coin_price -= (reserve_coin_price % 10000);
+
+    multiprecision::uint128_t reserve_amount_128 = amount_128 * reserve_coin_price;
+    reserve_amount_128 /= COIN;
+
+    if (reserve_amount_128 > std::numeric_limits<uint64_t>::max())
+    {
+      MWARNING("overflow detected in sispop amount from reserve amount calculation.");
+      reserve_amount_128 = 0;
+    }
+
+    return reserve_amount_128.convert_to<uint64_t>();
+  }
+  //---------------------------------------------------------------
+  // SISPOP -> SISPOPUSD
+  uint64_t sispop_to_sispopusd(const uint64_t amount, const oracle::pricing_record &pr)
+  {
+    multiprecision::uint128_t amount_128 = amount;
+    multiprecision::uint128_t exchange_128 = std::max(pr.stable, pr.stable_ma);
+
+    multiprecision::uint128_t rate_128 = COIN;
+    rate_128 *= COIN;
+    rate_128 /= exchange_128;
+
+    multiprecision::uint128_t conversion_fee = (rate_128 * 2) / 100; // 2% fee
+    rate_128 -= conversion_fee;
+    rate_128 -= (rate_128 % 10000);
+
+    multiprecision::uint128_t stable_128 = amount_128 * rate_128;
+    stable_128 /= COIN;
+
+    if (stable_128 > std::numeric_limits<uint64_t>::max())
+    {
+      MWARNING("overflow detected in stable amount calculation.");
+      stable_128 = 0;
+    }
+
+    return stable_128.convert_to<uint64_t>();
+  }
+  //---------------------------------------------------------------
+  // SISPOPUSD -> SISPOP
+  uint64_t sispopusd_to_sispop(const uint64_t amount, const oracle::pricing_record &pr)
+  {
+    multiprecision::uint128_t stable_128 = amount;
+    multiprecision::uint128_t exchange_128 = std::min(pr.stable, pr.stable_ma);
+    multiprecision::uint128_t conversion_fee = (exchange_128 * 2) / 100; // 2% fee
+    exchange_128 -= conversion_fee;
+    exchange_128 -= (exchange_128 % 10000);
+
+    multiprecision::uint128_t sispop_128 = stable_128 * exchange_128;
+    sispop_128 /= COIN;
+
+    if (sispop_128 > std::numeric_limits<uint64_t>::max())
+    {
+      MWARNING("overflow detected in sispop amount calculation.");
+      sispop_128 = 0;
+    }
+
+    return sispop_128.convert_to<uint64_t>();
+  }
+  //---------------------------------------------------------------
+  uint64_t sispop_to_asset_fee(const uint64_t sispop_fee, const uint64_t exchange_rate)
+  {
+    multiprecision::uint128_t sispop_fee_128 = sispop_fee;
+    multiprecision::uint128_t rate_128 = COIN;
+    rate_128 *= COIN;
+    rate_128 /= exchange_rate;
+    rate_128 -= (rate_128 % 10000);
+
+    multiprecision::uint128_t asset_fee = sispop_fee_128 * rate_128;
+    asset_fee /= COIN;
+    if (asset_fee > std::numeric_limits<uint64_t>::max())
+    {
+      MWARNING("overflow detected in sispop_to_asset_fee calculation.");
+      asset_fee = 0;
+    }
+    return asset_fee.convert_to<uint64_t>();
+  }
+  //---------------------------------------------------------------
+  uint64_t asset_to_sispop_fee(const uint64_t asset_fee, const uint64_t exchange_rate)
+  {
+    multiprecision::uint128_t asset_fee_128 = asset_fee;
+    multiprecision::uint128_t sispop_fee = asset_fee_128 * exchange_rate;
+    sispop_fee /= COIN;
+    if (sispop_fee > std::numeric_limits<uint64_t>::max())
+    {
+      MWARNING("overflow detected in asset_to_sispop_fee calculation.");
+      sispop_fee = 0;
+    }
+    return sispop_fee.convert_to<uint64_t>();
+  }
+  //---------------------------------------------------------------------------------
+  uint64_t get_fee_in_sispop_equivalent(const std::string &fee_asset, uint64_t fee_amount, const oracle::pricing_record &pr)
+  {
+    if (fee_asset == "SISPOP" || pr.has_missing_rates())
+    {
+      return fee_amount;
+    }
+    else if (fee_asset == "SISPOPUSD")
+    {
+      return asset_to_sispop_fee(fee_amount, pr.stable_ma);
+    }
+    else if (fee_asset == "SISPOPRSV")
+    {
+      return asset_to_sispop_fee(fee_amount, pr.reserve_ma);
+    }
+
+    return fee_amount;
+  }
+  //---------------------------------------------------------------------------------
+  uint64_t get_fee_in_asset_equivalent(const std::string &to_asset_type, uint64_t fee_amount, const oracle::pricing_record &pr)
+  {
+    if (to_asset_type == "SISPOP" || pr.has_missing_rates())
+    {
+      return fee_amount;
+    }
+    else if (to_asset_type == "SISPOPUSD")
+    {
+      return sispop_to_asset_fee(fee_amount, pr.stable_ma);
+    }
+    else if (to_asset_type == "SISPOPRSV")
+    {
+      return sispop_to_asset_fee(fee_amount, pr.reserve_ma);
+    }
+
+    return fee_amount;
+  }
+  //---------------------------------------------------------------
+  bool construct_tx_and_get_tx_key(
+      const account_keys &sender_account_keys,
+      const std::unordered_map<crypto::public_key,
+                               subaddress_index> &subaddresses,
+      std::vector<tx_source_entry> &sources,
+      std::vector<tx_destination_entry> &destinations,
+      const boost::optional<cryptonote::account_public_address> &change_addr,
+      const std::vector<uint8_t> &extra,
+      transaction &tx,
+      const std::string &source_asset,
+      const std::string &dest_asset,
+      const uint64_t current_height,
+      const uint8_t hf_version,
+      const oracle::pricing_record &pr,
+      const std::vector<std::pair<std::string, std::string>> circ_amounts,
+      uint64_t unlock_time,
+      crypto::secret_key &tx_key,
+      std::vector<crypto::secret_key> &additional_tx_keys,
+      bool rct,
+      const rct::RCTConfig &rct_config,
+      bool use_view_tags)
   {
     hw::device &hwdev = sender_account_keys.get_device();
     hwdev.open_tx(tx_key);
-
-    // figure out if we need to make additional tx pubkeys
-    size_t num_stdaddresses = 0;
-    size_t num_subaddresses = 0;
-    account_public_address single_dest_subaddress;
-    classify_addresses(destinations, change_addr, num_stdaddresses, num_subaddresses, single_dest_subaddress);
-    bool need_additional_txkeys = num_subaddresses > 0 && (num_stdaddresses > 0 || num_subaddresses > 1);
-    if (need_additional_txkeys)
+    try
     {
-      additional_tx_keys.clear();
-      for (const auto &d: destinations)
-        additional_tx_keys.push_back(keypair::generate(sender_account_keys.get_device()).sec);
-    }
+      // figure out if we need to make additional tx pubkeys
+      size_t num_stdaddresses = 0;
+      size_t num_subaddresses = 0;
+      account_public_address single_dest_subaddress;
+      classify_addresses(destinations, change_addr, num_stdaddresses, num_subaddresses, single_dest_subaddress);
+      bool need_additional_txkeys = num_subaddresses > 0 && (num_stdaddresses > 0 || num_subaddresses > 1);
+      if (need_additional_txkeys)
+      {
+        additional_tx_keys.clear();
+        for (size_t i = 0; i < destinations.size(); ++i)
+        {
+          additional_tx_keys.push_back(keypair::generate(sender_account_keys.get_device()).sec);
+        }
+      }
 
-    bool r = construct_tx_with_tx_key(sender_account_keys, subaddresses, sources, destinations, change_addr, extra, tx, unlock_time, tx_key, additional_tx_keys, rct_config, msout, true /*shuffle_outs*/, tx_params);
-    hwdev.close_tx();
-    return r;
+      bool shuffle_outs = true;
+      bool r = construct_tx_with_tx_key(
+          sender_account_keys,
+          subaddresses,
+          sources,
+          destinations,
+          change_addr,
+          extra,
+          tx,
+          source_asset,
+          dest_asset,
+          current_height,
+          hf_version,
+          pr,
+          circ_amounts,
+          unlock_time,
+          tx_key,
+          additional_tx_keys,
+          rct,
+          rct_config,
+          shuffle_outs,
+          use_view_tags);
+      hwdev.close_tx();
+      return r;
+    }
+    catch (...)
+    {
+      hwdev.close_tx();
+      throw;
+    }
   }
   //---------------------------------------------------------------
-  bool construct_tx(const account_keys& sender_account_keys, std::vector<tx_source_entry> &sources, const std::vector<tx_destination_entry>& destinations, const boost::optional<cryptonote::tx_destination_entry>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time, const sispop_construct_tx_params &tx_params)
+  bool construct_tx(const account_keys &sender_account_keys, std::vector<tx_source_entry> &sources, const std::vector<tx_destination_entry> &destinations, const boost::optional<cryptonote::tx_destination_entry> &change_addr, const std::vector<uint8_t> &extra, transaction &tx, uint64_t unlock_time, const sispop_construct_tx_params &tx_params)
   {
-     std::unordered_map<crypto::public_key, cryptonote::subaddress_index> subaddresses;
-     subaddresses[sender_account_keys.m_account_address.m_spend_public_key] = {0,0};
-     crypto::secret_key tx_key;
-     std::vector<crypto::secret_key> additional_tx_keys;
-     std::vector<tx_destination_entry> destinations_copy = destinations;
+    std::unordered_map<crypto::public_key, cryptonote::subaddress_index> subaddresses;
+    subaddresses[sender_account_keys.m_account_address.m_spend_public_key] = {0, 0};
+    crypto::secret_key tx_key;
+    std::vector<crypto::secret_key> additional_tx_keys;
+    std::vector<tx_destination_entry> destinations_copy = destinations;
 
-     rct::RCTConfig rct_config    = {};
-     rct_config.range_proof_type  = (tx_params.hf_version < network_version_10_bulletproofs) ?  rct::RangeProofBorromean : rct::RangeProofPaddedBulletproof;
-     rct_config.bp_version        = (tx_params.hf_version < HF_VERSION_SMALLER_BP) ? 1 : 0;
+    rct::RCTConfig rct_config = {};
+    rct_config.range_proof_type = (tx_params.hf_version < network_version_10_bulletproofs) ? rct::RangeProofBorromean : rct::RangeProofPaddedBulletproof;
+    rct_config.bp_version = (tx_params.hf_version < HF_VERSION_SMALLER_BP) ? 1 : 0;
 
-     return construct_tx_and_get_tx_key(sender_account_keys, subaddresses, sources, destinations_copy, change_addr, extra, tx, unlock_time, tx_key, additional_tx_keys, rct_config, NULL, tx_params);
+    return construct_tx_and_get_tx_key(sender_account_keys, subaddresses, sources, destinations_copy, change_addr, extra, tx, unlock_time, tx_key, additional_tx_keys, rct_config, NULL, tx_params);
+    return construct_tx_and_get_tx_key(sender_account_keys, subaddresses, sources, destinations_copy, change_addr, extra, tx, "SISPOP", "SISPOP", 100, hf_version, oracle::pricing_record(), circ_supply, unlock_time, tx_key, additional_tx_keys, false, {rct::RangeProofBorromean, 0});
   }
   //---------------------------------------------------------------
   bool generate_genesis_block(
-      block& bl
-    , std::string const & genesis_tx
-    , uint32_t nonce
-    )
+      block &bl, std::string const &genesis_tx, uint32_t nonce)
   {
-    //genesis block
+    // genesis block
     bl = {};
 
     blobdata tx_bl;
@@ -996,23 +1934,24 @@ namespace cryptonote
     return true;
   }
   //---------------------------------------------------------------
-  void get_altblock_longhash(const block& b, crypto::hash& res, const uint64_t main_height, const uint64_t height, const uint64_t seed_height, const crypto::hash& seed_hash)
+  void get_altblock_longhash(const block &b, crypto::hash &res, const uint64_t main_height, const uint64_t height, const uint64_t seed_height, const crypto::hash &seed_hash)
   {
     blobdata bd = get_block_hashing_blob(b);
     rx_slow_hash(main_height, seed_height, seed_hash.data, bd.data(), bd.size(), res.data, 0, 1);
   }
 
-  bool get_block_longhash(const Blockchain *pbc, const block& b, crypto::hash& res, const uint64_t height, const int miners)
+  bool get_block_longhash(const Blockchain *pbc, const block &b, crypto::hash &res, const uint64_t height, const int miners)
   {
-    const blobdata bd                 = get_block_hashing_blob(b);
-    const uint8_t hf_version          = b.major_version;
+    const blobdata bd = get_block_hashing_blob(b);
+    const uint8_t hf_version = b.major_version;
     crypto::cn_slow_hash_type cn_type = cn_slow_hash_type::heavy_v1;
 
 #if defined(SISPOP_ENABLE_INTEGRATION_TEST_HOOKS)
     const_cast<int &>(miners) = 0;
 #endif
 
-    if (hf_version >= network_version_12_checkpointing) {
+    if (hf_version >= network_version_12_checkpointing)
+    {
       uint64_t seed_height, main_height;
       crypto::hash hash;
       if (pbc != NULL)
@@ -1020,9 +1959,10 @@ namespace cryptonote
         seed_height = rx_seedheight(height);
         hash = pbc->get_pending_block_id_by_height(seed_height);
         main_height = pbc->get_current_blockchain_height();
-      } else
+      }
+      else
       {
-        memset(&hash, 0, sizeof(hash));  // only happens when generating genesis block
+        memset(&hash, 0, sizeof(hash)); // only happens when generating genesis block
         seed_height = 0;
         main_height = 0;
       }
@@ -1039,7 +1979,7 @@ namespace cryptonote
     return true;
   }
 
-  crypto::hash get_block_longhash(const Blockchain *pbc, const block& b, const uint64_t height, const int miners)
+  crypto::hash get_block_longhash(const Blockchain *pbc, const block &b, const uint64_t height, const int miners)
   {
     crypto::hash p = crypto::null_hash;
     get_block_longhash(pbc, b, p, height, miners);

@@ -165,6 +165,7 @@ namespace cryptonote
   bool parse_and_validate_block_from_blob(const blobdata& b_blob, block& b, crypto::hash &block_hash);
   bool get_inputs_money_amount(const transaction& tx, uint64_t& money);
   uint64_t get_outs_money_amount(const transaction& tx);
+  uint64_t get_outs_money_amount(const transaction &tx, const std::string &asset_type = "SISPOP");
   bool check_inputs_types_supported(const transaction& tx);
   bool check_outs_valid(const transaction& tx);
   bool parse_amount(uint64_t& amount, const std::string& str_amount);

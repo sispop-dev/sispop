@@ -811,8 +811,8 @@ estim:
   return threshold_size;
 }
 
-void BlockchainLMDB::add_block(const block& blk, size_t block_weight, uint64_t long_term_block_weight, const difficulty_type& cumulative_difficulty, const uint64_t& coins_generated,
-    uint64_t num_rct_outs, const crypto::hash& blk_hash)
+void BlockchainLMDB::add_block(const block &blk, size_t block_weight, uint64_t long_term_block_weight, const difficulty_type &cumulative_difficulty, const uint64_t &coins_generated,
+                               const uint64_t &reserve_reward, uint64_t num_rct_outs, oracle::asset_type_counts &cum_rct_by_asset_type, const crypto::hash &blk_hash)
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
   check_open();
@@ -846,6 +846,7 @@ void BlockchainLMDB::add_block(const block& blk, size_t block_weight, uint64_t l
 
   CURSOR(blocks)
   CURSOR(block_info)
+  CURSOR(circ_supply_tally)
 
   // this call to mdb_cursor_put will change height()
   cryptonote::blobdata block_blob(block_to_blob(blk));
@@ -859,19 +860,24 @@ void BlockchainLMDB::add_block(const block& blk, size_t block_weight, uint64_t l
   bi.bi_timestamp = blk.timestamp;
   bi.bi_coins = coins_generated;
   bi.bi_weight = block_weight;
-  bi.bi_diff = cumulative_difficulty;
+  bi.bi_diff_hi = ((cumulative_difficulty >> 64) & 0xffffffffffffffff).convert_to<uint64_t>();
+  bi.bi_diff_lo = (cumulative_difficulty & 0xffffffffffffffff).convert_to<uint64_t>();
   bi.bi_hash = blk_hash;
   bi.bi_cum_rct = num_rct_outs;
-  if (blk.major_version >= 4 && m_height > 0)
+  bi.bi_pricing_record = blk.pricing_record;
+  if (m_height > 0)
   {
-    uint64_t last_height = m_height-1;
+    uint64_t last_height = m_height - 1;
     MDB_val_set(h, last_height);
     if ((result = mdb_cursor_get(m_cur_block_info, (MDB_val *)&zerokval, &h, MDB_GET_BOTH)))
-        throw1(BLOCK_DNE(lmdb_error("Failed to get block info: ", result).c_str()));
-    const mdb_block_info *bi_prev = (const mdb_block_info*)h.mv_data;
+      throw1(BLOCK_DNE(lmdb_error("Failed to get block info: ", result).c_str()));
+    const mdb_block_info *bi_prev = (const mdb_block_info *)h.mv_data;
     bi.bi_cum_rct += bi_prev->bi_cum_rct;
+    for (auto const &asset_type : oracle::ASSET_TYPES)
+      cum_rct_by_asset_type.add(asset_type, bi_prev->bi_cum_rct_by_asset_type[asset_type]);
   }
   bi.bi_long_term_block_weight = long_term_block_weight;
+  bi.bi_cum_rct_by_asset_type = cum_rct_by_asset_type;
 
   MDB_val_set(val, bi);
   result = mdb_cursor_put(m_cur_block_info, (MDB_val *)&zerokval, &val, MDB_APPENDDUP);
@@ -886,9 +892,17 @@ void BlockchainLMDB::add_block(const block& blk, size_t block_weight, uint64_t l
   // and often actually equal
   m_cum_size += block_weight;
   m_cum_count++;
+
+  uint64_t source_currency_type = std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), "SISPOP") - oracle::ASSET_TYPES.begin();
+  MDB_val_copy<uint64_t> source_idx(source_currency_type);
+  boost::multiprecision::int128_t source_tally = read_circulating_supply_data(m_cur_circ_supply_tally, source_idx);
+
+  boost::multiprecision::int128_t final_source_tally;
+  final_source_tally = source_tally + reserve_reward; // Add reserve reward SISPOP to reserve
+  write_circulating_supply_data(m_cur_circ_supply_tally, source_idx, final_source_tally);
 }
 
-void BlockchainLMDB::remove_block()
+void BlockchainLMDB::remove_block(const uint64_t &reserve_reward)
 {
   int result;
 
@@ -897,16 +911,17 @@ void BlockchainLMDB::remove_block()
   uint64_t m_height = height();
 
   if (m_height == 0)
-    throw0(BLOCK_DNE ("Attempting to remove block from an empty blockchain"));
+    throw0(BLOCK_DNE("Attempting to remove block from an empty blockchain"));
 
   mdb_txn_cursors *m_cursors = &m_wcursors;
   CURSOR(block_info)
   CURSOR(block_heights)
   CURSOR(blocks)
+  CURSOR(circ_supply_tally)
   MDB_val_copy<uint64_t> k(m_height - 1);
   MDB_val h = k;
   if ((result = mdb_cursor_get(m_cur_block_info, (MDB_val *)&zerokval, &h, MDB_GET_BOTH)))
-      throw1(BLOCK_DNE(lmdb_error("Attempting to remove block that's not in the db: ", result).c_str()));
+    throw1(BLOCK_DNE(lmdb_error("Attempting to remove block that's not in the db: ", result).c_str()));
 
   // must use h now; deleting from m_block_info will invalidate it
   mdb_block_info *bi = (mdb_block_info *)h.mv_data;
@@ -914,18 +929,30 @@ void BlockchainLMDB::remove_block()
   h.mv_data = (void *)&bh;
   h.mv_size = sizeof(bh);
   if ((result = mdb_cursor_get(m_cur_block_heights, (MDB_val *)&zerokval, &h, MDB_GET_BOTH)))
-      throw1(DB_ERROR(lmdb_error("Failed to locate block height by hash for removal: ", result).c_str()));
+    throw1(DB_ERROR(lmdb_error("Failed to locate block height by hash for removal: ", result).c_str()));
   if ((result = mdb_cursor_del(m_cur_block_heights, 0)))
-      throw1(DB_ERROR(lmdb_error("Failed to add removal of block height by hash to db transaction: ", result).c_str()));
+    throw1(DB_ERROR(lmdb_error("Failed to add removal of block height by hash to db transaction: ", result).c_str()));
 
   if ((result = mdb_cursor_del(m_cur_blocks, 0)))
-      throw1(DB_ERROR(lmdb_error("Failed to add removal of block to db transaction: ", result).c_str()));
+    throw1(DB_ERROR(lmdb_error("Failed to add removal of block to db transaction: ", result).c_str()));
 
   if ((result = mdb_cursor_del(m_cur_block_info, 0)))
-      throw1(DB_ERROR(lmdb_error("Failed to add removal of block info to db transaction: ", result).c_str()));
+    throw1(DB_ERROR(lmdb_error("Failed to add removal of block info to db transaction: ", result).c_str()));
+
+  uint64_t source_currency_type = std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), "SISPOP") - oracle::ASSET_TYPES.begin();
+  MDB_val_copy<uint64_t> source_idx(source_currency_type);
+  boost::multiprecision::int128_t source_tally = read_circulating_supply_data(m_cur_circ_supply_tally, source_idx);
+  boost::multiprecision::int128_t final_source_tally;
+  final_source_tally = source_tally - reserve_reward; // Undo adding reserve reward SISPOP to reserve
+  if (final_source_tally < 0)
+  {
+    LOG_ERROR(__func__ << " : reserve underflow detected for SISPOP: correcting supply tally by " << final_source_tally);
+    final_source_tally = 0;
+  }
+  write_circulating_supply_data(m_cur_circ_supply_tally, source_idx, final_source_tally);
 }
 
-uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, const std::pair<transaction, blobdata>& txp, const crypto::hash& tx_hash, const crypto::hash& tx_prunable_hash)
+uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash &blk_hash, const std::pair<transaction, blobdata_ref> &txp, const crypto::hash &tx_hash, const crypto::hash &tx_prunable_hash, const bool miner_tx)
 {
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
   check_open();
@@ -940,14 +967,19 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
   CURSOR(txs_prunable_hash)
   CURSOR(txs_prunable_tip)
   CURSOR(tx_indices)
+  CURSOR(circ_supply)
+  CURSOR(circ_supply_tally)
 
   MDB_val_set(val_tx_id, tx_id);
   MDB_val_set(val_h, tx_hash);
   result = mdb_cursor_get(m_cur_tx_indices, (MDB_val *)&zerokval, &val_h, MDB_GET_BOTH);
-  if (result == 0) {
+  if (result == 0)
+  {
     txindex *tip = (txindex *)val_h.mv_data;
     throw1(TX_EXISTS(std::string("Attempting to add transaction that's already in the db (tx id ").append(boost::lexical_cast<std::string>(tip->data.tx_id)).append(")").c_str()));
-  } else if (result != MDB_NOTFOUND) {
+  }
+  else if (result != MDB_NOTFOUND)
+  {
     throw1(DB_ERROR(lmdb_error(std::string("Error checking if tx index exists for tx hash ") + epee::string_tools::pod_to_hex(tx_hash) + ": ", result).c_str()));
   }
 
@@ -956,7 +988,7 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
   ti.key = tx_hash;
   ti.data.tx_id = tx_id;
   ti.data.unlock_time = tx.unlock_time;
-  ti.data.block_id = m_height;  // we don't need blk_hash since we know m_height
+  ti.data.block_id = m_height; // we don't need blk_hash since we know m_height
 
   val_h.mv_size = sizeof(ti);
   val_h.mv_data = (void *)&ti;
@@ -965,15 +997,14 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
   if (result)
     throw0(DB_ERROR(lmdb_error("Failed to add tx data to db transaction: ", result).c_str()));
 
-  const cryptonote::blobdata &blob = txp.second;
-  MDB_val_sized(blobval, blob);
+  const cryptonote::blobdata_ref &blob = txp.second;
 
   unsigned int unprunable_size = tx.unprunable_size;
   if (unprunable_size == 0)
   {
     std::stringstream ss;
     binary_archive<true> ba(ss);
-    bool r = const_cast<cryptonote::transaction&>(tx).serialize_base(ba);
+    bool r = const_cast<cryptonote::transaction &>(tx).serialize_base(ba);
     if (!r)
       throw0(DB_ERROR("Failed to serialize pruned tx"));
     unprunable_size = ss.str().size();
@@ -982,12 +1013,12 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
   if (unprunable_size > blob.size())
     throw0(DB_ERROR("pruned tx size is larger than tx size"));
 
-  MDB_val pruned_blob = {unprunable_size, (void*)blob.data()};
+  MDB_val pruned_blob = {unprunable_size, (void *)blob.data()};
   result = mdb_cursor_put(m_cur_txs_pruned, &val_tx_id, &pruned_blob, MDB_APPEND);
   if (result)
     throw0(DB_ERROR(lmdb_error("Failed to add pruned tx blob to db transaction: ", result).c_str()));
 
-  MDB_val prunable_blob = {blob.size() - unprunable_size, (void*)(blob.data() + unprunable_size)};
+  MDB_val prunable_blob = {blob.size() - unprunable_size, (void *)(blob.data() + unprunable_size)};
   result = mdb_cursor_put(m_cur_txs_prunable, &val_tx_id, &prunable_blob, MDB_APPEND);
   if (result)
     throw0(DB_ERROR(lmdb_error("Failed to add prunable tx blob to db transaction: ", result).c_str()));
@@ -1000,7 +1031,7 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
       throw0(DB_ERROR(lmdb_error("Failed to add prunable tx id to db transaction: ", result).c_str()));
   }
 
-  if (tx.version >= cryptonote::txversion::v2_ringct)
+  if (tx.version > 1)
   {
     MDB_val_set(val_prunable_hash, tx_prunable_hash);
     result = mdb_cursor_put(m_cur_txs_prunable_hash, &val_tx_id, &val_prunable_hash, MDB_APPEND);
@@ -1008,13 +1039,133 @@ uint64_t BlockchainLMDB::add_transaction_data(const crypto::hash& blk_hash, cons
       throw0(DB_ERROR(lmdb_error("Failed to add prunable tx prunable hash to db transaction: ", result).c_str()));
   }
 
+  // get tx assets
+  std::string strSource;
+  std::string strDest;
+  if (!get_tx_asset_types(tx, tx_hash, strSource, strDest, miner_tx))
+  {
+    throw0(DB_ERROR("Failed to add tx circulating supply to db transaction: get_tx_asset_types fails."));
+  }
+
+  if (strSource != strDest)
+  {
+    // Conversion TX - update our records
+    circ_supply cs;
+    cs.tx_hash = tx_hash;
+    cs.pricing_record_height = tx.pricing_record_height;
+    cs.source_currency_type = std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), strSource) - oracle::ASSET_TYPES.begin();
+    cs.dest_currency_type = std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), strDest) - oracle::ASSET_TYPES.begin();
+    cs.amount_burnt = tx.amount_burnt;
+    cs.amount_minted = tx.amount_minted;
+
+    MDB_val_set(val_circ_supply, cs);
+    result = mdb_cursor_put(m_cur_circ_supply, &val_tx_id, &val_circ_supply, MDB_APPEND);
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to add tx circulating supply to db transaction: ", result).c_str()));
+
+    // Get the current tally value for the source currency type
+    MDB_val_copy<uint64_t> source_idx(cs.source_currency_type);
+    boost::multiprecision::int128_t source_tally = read_circulating_supply_data(m_cur_circ_supply_tally, source_idx);
+    boost::multiprecision::int128_t final_source_tally;
+
+    if (strSource == "SISPOP")
+    {
+      final_source_tally = source_tally + cs.amount_burnt; // Adds burnt SISPOP to the Reserve
+    }
+    else
+    {
+      final_source_tally = source_tally - cs.amount_burnt; // Burn SISPOPUSD or SISPOPRSV
+      if (final_source_tally < 0)
+      {
+        LOG_ERROR(__func__ << " : mint/burn underflow detected for " << strSource << " : correcting supply tally by " << final_source_tally);
+        final_source_tally = 0;
+      }
+    }
+
+    write_circulating_supply_data(m_cur_circ_supply_tally, source_idx, final_source_tally);
+
+    // Get the current tally value for the dest currency type
+    MDB_val_copy<uint64_t> dest_idx(cs.dest_currency_type);
+    boost::multiprecision::int128_t dest_tally = read_circulating_supply_data(m_cur_circ_supply_tally, dest_idx);
+    boost::multiprecision::int128_t final_dest_tally;
+
+    if (strDest == "SISPOP")
+    {
+      final_dest_tally = dest_tally - cs.amount_minted; // Remove minted SISPOP amount from the Reserve
+      if (final_dest_tally < 0)
+      {
+        LOG_ERROR(__func__ << " : mint/burn underflow detected for " << strDest << " : correcting supply tally by " << final_dest_tally);
+        final_dest_tally = 0;
+      }
+    }
+    else
+    {
+      final_dest_tally = dest_tally + cs.amount_minted; // Mint SISPOPUSD or SISPOPRSV
+    }
+
+    write_circulating_supply_data(m_cur_circ_supply_tally, dest_idx, final_dest_tally);
+
+    LOG_PRINT_L1("tx ID " << tx_id << "\nSource tally before burn =" << source_tally.str() << "\nSource tally after burn =" << final_source_tally.str() << "\nDest tally before mint =" << dest_tally.str() << "\nDest tally after mint =" << final_dest_tally.str());
+  }
+
   return tx_id;
+}
+
+std::vector<std::pair<std::string, std::string>> BlockchainLMDB::get_circulating_supply() const
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  std::vector<std::pair<std::string, std::string>> circulating_supply;
+  uint64_t m_height = height();
+  if (m_height == 0)
+  {
+    return circulating_supply;
+  }
+
+  uint64_t m_coinbase = get_block_already_generated_coins(m_height - 1);
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__ << " - mined supply for SISPOP = " << m_coinbase);
+  check_open();
+
+  TXN_PREFIX_RDONLY();
+  RCURSOR(circ_supply_tally);
+
+  MDB_val k;
+  MDB_val v;
+  int result = 0;
+
+  MDB_cursor_op op = MDB_FIRST;
+  while (1)
+  {
+    int result = mdb_cursor_get(m_cur_circ_supply_tally, &k, &v, op);
+    op = MDB_NEXT;
+    if (result == MDB_NOTFOUND)
+      break;
+    if (result)
+      throw0(DB_ERROR(lmdb_error("Failed to get circulating supply: ", result).c_str()));
+
+    // Push the data into the circulating supply return struct
+    const uint64_t currency_type = *(const uint64_t *)k.mv_data;
+    circ_supply_tally *cst = (circ_supply_tally *)v.mv_data;
+    const std::string currency_label = oracle::ASSET_TYPES.at(currency_type);
+    boost::multiprecision::int128_t amount = import_tally_from_cst(cst);
+
+    circulating_supply.emplace_back(std::pair<std::string, std::string>{currency_label, amount.str()});
+  }
+
+  TXN_POSTFIX_RDONLY();
+
+  // NEAC: check for empty supply tally - only happens prior to first conversion on chain
+  if (circulating_supply.empty())
+  {
+    circulating_supply.emplace_back(std::pair<std::string, std::string>{"SISPOP", std::to_string(0)});
+  }
+  return circulating_supply;
 }
 
 // TODO: compare pros and cons of looking up the tx hash's tx index once and
 // passing it in to functions like this
-void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const transaction& tx)
+void BlockchainLMDB::remove_transaction_data(const crypto::hash &tx_hash, const transaction &tx, const bool miner_tx)
 {
+  uint64_t m_height = height();
   int result;
 
   LOG_PRINT_L3("BlockchainLMDB::" << __func__);
@@ -1027,47 +1178,119 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
   CURSOR(txs_prunable_hash)
   CURSOR(txs_prunable_tip)
   CURSOR(tx_outputs)
+  CURSOR(circ_supply)
+  CURSOR(circ_supply_tally)
 
   MDB_val_set(val_h, tx_hash);
 
   if (mdb_cursor_get(m_cur_tx_indices, (MDB_val *)&zerokval, &val_h, MDB_GET_BOTH))
-      throw1(TX_DNE("Attempting to remove transaction that isn't in the db"));
+    throw1(TX_DNE("Attempting to remove transaction that isn't in the db"));
   txindex *tip = (txindex *)val_h.mv_data;
   MDB_val_set(val_tx_id, tip->data.tx_id);
 
   if ((result = mdb_cursor_get(m_cur_txs_pruned, &val_tx_id, NULL, MDB_SET)))
-      throw1(DB_ERROR(lmdb_error("Failed to locate pruned tx for removal: ", result).c_str()));
+    throw1(DB_ERROR(lmdb_error("Failed to locate pruned tx for removal: ", result).c_str()));
   result = mdb_cursor_del(m_cur_txs_pruned, 0);
   if (result)
-      throw1(DB_ERROR(lmdb_error("Failed to add removal of pruned tx to db transaction: ", result).c_str()));
+    throw1(DB_ERROR(lmdb_error("Failed to add removal of pruned tx to db transaction: ", result).c_str()));
 
   result = mdb_cursor_get(m_cur_txs_prunable, &val_tx_id, NULL, MDB_SET);
   if (result == 0)
   {
-      result = mdb_cursor_del(m_cur_txs_prunable, 0);
-      if (result)
-          throw1(DB_ERROR(lmdb_error("Failed to add removal of prunable tx to db transaction: ", result).c_str()));
+    result = mdb_cursor_del(m_cur_txs_prunable, 0);
+    if (result)
+      throw1(DB_ERROR(lmdb_error("Failed to add removal of prunable tx to db transaction: ", result).c_str()));
   }
   else if (result != MDB_NOTFOUND)
-      throw1(DB_ERROR(lmdb_error("Failed to locate prunable tx for removal: ", result).c_str()));
+    throw1(DB_ERROR(lmdb_error("Failed to locate prunable tx for removal: ", result).c_str()));
 
   result = mdb_cursor_get(m_cur_txs_prunable_tip, &val_tx_id, NULL, MDB_SET);
   if (result && result != MDB_NOTFOUND)
-      throw1(DB_ERROR(lmdb_error("Failed to locate tx id for removal: ", result).c_str()));
+    throw1(DB_ERROR(lmdb_error("Failed to locate tx id for removal: ", result).c_str()));
   if (result == 0)
   {
     result = mdb_cursor_del(m_cur_txs_prunable_tip, 0);
     if (result)
-        throw1(DB_ERROR(lmdb_error("Error adding removal of tx id to db transaction", result).c_str()));
+      throw1(DB_ERROR(lmdb_error("Error adding removal of tx id to db transaction", result).c_str()));
   }
 
-  if (tx.version >= cryptonote::txversion::v2_ringct)
+  if (tx.version > 1)
   {
     if ((result = mdb_cursor_get(m_cur_txs_prunable_hash, &val_tx_id, NULL, MDB_SET)))
-        throw1(DB_ERROR(lmdb_error("Failed to locate prunable hash tx for removal: ", result).c_str()));
+      throw1(DB_ERROR(lmdb_error("Failed to locate prunable hash tx for removal: ", result).c_str()));
     result = mdb_cursor_del(m_cur_txs_prunable_hash, 0);
     if (result)
-        throw1(DB_ERROR(lmdb_error("Failed to add removal of prunable hash tx to db transaction: ", result).c_str()));
+      throw1(DB_ERROR(lmdb_error("Failed to add removal of prunable hash tx to db transaction: ", result).c_str()));
+  }
+
+  // get tx assets
+  std::string strSource;
+  std::string strDest;
+  if (!get_tx_asset_types(tx, tx_hash, strSource, strDest, miner_tx))
+  {
+    throw0(DB_ERROR("Failed to add tx circulating supply to db transaction: get_tx_asset_types fails."));
+  }
+
+  if (strSource != strDest)
+  {
+    // Update the tally table
+    // Get the current tally value for the source currency type
+    circ_supply cs;
+    cs.tx_hash = tx_hash;
+    cs.pricing_record_height = tx.pricing_record_height;
+    cs.amount_burnt = tx.amount_burnt;
+    cs.amount_minted = tx.amount_minted;
+    cs.source_currency_type = std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), strSource) - oracle::ASSET_TYPES.begin();
+    cs.dest_currency_type = std::find(oracle::ASSET_TYPES.begin(), oracle::ASSET_TYPES.end(), strDest) - oracle::ASSET_TYPES.begin();
+
+    // Update the tally by increasing the amount by how much we've burnt
+    MDB_val_copy<uint64_t> source_idx(cs.source_currency_type);
+    boost::multiprecision::int128_t source_tally = read_circulating_supply_data(m_cur_circ_supply_tally, source_idx);
+    boost::multiprecision::int128_t final_source_tally;
+
+    if (strSource == "SISPOP")
+    {
+      final_source_tally = source_tally - cs.amount_burnt; // Undo the adding of burnt SISPOP to the Reserve
+      if (final_source_tally < 0)
+      {
+        LOG_ERROR(__func__ << " : mint/burn underflow detected for " << strSource << " : correcting supply tally by " << final_source_tally);
+        final_source_tally = 0;
+      }
+    }
+    else
+    {
+      final_source_tally = source_tally + cs.amount_burnt;
+    }
+
+    write_circulating_supply_data(m_cur_circ_supply_tally, source_idx, final_source_tally);
+
+    // Update the tally by decreasing the amount by how much we've minted
+    MDB_val_copy<uint64_t> dest_idx(cs.dest_currency_type);
+    boost::multiprecision::int128_t dest_tally = read_circulating_supply_data(m_cur_circ_supply_tally, dest_idx);
+    boost::multiprecision::int128_t final_dest_tally;
+    if (strDest == "SISPOP")
+    {
+      final_dest_tally = dest_tally + cs.amount_minted; // Undo removing minted SISPOP amount from the Reserve
+      if (final_dest_tally < 0)
+      {
+        LOG_ERROR(__func__ << " : mint/burn underflow detected for " << strDest << " : correcting supply tally by " << final_dest_tally);
+        final_dest_tally = 0;
+      }
+    }
+    else
+    {
+      final_dest_tally = dest_tally - cs.amount_minted;
+    }
+    write_circulating_supply_data(m_cur_circ_supply_tally, dest_idx, final_dest_tally);
+
+    // Update the circ_supply table
+    if ((result = mdb_cursor_get(m_cur_circ_supply, &val_tx_id, NULL, MDB_SET)))
+      throw1(DB_ERROR(lmdb_error("Failed to locate circulating supply for removal: ", result).c_str()));
+    result = mdb_cursor_del(m_cur_circ_supply, 0);
+    if (result)
+      throw1(DB_ERROR(lmdb_error("Failed to add removal of circulating supply to db transaction: ", result).c_str()));
+
+    LOG_PRINT_L1("tx ID " << tip->data.tx_id << "\nSource tally before undoing burn =" << source_tally.str() << "\nSource tally after undoing burn =" << final_source_tally.str() << "\nDest tally before undoing mint =" << dest_tally.str() << "\nDest tally after undoing mint =" << final_dest_tally.str());
   }
 
   remove_tx_outputs(tip->data.tx_id, tx);
@@ -1086,7 +1309,7 @@ void BlockchainLMDB::remove_transaction_data(const crypto::hash& tx_hash, const 
 
   // Don't delete the tx_indices entry until the end, after we're done with val_tx_id
   if (mdb_cursor_del(m_cur_tx_indices, 0))
-      throw1(DB_ERROR("Failed to add removal of tx index to db transaction"));
+    throw1(DB_ERROR("Failed to add removal of tx index to db transaction"));
 }
 
 uint64_t BlockchainLMDB::add_output(const crypto::hash& tx_hash,

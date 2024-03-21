@@ -61,6 +61,8 @@
 #include "common/varint.h"
 #include "common/pruning.h"
 #include "common/lock.h"
+#include "oracle/asset_types.h"
+#include "oracle/pricing_record.h"
 
 #ifdef ENABLE_SYSTEMD
 extern "C" {
