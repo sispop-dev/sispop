@@ -31,8 +31,12 @@
 #include <limits>
 #include <boost/thread.hpp>
 #include <boost/chrono/duration.hpp>
+#include <boost/utility/value_init.hpp>
+#include <boost/shared_ptr.hpp>
+#include <vector>
 namespace epee
 {
+#define AUTO_VAL_INIT(v) boost::value_initialized<decltype(v)>()
 #define STD_TRY_BEGIN() try {
 
 #define STD_TRY_CATCH(where_, ret_val) \
