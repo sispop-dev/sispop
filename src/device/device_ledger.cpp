@@ -1293,13 +1293,13 @@ namespace hw {
         return true;
     }
 
-
-    bool device_ledger::generate_output_ephemeral_keys(const size_t tx_version, bool &found_change, const cryptonote::account_keys &sender_account_keys, const crypto::public_key &txkey_pub,  const crypto::secret_key &tx_key,
-                                                       const cryptonote::tx_destination_entry &dst_entr, const boost::optional<cryptonote::tx_destination_entry> &change_addr, const size_t output_index,
-                                                       const bool &need_additional_txkeys,  const std::vector<crypto::secret_key> &additional_tx_keys,
+    bool device_ledger::generate_output_ephemeral_keys(const size_t tx_version, bool &found_change, const cryptonote::account_keys &sender_account_keys, const crypto::public_key &txkey_pub, const crypto::secret_key &tx_key,
+                                                       const cryptonote::tx_destination_entry &dst_entr, const boost::optional<cryptonote::account_public_address > &change_addr, const size_t output_index,
+                                                       const bool &need_additional_txkeys, const std::vector<crypto::secret_key> &additional_tx_keys,
                                                        std::vector<crypto::public_key> &additional_tx_public_keys,
                                                        std::vector<rct::key> &amount_keys,
-                                                       crypto::public_key &out_eph_public_key) {
+                                                       crypto::public_key &out_eph_public_key)
+    {
       AUTO_LOCK_CMD();
 
       #ifdef DEBUG_HWDEVICE
@@ -1310,7 +1310,7 @@ namespace hw {
       const crypto::public_key                 txkey_pub_x                    = txkey_pub;
       const crypto::secret_key                 tx_key_x                       = hw::ledger::decrypt(tx_key);
       const cryptonote::tx_destination_entry   dst_entr_x                     = dst_entr;
-      const boost::optional<cryptonote::tx_destination_entry> change_addr_x   = change_addr;
+      const boost::optional<cryptonote::account_public_address> change_addr_x = change_addr;
       const size_t                             output_index_x                 = output_index;
       const bool                               need_additional_txkeys_x       = need_additional_txkeys;
       
@@ -1358,7 +1358,7 @@ namespace hw {
 
       bool &is_change = found_change; // NOTE(sispop): Alias our param into theirs so we don't have to change much code.
 
-      if (change_addr && dst_entr == *change_addr && !is_change)
+      if (change_addr && dst_entr.addr == *change_addr && !is_change)
         is_change = true; // sending change to yourself; derivation = a*R
 
       int offset = set_command_header_noopt(INS_GEN_TXOUT_KEYS);
