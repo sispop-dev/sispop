@@ -45,7 +45,7 @@ using namespace cryptonote;
 
 static bool stop_requested = false;
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   TRY_ENTRY();
 
@@ -66,16 +66,15 @@ int main(int argc, char* argv[])
 
   po::options_description desc_cmd_only("Command line options");
   po::options_description desc_cmd_sett("Command line options and settings options");
-  const command_line::arg_descriptor<std::string> arg_log_level  = {"log-level",  "0-4 or categories", ""};
+  const command_line::arg_descriptor<std::string> arg_log_level = {"log-level", "0-4 or categories", ""};
   const command_line::arg_descriptor<std::string> arg_database = {
-    "database", available_dbs.c_str(), default_db_type
-  };
-  const command_line::arg_descriptor<uint64_t> arg_block_start  = {"block-start", "start at block number", block_start};
+      "database", available_dbs.c_str(), default_db_type};
+  const command_line::arg_descriptor<uint64_t> arg_block_start = {"block-start", "start at block number", block_start};
   const command_line::arg_descriptor<uint64_t> arg_block_stop = {"block-stop", "Stop at block number", block_stop};
-  const command_line::arg_descriptor<bool> arg_inputs  = {"with-inputs", "with input stats", false};
-  const command_line::arg_descriptor<bool> arg_outputs  = {"with-outputs", "with output stats", false};
-  const command_line::arg_descriptor<bool> arg_ringsize  = {"with-ringsize", "with ringsize stats", false};
-  const command_line::arg_descriptor<bool> arg_hours  = {"with-hours", "with txns per hour", false};
+  const command_line::arg_descriptor<bool> arg_inputs = {"with-inputs", "with input stats", false};
+  const command_line::arg_descriptor<bool> arg_outputs = {"with-outputs", "with output stats", false};
+  const command_line::arg_descriptor<bool> arg_ringsize = {"with-ringsize", "with ringsize stats", false};
+  const command_line::arg_descriptor<bool> arg_hours = {"with-hours", "with txns per hour", false};
 
   command_line::add_arg(desc_cmd_sett, cryptonote::arg_data_dir);
   command_line::add_arg(desc_cmd_sett, cryptonote::arg_testnet_on);
@@ -95,13 +94,12 @@ int main(int argc, char* argv[])
 
   po::variables_map vm;
   bool r = command_line::handle_error_helper(desc_options, [&]()
-  {
+                                             {
     auto parser = po::command_line_parser(argc, argv).options(desc_options);
     po::store(parser.run(), vm);
     po::notify(vm);
-    return true;
-  });
-  if (! r)
+    return true; });
+  if (!r)
     return 1;
 
   if (command_line::get_arg(vm, command_line::arg_help))
@@ -122,7 +120,8 @@ int main(int argc, char* argv[])
   std::string opt_data_dir = command_line::get_arg(vm, cryptonote::arg_data_dir);
   bool opt_testnet = command_line::get_arg(vm, cryptonote::arg_testnet_on);
   bool opt_stagenet = command_line::get_arg(vm, cryptonote::arg_stagenet_on);
-  network_type net_type = opt_testnet ? TESTNET : opt_stagenet ? STAGENET : MAINNET;
+  network_type net_type = opt_testnet ? TESTNET : opt_stagenet ? STAGENET
+                                                               : MAINNET;
   block_start = command_line::get_arg(vm, arg_block_start);
   block_stop = command_line::get_arg(vm, arg_block_stop);
   bool do_inputs = command_line::get_arg(vm, arg_inputs);
@@ -155,7 +154,7 @@ int main(int argc, char* argv[])
   {
     db->open(filename, core_storage->nettype(), DBF_RDONLY);
   }
-  catch (const std::exception& e)
+  catch (const std::exception &e)
   {
     LOG_PRINT_L0("Error opening database: " << e.what());
     return 1;
@@ -165,30 +164,29 @@ int main(int argc, char* argv[])
   CHECK_AND_ASSERT_MES(r, 1, "Failed to initialize source blockchain storage");
   LOG_PRINT_L0("Source blockchain storage initialized OK");
 
-  tools::signal_handler::install([](int type) {
-    stop_requested = true;
-  });
+  tools::signal_handler::install([](int type)
+                                 { stop_requested = true; });
 
   const uint64_t db_height = db->height();
   if (!block_stop)
-      block_stop = db_height;
+    block_stop = db_height;
   MINFO("Starting from height " << block_start << ", stopping at height " << block_stop);
 
-/*
- * The default output can be plotted with GnuPlot using these commands:
-set key autotitle columnhead
-set title "Sispop Blockchain Growth"
-set timefmt "%Y-%m-%d"
-set xdata time
-set xrange ["2014-04-17":*]
-set format x "%Y-%m-%d"
-set yrange [0:*]
-set y2range [0:*]
-set ylabel "Txs/Day"
-set y2label "Bytes"
-set y2tics nomirror
-plot 'stats.csv' index "DATA" using (timecolumn(1,"%Y-%m-%d")):4 with lines, '' using (timecolumn(1,"%Y-%m-%d")):7 axes x1y2 with lines
- */
+  /*
+   * The default output can be plotted with GnuPlot using these commands:
+  set key autotitle columnhead
+  set title "Sispop Blockchain Growth"
+  set timefmt "%Y-%m-%d"
+  set xdata time
+  set xrange ["2014-04-17":*]
+  set format x "%Y-%m-%d"
+  set yrange [0:*]
+  set y2range [0:*]
+  set ylabel "Txs/Day"
+  set y2label "Bytes"
+  set y2tics nomirror
+  plot 'stats.csv' index "DATA" using (timecolumn(1,"%Y-%m-%d")):4 with lines, '' using (timecolumn(1,"%Y-%m-%d")):7 axes x1y2 with lines
+   */
 
   // spit out a comment that GnuPlot can use as an index
   std::cout << ENDL << "# DATA" << ENDL;
@@ -199,10 +197,12 @@ plot 'stats.csv' index "DATA" using (timecolumn(1,"%Y-%m-%d")):4 with lines, '' 
     std::cout << "\tOutMin\tOutMax\tOutAvg";
   if (do_ringsize)
     std::cout << "\tRingMin\tRingMax\tRingAvg";
-  if (do_hours) {
+  if (do_hours)
+  {
     char buf[8];
     unsigned int i;
-    for (i=0; i<24; i++) {
+    for (i = 0; i < 24; i++)
+    {
       sprintf(buf, "\t%02u:00", i);
       std::cout << buf;
     }
@@ -251,30 +251,41 @@ plot 'stats.csv' index "DATA" using (timecolumn(1,"%Y-%m-%d")):4 with lines, '' 
       currtxs = 0;
       if (!tottxs)
         tottxs = 1;
-      if (do_inputs) {
+      if (do_inputs)
+      {
         std::cout << "\t" << (maxins ? minins : 0) << "\t" << maxins << "\t" << totins / tottxs;
-        minins = 10; maxins = 0; totins = 0;
+        minins = 10;
+        maxins = 0;
+        totins = 0;
       }
-      if (do_outputs) {
+      if (do_outputs)
+      {
         std::cout << "\t" << (maxouts ? minouts : 0) << "\t" << maxouts << "\t" << totouts / tottxs;
-        minouts = 10; maxouts = 0; totouts = 0;
+        minouts = 10;
+        maxouts = 0;
+        totouts = 0;
       }
-      if (do_ringsize) {
+      if (do_ringsize)
+      {
         std::cout << "\t" << (maxrings ? minrings : 0) << "\t" << maxrings << "\t" << totrings / tottxs;
-        minrings = 50; maxrings = 0; totrings = 0;
+        minrings = 50;
+        maxrings = 0;
+        totrings = 0;
       }
       tottxs = 0;
-      if (do_hours) {
-        for (i=0; i<24; i++) {
+      if (do_hours)
+      {
+        for (i = 0; i < 24; i++)
+        {
           std::cout << "\t" << txhr[i];
           txhr[i] = 0;
         }
       }
       std::cout << ENDL;
     }
-skip:
+  skip:
     currsz += bd.size();
-    for (const auto& tx_id : blk.tx_hashes)
+    for (const auto &tx_id : blk.tx_hashes)
     {
       if (tx_id == crypto::null_hash)
       {
@@ -294,7 +305,8 @@ skip:
       currtxs++;
       if (do_hours)
         txhr[currtm.tm_hour]++;
-      if (do_inputs) {
+      if (do_inputs)
+      {
         io = tx.vin.size();
         if (io < minins)
           minins = io;
@@ -302,9 +314,9 @@ skip:
           maxins = io;
         totins += io;
       }
-      if (do_ringsize) {
-        const cryptonote::txin_to_key& tx_in_to_key
-                       = boost::get<cryptonote::txin_to_key>(tx.vin[0]);
+      if (do_ringsize)
+      {
+        const cryptonote::txin_sispop_key &tx_in_to_key = boost::get<cryptonote::txin_sispop_key>(tx.vin[0]);
         io = tx_in_to_key.key_offsets.size();
         if (io < minrings)
           minrings = io;
@@ -312,7 +324,8 @@ skip:
           maxrings = io;
         totrings += io;
       }
-      if (do_outputs) {
+      if (do_outputs)
+      {
         io = tx.vout.size();
         if (io < minouts)
           minouts = io;

@@ -27,7 +27,7 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #ifdef _WIN32
- #define __STDC_FORMAT_MACROS // NOTE(sispop): Explicitly define the SCNu64 macro on Mingw
+#define __STDC_FORMAT_MACROS // NOTE(sispop): Explicitly define the SCNu64 macro on Mingw
 #endif
 
 #include <unordered_map>
@@ -65,7 +65,8 @@ struct ancestor
 
   bool operator==(const ancestor &other) const { return amount == other.amount && offset == other.offset; }
 
-  template <typename t_archive> void serialize(t_archive &a, const unsigned int ver)
+  template <typename t_archive>
+  void serialize(t_archive &a, const unsigned int ver)
   {
     a & amount;
     a & offset;
@@ -75,7 +76,8 @@ BOOST_CLASS_VERSION(ancestor, 0)
 
 namespace std
 {
-  template<> struct hash<ancestor>
+  template <>
+  struct hash<ancestor>
   {
     size_t operator()(const ancestor &a) const
     {
@@ -90,7 +92,7 @@ struct tx_data_t
   std::vector<crypto::public_key> vout;
   bool coinbase;
 
-  tx_data_t(): coinbase(false) {}
+  tx_data_t() : coinbase(false) {}
   tx_data_t(const cryptonote::transaction &tx)
   {
     coinbase = tx.vin.size() == 1 && tx.vin[0].type() == typeid(cryptonote::txin_gen);
@@ -99,9 +101,9 @@ struct tx_data_t
       vin.reserve(tx.vin.size());
       for (size_t ring = 0; ring < tx.vin.size(); ++ring)
       {
-        if (tx.vin[ring].type() == typeid(cryptonote::txin_to_key))
+        if (tx.vin[ring].type() == typeid(cryptonote::txin_sispop_key))
         {
-          const cryptonote::txin_to_key &txin = boost::get<cryptonote::txin_to_key>(tx.vin[ring]);
+          const cryptonote::txin_sispop_key &txin = boost::get<cryptonote::txin_sispop_key>(tx.vin[ring]);
           vin.push_back(std::make_pair(txin.amount, cryptonote::relative_output_offsets_to_absolute(txin.key_offsets)));
         }
         else
@@ -114,9 +116,9 @@ struct tx_data_t
     vout.reserve(tx.vout.size());
     for (size_t out = 0; out < tx.vout.size(); ++out)
     {
-      if (tx.vout[out].target.type() == typeid(cryptonote::txout_to_key))
+      if (tx.vout[out].target.type() == typeid(cryptonote::txout_sispop_tagged_key))
       {
-        const auto &txout = boost::get<cryptonote::txout_to_key>(tx.vout[out].target);
+        const auto &txout = boost::get<cryptonote::txout_sispop_tagged_key>(tx.vout[out].target);
         vout.push_back(txout.key);
       }
       else
@@ -127,7 +129,8 @@ struct tx_data_t
     }
   }
 
-  template <typename t_archive> void serialize(t_archive &a, const unsigned int ver)
+  template <typename t_archive>
+  void serialize(t_archive &a, const unsigned int ver)
   {
     a & coinbase;
     a & vin;
@@ -143,9 +146,10 @@ struct ancestry_state_t
   std::unordered_map<crypto::hash, ::tx_data_t> tx_cache;
   std::vector<cryptonote::block> block_cache;
 
-  ancestry_state_t(): height(0) {}
+  ancestry_state_t() : height(0) {}
 
-  template <typename t_archive> void serialize(t_archive &a, const unsigned int ver)
+  template <typename t_archive>
+  void serialize(t_archive &a, const unsigned int ver)
   {
     a & height;
     a & ancestry;
@@ -154,7 +158,7 @@ struct ancestry_state_t
     {
       std::unordered_map<crypto::hash, cryptonote::transaction> old_tx_cache;
       a & old_tx_cache;
-      for (const auto i: old_tx_cache)
+      for (const auto i : old_tx_cache)
         tx_cache.insert(std::make_pair(i.first, ::tx_data_t(i.second)));
     }
     else
@@ -166,7 +170,7 @@ struct ancestry_state_t
       std::unordered_map<uint64_t, cryptonote::block> old_block_cache;
       a & old_block_cache;
       block_cache.resize(old_block_cache.size());
-      for (const auto i: old_block_cache)
+      for (const auto i : old_block_cache)
         block_cache[i.first] = i.second;
     }
     else
@@ -189,7 +193,7 @@ static void add_ancestor(std::unordered_map<ancestor, unsigned int> &ancestry, u
 static size_t get_full_ancestry(const std::unordered_map<ancestor, unsigned int> &ancestry)
 {
   size_t count = 0;
-  for (const auto &i: ancestry)
+  for (const auto &i : ancestry)
     count += i.second;
   return count;
 }
@@ -204,7 +208,7 @@ static void add_ancestry(std::unordered_map<crypto::hash, std::unordered_set<anc
   std::pair<std::unordered_map<crypto::hash, std::unordered_set<ancestor>>::iterator, bool> p = ancestry.insert(std::make_pair(txid, ancestors));
   if (!p.second)
   {
-    for (const auto &e: ancestors)
+    for (const auto &e : ancestors)
       p.first->second.insert(e);
   }
 }
@@ -220,8 +224,8 @@ static std::unordered_set<ancestor> get_ancestry(const std::unordered_map<crypto
   std::unordered_map<crypto::hash, std::unordered_set<ancestor>>::const_iterator i = ancestry.find(txid);
   if (i == ancestry.end())
   {
-    //MERROR("txid ancestry not found: " << txid);
-    //throw std::runtime_error("txid ancestry not found");
+    // MERROR("txid ancestry not found: " << txid);
+    // throw std::runtime_error("txid ancestry not found");
     return std::unordered_set<ancestor>();
   }
   return i->second;
@@ -297,9 +301,9 @@ static bool get_output_txid(ancestry_state_t &state, BlockchainDB *db, uint64_t 
 
   for (size_t out = 0; out < b.miner_tx.vout.size(); ++out)
   {
-    if (b.miner_tx.vout[out].target.type() == typeid(cryptonote::txout_to_key))
+    if (b.miner_tx.vout[out].target.type() == typeid(cryptonote::txout_sispop_tagged_key))
     {
-      const auto &txout = boost::get<cryptonote::txout_to_key>(b.miner_tx.vout[out].target);
+      const auto &txout = boost::get<cryptonote::txout_sispop_tagged_key>(b.miner_tx.vout[out].target);
       if (txout.key == od.pubkey)
       {
         txid = cryptonote::get_transaction_hash(b.miner_tx);
@@ -314,7 +318,7 @@ static bool get_output_txid(ancestry_state_t &state, BlockchainDB *db, uint64_t 
       return false;
     }
   }
-  for (const crypto::hash &block_txid: b.tx_hashes)
+  for (const crypto::hash &block_txid : b.tx_hashes)
   {
     ::tx_data_t tx_data3;
     if (!get_transaction(state, db, block_txid, tx_data3))
@@ -334,7 +338,7 @@ static bool get_output_txid(ancestry_state_t &state, BlockchainDB *db, uint64_t 
   return false;
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   TRY_ENTRY();
 
@@ -353,19 +357,18 @@ int main(int argc, char* argv[])
 
   po::options_description desc_cmd_only("Command line options");
   po::options_description desc_cmd_sett("Command line options and settings options");
-  const command_line::arg_descriptor<std::string> arg_log_level  = {"log-level",  "0-4 or categories", ""};
+  const command_line::arg_descriptor<std::string> arg_log_level = {"log-level", "0-4 or categories", ""};
   const command_line::arg_descriptor<std::string> arg_database = {
-    "database", available_dbs.c_str(), default_db_type
-  };
-  const command_line::arg_descriptor<std::string> arg_txid  = {"txid", "Get ancestry for this txid", ""};
-  const command_line::arg_descriptor<std::string> arg_output  = {"output", "Get ancestry for this output (amount/offset format)", ""};
-  const command_line::arg_descriptor<uint64_t> arg_height  = {"height", "Get ancestry for all txes at this height", 0};
-  const command_line::arg_descriptor<bool> arg_refresh  = {"refresh", "Refresh the whole chain first", false};
-  const command_line::arg_descriptor<bool> arg_cache_outputs  = {"cache-outputs", "Cache outputs (memory hungry)", false};
-  const command_line::arg_descriptor<bool> arg_cache_txes  = {"cache-txes", "Cache txes (memory hungry)", false};
-  const command_line::arg_descriptor<bool> arg_cache_blocks  = {"cache-blocks", "Cache blocks (memory hungry)", false};
-  const command_line::arg_descriptor<bool> arg_include_coinbase  = {"include-coinbase", "Including coinbase tx in per height average", false};
-  const command_line::arg_descriptor<bool> arg_show_cache_stats  = {"show-cache-stats", "Show cache statistics", false};
+      "database", available_dbs.c_str(), default_db_type};
+  const command_line::arg_descriptor<std::string> arg_txid = {"txid", "Get ancestry for this txid", ""};
+  const command_line::arg_descriptor<std::string> arg_output = {"output", "Get ancestry for this output (amount/offset format)", ""};
+  const command_line::arg_descriptor<uint64_t> arg_height = {"height", "Get ancestry for all txes at this height", 0};
+  const command_line::arg_descriptor<bool> arg_refresh = {"refresh", "Refresh the whole chain first", false};
+  const command_line::arg_descriptor<bool> arg_cache_outputs = {"cache-outputs", "Cache outputs (memory hungry)", false};
+  const command_line::arg_descriptor<bool> arg_cache_txes = {"cache-txes", "Cache txes (memory hungry)", false};
+  const command_line::arg_descriptor<bool> arg_cache_blocks = {"cache-blocks", "Cache blocks (memory hungry)", false};
+  const command_line::arg_descriptor<bool> arg_include_coinbase = {"include-coinbase", "Including coinbase tx in per height average", false};
+  const command_line::arg_descriptor<bool> arg_show_cache_stats = {"show-cache-stats", "Show cache statistics", false};
 
   command_line::add_arg(desc_cmd_sett, cryptonote::arg_data_dir);
   command_line::add_arg(desc_cmd_sett, cryptonote::arg_testnet_on);
@@ -388,13 +391,12 @@ int main(int argc, char* argv[])
 
   po::variables_map vm;
   bool r = command_line::handle_error_helper(desc_options, [&]()
-  {
+                                             {
     auto parser = po::command_line_parser(argc, argv).options(desc_options);
     po::store(parser.run(), vm);
     po::notify(vm);
-    return true;
-  });
-  if (! r)
+    return true; });
+  if (!r)
     return 1;
 
   if (command_line::get_arg(vm, command_line::arg_help))
@@ -415,7 +417,8 @@ int main(int argc, char* argv[])
   std::string opt_data_dir = command_line::get_arg(vm, cryptonote::arg_data_dir);
   bool opt_testnet = command_line::get_arg(vm, cryptonote::arg_testnet_on);
   bool opt_stagenet = command_line::get_arg(vm, cryptonote::arg_stagenet_on);
-  network_type net_type = opt_testnet ? TESTNET : opt_stagenet ? STAGENET : MAINNET;
+  network_type net_type = opt_testnet ? TESTNET : opt_stagenet ? STAGENET
+                                                               : MAINNET;
   std::string opt_txid_string = command_line::get_arg(vm, arg_txid);
   std::string opt_output_string = command_line::get_arg(vm, arg_output);
   uint64_t opt_height = command_line::get_arg(vm, arg_height);
@@ -475,7 +478,7 @@ int main(int argc, char* argv[])
   {
     db->open(filename, core_storage->nettype(), DBF_RDONLY);
   }
-  catch (const std::exception& e)
+  catch (const std::exception &e)
   {
     LOG_PRINT_L0("Error opening database: " << e.what());
     return 1;
@@ -508,9 +511,8 @@ int main(int argc, char* argv[])
     state_data_in.close();
   }
 
-  tools::signal_handler::install([](int type) {
-    stop_requested = true;
-  });
+  tools::signal_handler::install([](int type)
+                                 { stop_requested = true; });
 
   // forward method
   const uint64_t db_height = db->height();
@@ -538,9 +540,9 @@ int main(int argc, char* argv[])
       txids.reserve(1 + b.tx_hashes.size());
       if (opt_include_coinbase)
         txids.push_back(cryptonote::get_transaction_hash(b.miner_tx));
-      for (const auto &h: b.tx_hashes)
+      for (const auto &h : b.tx_hashes)
         txids.push_back(h);
-      for (const crypto::hash &txid: txids)
+      for (const crypto::hash &txid : txids)
       {
         printf("%lu/%lu               \r", (unsigned long)h, (unsigned long)db_height);
         fflush(stdout);
@@ -580,7 +582,7 @@ int main(int argc, char* argv[])
           {
             const uint64_t amount = tx_data.vin[ring].first;
             const std::vector<uint64_t> &absolute_offsets = tx_data.vin[ring].second;
-            for (uint64_t offset: absolute_offsets)
+            for (uint64_t offset : absolute_offsets)
             {
               add_ancestry(state.ancestry, txid, ancestor{amount, offset});
               // find the tx which created this output
@@ -658,7 +660,7 @@ int main(int argc, char* argv[])
       LOG_PRINT_L0("Bad block from db");
       return 1;
     }
-    for (const crypto::hash &txid: b.tx_hashes)
+    for (const crypto::hash &txid : b.tx_hashes)
       start_txids.push_back(txid);
   }
 
@@ -668,7 +670,7 @@ int main(int argc, char* argv[])
     return 1;
   }
 
-  for (const crypto::hash &start_txid: start_txids)
+  for (const crypto::hash &start_txid : start_txids)
   {
     LOG_PRINT_L0("Checking ancestry for txid " << start_txid);
 
@@ -697,7 +699,7 @@ int main(int argc, char* argv[])
         {
           const uint64_t amount = tx_data2.vin[ring].first;
           auto absolute_offsets = tx_data2.vin[ring].second;
-          for (uint64_t offset: absolute_offsets)
+          for (uint64_t offset : absolute_offsets)
           {
             add_ancestor(ancestry, amount, offset);
 
@@ -719,7 +721,7 @@ int main(int argc, char* argv[])
     }
 
     MINFO("Ancestry for " << start_txid << ": " << get_deduplicated_ancestry(ancestry) << " / " << get_full_ancestry(ancestry));
-    for (const auto &i: ancestry)
+    for (const auto &i : ancestry)
     {
       MINFO(cryptonote::print_money(i.first.amount) << "/" << i.first.offset << ": " << i.second);
     }
@@ -729,10 +731,10 @@ done:
   core_storage->deinit();
 
   if (opt_show_cache_stats)
-  MINFO("cache: txes " << std::to_string(cached_txes*100./total_txes)
-        << "%, blocks " << std::to_string(cached_blocks*100./total_blocks)
-        << "%, outputs " << std::to_string(cached_outputs*100./total_outputs)
-        << "%");
+    MINFO("cache: txes " << std::to_string(cached_txes * 100. / total_txes)
+                         << "%, blocks " << std::to_string(cached_blocks * 100. / total_blocks)
+                         << "%, outputs " << std::to_string(cached_outputs * 100. / total_outputs)
+                         << "%");
 
   return 0;
 

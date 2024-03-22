@@ -33,7 +33,8 @@
 
 #include <boost/endian/conversion.hpp>
 
-extern "C" {
+extern "C"
+{
 #include <sodium.h>
 }
 
@@ -62,15 +63,15 @@ namespace service_nodes
 {
   size_t constexpr STORE_LONG_TERM_STATE_INTERVAL = 10000;
 
-  constexpr int X25519_MAP_PRUNING_INTERVAL = 5*60;
-  constexpr int X25519_MAP_PRUNING_LAG = 24*60*60;
+  constexpr int X25519_MAP_PRUNING_INTERVAL = 5 * 60;
+  constexpr int X25519_MAP_PRUNING_LAG = 24 * 60 * 60;
   static_assert(X25519_MAP_PRUNING_LAG > UPTIME_PROOF_MAX_TIME_IN_SECONDS, "x25519 map pruning lag is too short!");
 
   static uint64_t short_term_state_cull_height(uint8_t hf_version, uint64_t block_height)
   {
     size_t constexpr DEFAULT_SHORT_TERM_STATE_HISTORY = 6 * STATE_CHANGE_TX_LIFETIME_IN_BLOCKS;
     static_assert(DEFAULT_SHORT_TERM_STATE_HISTORY >= BLOCKS_EXPECTED_IN_HOURS(12), // Arbitrary, but raises a compilation failure if it gets shortened.
-        "not enough short term state storage for blink quorum retrieval!");
+                  "not enough short term state storage for blink quorum retrieval!");
     uint64_t result =
         (block_height < DEFAULT_SHORT_TERM_STATE_HISTORY) ? 0 : block_height - DEFAULT_SHORT_TERM_STATE_HISTORY;
     return result;
@@ -79,14 +80,14 @@ namespace service_nodes
   static constexpr service_node_info::version_t get_min_service_node_info_version_for_hf(uint8_t hf_version)
   {
     return hf_version < cryptonote::network_version_14_blink
-      ? service_node_info::version_t::v2_ed25519
-      : service_node_info::version_t::v3_quorumnet;
+               ? service_node_info::version_t::v2_ed25519
+               : service_node_info::version_t::v3_quorumnet;
   }
 
   service_node_list::service_node_list(cryptonote::Blockchain &blockchain)
-  : m_blockchain(blockchain) // Warning: don't touch `blockchain`, it gets initialized *after* us
-  , m_service_node_keys(nullptr)
-  , m_state{this}
+      : m_blockchain(blockchain) // Warning: don't touch `blockchain`, it gets initialized *after* us
+        ,
+        m_service_node_keys(nullptr), m_state{this}
   {
   }
 
@@ -101,7 +102,8 @@ namespace service_nodes
 
     uint64_t current_height = m_blockchain.get_current_blockchain_height();
     bool loaded = load(current_height);
-    if (loaded && m_transient.old_quorum_states.size() < std::min(m_store_quorum_history, uint64_t{10})) {
+    if (loaded && m_transient.old_quorum_states.size() < std::min(m_store_quorum_history, uint64_t{10}))
+    {
       LOG_PRINT_L0("Full history storage requested, but " << m_transient.old_quorum_states.size() << " old quorum states found");
       loaded = false; // Either we don't have stored history or the history is very short, so recalculation is necessary or cheap.
     }
@@ -111,26 +113,35 @@ namespace service_nodes
   }
 
   template <typename UnaryPredicate>
-  static std::vector<service_nodes::pubkey_and_sninfo> sort_and_filter(const service_nodes_infos_t &sns_infos, UnaryPredicate p, bool reserve = true) {
+  static std::vector<service_nodes::pubkey_and_sninfo> sort_and_filter(const service_nodes_infos_t &sns_infos, UnaryPredicate p, bool reserve = true)
+  {
     std::vector<pubkey_and_sninfo> result;
-    if (reserve) result.reserve(sns_infos.size());
+    if (reserve)
+      result.reserve(sns_infos.size());
     for (const pubkey_and_sninfo &key_info : sns_infos)
       if (p(*key_info.second))
         result.push_back(key_info);
 
     std::sort(result.begin(), result.end(),
-      [](const pubkey_and_sninfo &a, const pubkey_and_sninfo &b) {
-        return memcmp(reinterpret_cast<const void*>(&a), reinterpret_cast<const void*>(&b), sizeof(a)) < 0;
-      });
+              [](const pubkey_and_sninfo &a, const pubkey_and_sninfo &b)
+              {
+                return memcmp(reinterpret_cast<const void *>(&a), reinterpret_cast<const void *>(&b), sizeof(a)) < 0;
+              });
     return result;
   }
 
-  std::vector<pubkey_and_sninfo> service_node_list::state_t::active_service_nodes_infos() const {
-    return sort_and_filter(service_nodes_infos, [](const service_node_info &info) { return info.is_active(); });
+  std::vector<pubkey_and_sninfo> service_node_list::state_t::active_service_nodes_infos() const
+  {
+    return sort_and_filter(service_nodes_infos, [](const service_node_info &info)
+                           { return info.is_active(); });
   }
 
-  std::vector<pubkey_and_sninfo> service_node_list::state_t::decommissioned_service_nodes_infos() const {
-    return sort_and_filter(service_nodes_infos, [](const service_node_info &info) { return info.is_decommissioned() && info.is_fully_funded(); }, /*reserve=*/ false);
+  std::vector<pubkey_and_sninfo> service_node_list::state_t::decommissioned_service_nodes_infos() const
+  {
+    return sort_and_filter(
+        service_nodes_infos, [](const service_node_info &info)
+        { return info.is_decommissioned() && info.is_fully_funded(); },
+        /*reserve=*/false);
   }
 
   std::shared_ptr<const quorum> service_node_list::get_quorum(quorum_type type, uint64_t height, bool include_old, std::vector<std::shared_ptr<const quorum>> *alt_quorums) const
@@ -149,7 +160,8 @@ namespace service_nodes
       if (!quorums)
       {
         auto it = m_transient.state_archive.find(height);
-        if (it != m_transient.state_archive.end()) quorums = &it->quorums;
+        if (it != m_transient.state_archive.end())
+          quorums = &it->quorums;
       }
     }
 
@@ -159,7 +171,8 @@ namespace service_nodes
           std::lower_bound(m_transient.old_quorum_states.begin(),
                            m_transient.old_quorum_states.end(),
                            height,
-                           [](quorums_by_height const &entry, uint64_t height) { return entry.height < height; });
+                           [](quorums_by_height const &entry, uint64_t height)
+                           { return entry.height < height; });
 
       if (it != m_transient.old_quorum_states.end() && it->height == height)
         quorums = &it->quorums;
@@ -176,7 +189,8 @@ namespace service_nodes
         if (alt_state.height == height)
         {
           std::shared_ptr<const quorum> alt_result = alt_state.quorums.get(type);
-          if (alt_result) alt_quorums->push_back(alt_result);
+          if (alt_result)
+            alt_quorums->push_back(alt_result);
         }
       }
     }
@@ -188,8 +202,10 @@ namespace service_nodes
   static bool get_pubkey_from_quorum(quorum const &quorum, quorum_group group, size_t quorum_index, crypto::public_key &key)
   {
     std::vector<crypto::public_key> const *array = nullptr;
-    if      (group == quorum_group::validator) array = &quorum.validators;
-    else if (group == quorum_group::worker)    array = &quorum.workers;
+    if (group == quorum_group::validator)
+      array = &quorum.validators;
+    else if (group == quorum_group::worker)
+      array = &quorum.workers;
     else
     {
       MERROR("Invalid quorum group specified");
@@ -257,13 +273,14 @@ namespace service_nodes
     m_service_node_keys = keys;
   }
 
-  void service_node_list::set_quorum_history_storage(uint64_t hist_size) {
+  void service_node_list::set_quorum_history_storage(uint64_t hist_size)
+  {
     if (hist_size == 1)
       hist_size = std::numeric_limits<uint64_t>::max();
     m_store_quorum_history = hist_size;
   }
 
-  bool service_node_list::is_service_node(const crypto::public_key& pubkey, bool require_active) const
+  bool service_node_list::is_service_node(const crypto::public_key &pubkey, bool require_active) const
   {
     std::lock_guard<boost::recursive_mutex> lock(m_sn_mutex);
     auto it = m_state.service_nodes_infos.find(pubkey);
@@ -272,7 +289,7 @@ namespace service_nodes
 
   bool service_node_list::is_key_image_locked(crypto::key_image const &check_image, uint64_t *unlock_height, service_node_info::contribution_t *the_locked_contribution) const
   {
-    for (const auto& pubkey_info : m_state.service_nodes_infos)
+    for (const auto &pubkey_info : m_state.service_nodes_infos)
     {
       const service_node_info &info = *pubkey_info.second;
       for (const service_node_info::contributor_t &contributor : info.contributors)
@@ -281,8 +298,10 @@ namespace service_nodes
         {
           if (check_image == contribution.key_image)
           {
-            if (the_locked_contribution) *the_locked_contribution = contribution;
-            if (unlock_height) *unlock_height = info.requested_unlock_height;
+            if (the_locked_contribution)
+              *the_locked_contribution = contribution;
+            if (unlock_height)
+              *unlock_height = info.requested_unlock_height;
             return true;
           }
         }
@@ -291,7 +310,7 @@ namespace service_nodes
     return false;
   }
 
-  bool reg_tx_extract_fields(const cryptonote::transaction& tx, std::vector<cryptonote::account_public_address>& addresses, uint64_t& portions_for_operator, std::vector<uint64_t>& portions, uint64_t& expiration_timestamp, crypto::public_key& service_node_key, crypto::signature& signature)
+  bool reg_tx_extract_fields(const cryptonote::transaction &tx, std::vector<cryptonote::account_public_address> &addresses, uint64_t &portions_for_operator, std::vector<uint64_t> &portions, uint64_t &expiration_timestamp, crypto::public_key &service_node_key, crypto::signature &signature)
   {
     cryptonote::tx_extra_service_node_register registration;
     if (!get_service_node_register_from_tx_extra(tx.extra, registration))
@@ -301,7 +320,8 @@ namespace service_nodes
 
     addresses.clear();
     addresses.reserve(registration.m_public_spend_keys.size());
-    for (size_t i = 0; i < registration.m_public_spend_keys.size(); i++) {
+    for (size_t i = 0; i < registration.m_public_spend_keys.size(); i++)
+    {
       addresses.emplace_back();
       addresses.back().m_spend_public_key = registration.m_public_spend_keys[i];
       addresses.back().m_view_public_key = registration.m_public_view_keys[i];
@@ -319,9 +339,9 @@ namespace service_nodes
     uint64_t result = height;
     if (type == quorum_type::checkpointing)
     {
-        if (result < REORG_SAFETY_BUFFER_BLOCKS_POST_HF12)
-            return 0;
-        result -= REORG_SAFETY_BUFFER_BLOCKS_POST_HF12;
+      if (result < REORG_SAFETY_BUFFER_BLOCKS_POST_HF12)
+        return 0;
+      result -= REORG_SAFETY_BUFFER_BLOCKS_POST_HF12;
     }
     return result;
   }
@@ -334,9 +354,9 @@ namespace service_nodes
     std::vector<service_node_info::contribution_t> locked_contributions;
   };
 
-  static uint64_t get_tx_output_amount(const cryptonote::transaction& tx, int i, crypto::key_derivation const &derivation, hw::device& hwdev)
+  static uint64_t get_tx_output_amount(const cryptonote::transaction &tx, int i, crypto::key_derivation const &derivation, hw::device &hwdev)
   {
-    if (tx.vout[i].target.type() != typeid(cryptonote::txout_to_key))
+    if (tx.vout[i].target.type() != typeid(cryptonote::txout_sispop_tagged_key))
     {
       return 0;
     }
@@ -374,7 +394,8 @@ namespace service_nodes
 
   /// Makes a copy of the given service_node_info and replaces the shared_ptr with a pointer to the copy.
   /// Returns the non-const service_node_info (which is now held by the passed-in shared_ptr lvalue ref).
-  static service_node_info &duplicate_info(std::shared_ptr<const service_node_info> &info_ptr) {
+  static service_node_info &duplicate_info(std::shared_ptr<const service_node_info> &info_ptr)
+  {
     auto new_ptr = std::make_shared<service_node_info>(*info_ptr);
     info_ptr = new_ptr;
     return *new_ptr;
@@ -422,7 +443,8 @@ namespace service_nodes
       for (std::pair<crypto::hash, state_t> const &entry : alt_states)
       {
         state_t const &alt_state = entry.second;
-        if (alt_state.height != state_change.block_height) continue;
+        if (alt_state.height != state_change.block_height)
+          continue;
 
         quorums = &alt_state.quorums;
         if (!verify_tx_state_change(state_change, cryptonote::get_block_height(block), tvc, *quorums->obligations, hf_version))
@@ -447,7 +469,8 @@ namespace service_nodes
     }
 
     auto iter = service_nodes_infos.find(key);
-    if (iter == service_nodes_infos.end()) {
+    if (iter == service_nodes_infos.end())
+    {
       LOG_PRINT_L2("Received state change tx for non-registered service node " << key << " (perhaps a delayed tx?)");
       return false;
     }
@@ -456,131 +479,137 @@ namespace service_nodes
     auto &info = duplicate_info(iter->second);
     bool is_me = my_keys && my_keys->pub == key;
 
-    switch (state_change.state) {
-      case new_state::deregister:
-        if (is_me)
-          MGINFO_RED("Deregistration for service node (yours): " << key);
-        else
-          LOG_PRINT_L1("Deregistration for service node: " << key);
+    switch (state_change.state)
+    {
+    case new_state::deregister:
+      if (is_me)
+        MGINFO_RED("Deregistration for service node (yours): " << key);
+      else
+        LOG_PRINT_L1("Deregistration for service node: " << key);
 
-        if (hf_version >= cryptonote::network_version_11_infinite_staking)
+      if (hf_version >= cryptonote::network_version_11_infinite_staking)
+      {
+        for (const auto &contributor : info.contributors)
         {
-          for (const auto &contributor : info.contributors)
+          for (const auto &contribution : contributor.locked_contributions)
           {
-            for (const auto &contribution : contributor.locked_contributions)
-            {
-              key_image_blacklist.emplace_back(); // NOTE: Use default value for version in key_image_blacklist_entry
-              key_image_blacklist_entry &entry = key_image_blacklist.back();
-              entry.key_image                  = contribution.key_image;
-              entry.unlock_height              = block_height + staking_num_lock_blocks(nettype);
-              entry.amount                     = contribution.amount;
-            }
+            key_image_blacklist.emplace_back(); // NOTE: Use default value for version in key_image_blacklist_entry
+            key_image_blacklist_entry &entry = key_image_blacklist.back();
+            entry.key_image = contribution.key_image;
+            entry.unlock_height = block_height + staking_num_lock_blocks(nettype);
+            entry.amount = contribution.amount;
           }
         }
+      }
 
-        service_nodes_infos.erase(iter);
-        return true;
+      service_nodes_infos.erase(iter);
+      return true;
 
-      case new_state::decommission:
-        if (hf_version < cryptonote::network_version_12_checkpointing) {
-          MERROR("Invalid decommission transaction seen before network v12");
-          return false;
-        }
-
-        if (info.is_decommissioned()) {
-          LOG_PRINT_L2("Received decommission tx for already-decommissioned service node " << key << "; ignoring");
-          return false;
-        }
-
-        if (is_me)
-          MGINFO_RED("Temporary decommission for service node (yours): " << key);
-        else
-          LOG_PRINT_L1("Temporary decommission for service node: " << key);
-
-        info.active_since_height = -info.active_since_height;
-        info.last_decommission_height = block_height;
-        info.decommission_count++;
-
-        if (hf_version >= cryptonote::network_version_13_enforce_checkpoints) {
-          // Assigning invalid swarm id effectively kicks the node off
-          // its current swarm; it will be assigned a new swarm id when it
-          // gets recommissioned. Prior to HF13 this step was incorrectly
-          // skipped.
-          info.swarm_id = UNASSIGNED_SWARM_ID;
-        }
-
-        if (sn_list && !sn_list->m_rescanning)
-        {
-          auto &proof = sn_list->proofs[key];
-          proof.timestamp = proof.effective_timestamp = 0;
-          proof.store(key, sn_list->m_blockchain);
-        }
-        return true;
-
-      case new_state::recommission:
-        if (hf_version < cryptonote::network_version_12_checkpointing) {
-          MERROR("Invalid recommission transaction seen before network v12");
-          return false;
-        }
-
-        if (!info.is_decommissioned()) {
-          LOG_PRINT_L2("Received recommission tx for already-active service node " << key << "; ignoring");
-          return false;
-        }
-
-        if (is_me)
-          MGINFO_GREEN("Recommission for service node (yours): " << key);
-        else
-          LOG_PRINT_L1("Recommission for service node: " << key);
-
-
-        info.active_since_height = block_height;
-        // Move the SN at the back of the list as if it had just registered (or just won)
-        info.last_reward_block_height = block_height;
-        info.last_reward_transaction_index = std::numeric_limits<uint32_t>::max();
-
-        // NOTE: Only the quorum deciding on this node agrees that the service
-        // node has a recent uptime atleast for it to be recommissioned not
-        // necessarily the entire network. Ensure the entire network agrees
-        // simultaneously they are online if we are recommissioning by resetting
-        // the failure conditions.  We set only the effective but not *actual*
-        // timestamp so that we delay obligations checks but don't prevent the
-        // next actual proof from being sent/relayed.
-        if (sn_list)
-        {
-          auto &proof = sn_list->proofs[key];
-          proof.effective_timestamp = block.timestamp;
-          proof.votes.fill({});
-        }
-        return true;
-
-      case new_state::ip_change_penalty:
-        if (hf_version < cryptonote::network_version_12_checkpointing) {
-          MERROR("Invalid ip_change_penalty transaction seen before network v12");
-          return false;
-        }
-
-        if (info.is_decommissioned()) {
-          LOG_PRINT_L2("Received reset position tx for service node " << key << " but it is already decommissioned; ignoring");
-          return false;
-        }
-
-        if (is_me)
-          MGINFO_RED("Reward position reset for service node (yours): " << key);
-        else
-          LOG_PRINT_L1("Reward position reset for service node: " << key);
-
-
-        // Move the SN at the back of the list as if it had just registered (or just won)
-        info.last_reward_block_height = block_height;
-        info.last_reward_transaction_index = std::numeric_limits<uint32_t>::max();
-        info.last_ip_change_height = block_height;
-        return true;
-
-      default:
-        // dev bug!
-        MERROR("BUG: Service node state change tx has unknown state " << static_cast<uint16_t>(state_change.state));
+    case new_state::decommission:
+      if (hf_version < cryptonote::network_version_12_checkpointing)
+      {
+        MERROR("Invalid decommission transaction seen before network v12");
         return false;
+      }
+
+      if (info.is_decommissioned())
+      {
+        LOG_PRINT_L2("Received decommission tx for already-decommissioned service node " << key << "; ignoring");
+        return false;
+      }
+
+      if (is_me)
+        MGINFO_RED("Temporary decommission for service node (yours): " << key);
+      else
+        LOG_PRINT_L1("Temporary decommission for service node: " << key);
+
+      info.active_since_height = -info.active_since_height;
+      info.last_decommission_height = block_height;
+      info.decommission_count++;
+
+      if (hf_version >= cryptonote::network_version_13_enforce_checkpoints)
+      {
+        // Assigning invalid swarm id effectively kicks the node off
+        // its current swarm; it will be assigned a new swarm id when it
+        // gets recommissioned. Prior to HF13 this step was incorrectly
+        // skipped.
+        info.swarm_id = UNASSIGNED_SWARM_ID;
+      }
+
+      if (sn_list && !sn_list->m_rescanning)
+      {
+        auto &proof = sn_list->proofs[key];
+        proof.timestamp = proof.effective_timestamp = 0;
+        proof.store(key, sn_list->m_blockchain);
+      }
+      return true;
+
+    case new_state::recommission:
+      if (hf_version < cryptonote::network_version_12_checkpointing)
+      {
+        MERROR("Invalid recommission transaction seen before network v12");
+        return false;
+      }
+
+      if (!info.is_decommissioned())
+      {
+        LOG_PRINT_L2("Received recommission tx for already-active service node " << key << "; ignoring");
+        return false;
+      }
+
+      if (is_me)
+        MGINFO_GREEN("Recommission for service node (yours): " << key);
+      else
+        LOG_PRINT_L1("Recommission for service node: " << key);
+
+      info.active_since_height = block_height;
+      // Move the SN at the back of the list as if it had just registered (or just won)
+      info.last_reward_block_height = block_height;
+      info.last_reward_transaction_index = std::numeric_limits<uint32_t>::max();
+
+      // NOTE: Only the quorum deciding on this node agrees that the service
+      // node has a recent uptime atleast for it to be recommissioned not
+      // necessarily the entire network. Ensure the entire network agrees
+      // simultaneously they are online if we are recommissioning by resetting
+      // the failure conditions.  We set only the effective but not *actual*
+      // timestamp so that we delay obligations checks but don't prevent the
+      // next actual proof from being sent/relayed.
+      if (sn_list)
+      {
+        auto &proof = sn_list->proofs[key];
+        proof.effective_timestamp = block.timestamp;
+        proof.votes.fill({});
+      }
+      return true;
+
+    case new_state::ip_change_penalty:
+      if (hf_version < cryptonote::network_version_12_checkpointing)
+      {
+        MERROR("Invalid ip_change_penalty transaction seen before network v12");
+        return false;
+      }
+
+      if (info.is_decommissioned())
+      {
+        LOG_PRINT_L2("Received reset position tx for service node " << key << " but it is already decommissioned; ignoring");
+        return false;
+      }
+
+      if (is_me)
+        MGINFO_RED("Reward position reset for service node (yours): " << key);
+      else
+        LOG_PRINT_L1("Reward position reset for service node: " << key);
+
+      // Move the SN at the back of the list as if it had just registered (or just won)
+      info.last_reward_block_height = block_height;
+      info.last_reward_transaction_index = std::numeric_limits<uint32_t>::max();
+      info.last_ip_change_height = block_height;
+      return true;
+
+    default:
+      // dev bug!
+      MERROR("BUG: Service node state change tx has unknown state " << static_cast<uint16_t>(state_change.state));
+      return false;
     }
   }
 
@@ -616,7 +645,8 @@ namespace service_nodes
     {
       auto cit = std::find_if(contributor.locked_contributions.begin(),
                               contributor.locked_contributions.end(),
-                              [&unlock](const service_node_info::contribution_t &contribution) {
+                              [&unlock](const service_node_info::contribution_t &contribution)
+                              {
                                 return unlock.key_image == contribution.key_image;
                               });
       if (cit != contributor.locked_contributions.end())
@@ -640,7 +670,7 @@ namespace service_nodes
     return false;
   }
 
-  static bool get_contribution(cryptonote::network_type nettype, int hf_version, const cryptonote::transaction& tx, uint64_t block_height, parsed_tx_contribution &parsed_contribution)
+  static bool get_contribution(cryptonote::network_type nettype, int hf_version, const cryptonote::transaction &tx, uint64_t block_height, parsed_tx_contribution &parsed_contribution)
   {
     if (!cryptonote::get_service_node_contributor_from_tx_extra(tx.extra, parsed_contribution.address))
       return false;
@@ -672,7 +702,7 @@ namespace service_nodes
       return false;
     }
 
-    hw::device& hwdev               = hw::get_device("default");
+    hw::device &hwdev = hw::get_device("default");
     parsed_contribution.transferred = 0;
 
     if (hf_version >= cryptonote::network_version_11_infinite_staking)
@@ -725,7 +755,7 @@ namespace service_nodes
           }
 
           // Stealth address public key should match the public key referenced in the TX only if valid information is given.
-          const auto& out_to_key = boost::get<cryptonote::txout_to_key>(tx.vout[output_index].target);
+          const auto &out_to_key = boost::get<cryptonote::txout_sispop_tagged_key>(tx.vout[output_index].target);
           if (out_to_key.key != ephemeral_pub_key)
           {
             LOG_PRINT_L1("TX: Derived TX ephemeral key did not match tx stored key on height: " << block_height << " for tx: " << get_transaction_hash(tx) << " for output: " << output_index);
@@ -753,8 +783,7 @@ namespace service_nodes
               service_node_info::contribution_t::version_t::v0,
               ephemeral_pub_key,
               proof->key_image,
-              transferred
-          );
+              transferred);
 
           parsed_contribution.transferred += transferred;
           key_image_proofs.proofs.erase(proof);
@@ -787,7 +816,7 @@ namespace service_nodes
     return true;
   }
 
-  bool is_registration_tx(cryptonote::network_type nettype, uint8_t hf_version, const cryptonote::transaction& tx, uint64_t block_timestamp, uint64_t block_height, uint32_t index, crypto::public_key& key, service_node_info& info)
+  bool is_registration_tx(cryptonote::network_type nettype, uint8_t hf_version, const cryptonote::transaction &tx, uint64_t block_timestamp, uint64_t block_height, uint32_t index, crypto::public_key &key, service_node_info &info)
   {
     crypto::public_key service_node_key;
     std::vector<cryptonote::account_public_address> service_node_addresses;
@@ -801,21 +830,16 @@ namespace service_nodes
 
     if (service_node_portions.size() != service_node_addresses.size() || service_node_portions.empty())
     {
-      LOG_PRINT_L1("Register TX: Extracted portions size: (" << service_node_portions.size() <<
-                   ") was empty or did not match address size: (" << service_node_addresses.size() <<
-                   ") on height: " << block_height <<
-                   " for tx: " << cryptonote::get_transaction_hash(tx));
+      LOG_PRINT_L1("Register TX: Extracted portions size: (" << service_node_portions.size() << ") was empty or did not match address size: (" << service_node_addresses.size() << ") on height: " << block_height << " for tx: " << cryptonote::get_transaction_hash(tx));
       return false;
     }
 
-    if (!check_service_node_portions(hf_version, service_node_portions)) return false;
+    if (!check_service_node_portions(hf_version, service_node_portions))
+      return false;
 
     if (portions_for_operator > STAKING_PORTIONS)
     {
-      LOG_PRINT_L1("Register TX: Operator portions: " << portions_for_operator <<
-                   " exceeded staking portions: " << STAKING_PORTIONS <<
-                   " on height: " << block_height <<
-                   " for tx: " << cryptonote::get_transaction_hash(tx));
+      LOG_PRINT_L1("Register TX: Operator portions: " << portions_for_operator << " exceeded staking portions: " << STAKING_PORTIONS << " on height: " << block_height << " for tx: " << cryptonote::get_transaction_hash(tx));
       return false;
     }
 
@@ -836,10 +860,7 @@ namespace service_nodes
 
     if (expiration_timestamp < block_timestamp)
     {
-      LOG_PRINT_L1("Register TX: Has expired. The block timestamp: " << block_timestamp <<
-                   " is greater than the expiration timestamp: " << expiration_timestamp <<
-                   " on height: " << block_height <<
-                   " for tx:" << cryptonote::get_transaction_hash(tx));
+      LOG_PRINT_L1("Register TX: Has expired. The block timestamp: " << block_timestamp << " is greater than the expiration timestamp: " << expiration_timestamp << " on height: " << block_height << " for tx:" << cryptonote::get_transaction_hash(tx));
       return false;
     }
 
@@ -868,10 +889,7 @@ namespace service_nodes
 
     if (total_num_of_addr > MAX_NUMBER_OF_CONTRIBUTORS)
     {
-      LOG_PRINT_L1("Register TX: Number of participants: " << total_num_of_addr <<
-                   " exceeded the max number of contributors: " << MAX_NUMBER_OF_CONTRIBUTORS <<
-                   " on height: " << block_height <<
-                   " for tx: " << cryptonote::get_transaction_hash(tx));
+      LOG_PRINT_L1("Register TX: Number of participants: " << total_num_of_addr << " exceeded the max number of contributors: " << MAX_NUMBER_OF_CONTRIBUTORS << " on height: " << block_height << " for tx: " << cryptonote::get_transaction_hash(tx));
       return false;
     }
 
@@ -879,16 +897,16 @@ namespace service_nodes
 
     key = service_node_key;
 
-    info.staking_requirement           = staking_requirement;
-    info.operator_address              = service_node_addresses[0];
-    info.portions_for_operator         = portions_for_operator;
-    info.registration_height           = block_height;
-    info.registration_hf_version       = hf_version;
-    info.last_reward_block_height      = block_height;
+    info.staking_requirement = staking_requirement;
+    info.operator_address = service_node_addresses[0];
+    info.portions_for_operator = portions_for_operator;
+    info.registration_height = block_height;
+    info.registration_hf_version = hf_version;
+    info.last_reward_block_height = block_height;
     info.last_reward_transaction_index = index;
-    info.swarm_id                      = UNASSIGNED_SWARM_ID;
-    info.last_ip_change_height         = block_height;
-    info.version                       = get_min_service_node_info_version_for_hf(hf_version);
+    info.swarm_id = UNASSIGNED_SWARM_ID;
+    info.last_ip_change_height = block_height;
+    info.version = get_min_service_node_info_version_for_hf(hf_version);
 
     for (size_t i = 0; i < service_node_addresses.size(); i++)
     {
@@ -906,19 +924,19 @@ namespace service_nodes
 
       info.contributors.emplace_back();
       auto &contributor = info.contributors.back();
-      contributor.reserved                         = resultlo;
-      contributor.address                          = service_node_addresses[i];
+      contributor.reserved = resultlo;
+      contributor.address = service_node_addresses[i];
       info.total_reserved += resultlo;
     }
 
     return true;
   }
 
-  bool service_node_list::state_t::process_registration_tx(cryptonote::network_type nettype, const cryptonote::block &block, const cryptonote::transaction& tx, uint32_t index, const service_node_keys *my_keys)
+  bool service_node_list::state_t::process_registration_tx(cryptonote::network_type nettype, const cryptonote::block &block, const cryptonote::transaction &tx, uint32_t index, const service_node_keys *my_keys)
   {
-    uint8_t const hf_version       = block.major_version;
+    uint8_t const hf_version = block.major_version;
     uint64_t const block_timestamp = block.timestamp;
-    uint64_t const block_height    = cryptonote::get_block_height(block);
+    uint64_t const block_height = cryptonote::get_block_height(block);
 
     crypto::public_key key;
     auto info_ptr = std::make_shared<service_node_info>();
@@ -942,8 +960,10 @@ namespace service_nodes
         proof.store(key, sn_list->m_blockchain);
       }
 
-      if (my_keys && my_keys->pub == key) MGINFO_GREEN("Service node registered (yours): " << key << " on height: " << block_height);
-      else                                LOG_PRINT_L1("New service node registered: "     << key << " on height: " << block_height);
+      if (my_keys && my_keys->pub == key)
+        MGINFO_GREEN("Service node registered (yours): " << key << " on height: " << block_height);
+      else
+        LOG_PRINT_L1("New service node registered: " << key << " on height: " << block_height);
     }
     else
     {
@@ -992,10 +1012,10 @@ namespace service_nodes
     return true;
   }
 
-  bool service_node_list::state_t::process_contribution_tx(cryptonote::network_type nettype, const cryptonote::block &block, const cryptonote::transaction& tx, uint32_t index)
+  bool service_node_list::state_t::process_contribution_tx(cryptonote::network_type nettype, const cryptonote::block &block, const cryptonote::transaction &tx, uint32_t index)
   {
     uint64_t const block_height = cryptonote::get_block_height(block);
-    uint8_t const hf_version    = block.major_version;
+    uint8_t const hf_version = block.major_version;
 
     crypto::public_key pubkey;
 
@@ -1012,25 +1032,21 @@ namespace service_nodes
     auto iter = service_nodes_infos.find(pubkey);
     if (iter == service_nodes_infos.end())
     {
-      LOG_PRINT_L1("TX: Contribution received for service node: " << pubkey <<
-                   ", but could not be found in the service node list on height: " << block_height <<
-                   " for tx: " << cryptonote::get_transaction_hash(tx )<< "\n"
-                   "This could mean that the service node was deregistered before the contribution was processed.");
+      LOG_PRINT_L1("TX: Contribution received for service node: " << pubkey << ", but could not be found in the service node list on height: " << block_height << " for tx: " << cryptonote::get_transaction_hash(tx) << "\n"
+                                                                                                                                                                                                                         "This could mean that the service node was deregistered before the contribution was processed.");
       return false;
     }
 
-    const service_node_info& curinfo = *iter->second;
+    const service_node_info &curinfo = *iter->second;
     if (curinfo.is_fully_funded())
     {
-      LOG_PRINT_L1("TX: Service node: " << pubkey <<
-                   " is already fully funded, but contribution received on height: "  << block_height <<
-                   " for tx: " << cryptonote::get_transaction_hash(tx));
+      LOG_PRINT_L1("TX: Service node: " << pubkey << " is already fully funded, but contribution received on height: " << block_height << " for tx: " << cryptonote::get_transaction_hash(tx));
       return false;
     }
 
     if (!cryptonote::get_tx_secret_key_from_tx_extra(tx.extra, parsed_contribution.tx_key))
     {
-      LOG_PRINT_L1("TX: Failed to get tx secret key from contribution received on height: "  << block_height << " for tx: " << cryptonote::get_transaction_hash(tx));
+      LOG_PRINT_L1("TX: Failed to get tx secret key from contribution received on height: " << block_height << " for tx: " << cryptonote::get_transaction_hash(tx));
       return false;
     }
 
@@ -1038,7 +1054,8 @@ namespace service_nodes
     bool new_contributor = true;
     size_t contributor_position = 0;
     for (size_t i = 0; i < contributors.size(); i++)
-      if (contributors[i].address == parsed_contribution.address){
+      if (contributors[i].address == parsed_contribution.address)
+      {
         contributor_position = i;
         new_contributor = false;
         break;
@@ -1056,10 +1073,7 @@ namespace service_nodes
 
       if (too_many_contributions)
       {
-        LOG_PRINT_L1("TX: Already hit the max number of contributions: " << MAX_NUMBER_OF_CONTRIBUTORS <<
-                     " for contributor: " << cryptonote::get_account_address_as_str(nettype, false, parsed_contribution.address) <<
-                     " on height: "  << block_height <<
-                     " for tx: " << cryptonote::get_transaction_hash(tx));
+        LOG_PRINT_L1("TX: Already hit the max number of contributions: " << MAX_NUMBER_OF_CONTRIBUTORS << " for contributor: " << cryptonote::get_account_address_as_str(nettype, false, parsed_contribution.address) << " on height: " << block_height << " for tx: " << cryptonote::get_transaction_hash(tx));
         return false;
       }
     }
@@ -1067,17 +1081,13 @@ namespace service_nodes
     // Check that the contribution is large enough
     {
       const uint64_t min_contribution =
-        (!new_contributor && hf_version < cryptonote::network_version_11_infinite_staking)
-        ? 1 // Follow-up contributions from an existing contributor could be any size before HF11
-        : get_min_node_contribution(hf_version, curinfo.staking_requirement, curinfo.total_reserved, curinfo.total_num_locked_contributions());
+          (!new_contributor && hf_version < cryptonote::network_version_11_infinite_staking)
+              ? 1 // Follow-up contributions from an existing contributor could be any size before HF11
+              : get_min_node_contribution(hf_version, curinfo.staking_requirement, curinfo.total_reserved, curinfo.total_num_locked_contributions());
 
       if (parsed_contribution.transferred < min_contribution)
       {
-        LOG_PRINT_L1("TX: Amount " << parsed_contribution.transferred <<
-                     " did not meet min " << min_contribution <<
-                     " for service node: " << pubkey <<
-                     " on height: "  << block_height <<
-                     " for tx: " << cryptonote::get_transaction_hash(tx));
+        LOG_PRINT_L1("TX: Amount " << parsed_contribution.transferred << " did not meet min " << min_contribution << " for service node: " << pubkey << " on height: " << block_height << " for tx: " << cryptonote::get_transaction_hash(tx));
         return false;
       }
     }
@@ -1093,15 +1103,15 @@ namespace service_nodes
       info.contributors.emplace_back();
       info.contributors.back().address = parsed_contribution.address;
     }
-    service_node_info::contributor_t& contributor = info.contributors[contributor_position];
+    service_node_info::contributor_t &contributor = info.contributors[contributor_position];
 
     // In this action, we cannot
     // increase total_reserved so much that it is >= staking_requirement
     uint64_t can_increase_reserved_by = info.staking_requirement - info.total_reserved;
-    uint64_t max_amount               = contributor.reserved + can_increase_reserved_by;
+    uint64_t max_amount = contributor.reserved + can_increase_reserved_by;
     parsed_contribution.transferred = std::min(max_amount - contributor.amount, parsed_contribution.transferred);
 
-    contributor.amount     += parsed_contribution.transferred;
+    contributor.amount += parsed_contribution.transferred;
     info.total_contributed += parsed_contribution.transferred;
 
     if (contributor.amount > contributor.reserved)
@@ -1118,14 +1128,15 @@ namespace service_nodes
         contributor.locked_contributions.push_back(contribution);
 
     LOG_PRINT_L1("Contribution of " << parsed_contribution.transferred << " received for service node " << pubkey);
-    if (info.is_fully_funded()) {
+    if (info.is_fully_funded())
+    {
       info.active_since_height = block_height;
       return true;
     }
     return false;
   }
 
-  bool service_node_list::block_added(const cryptonote::block& block, const std::vector<cryptonote::transaction>& txs, cryptonote::checkpoint_t const *checkpoint)
+  bool service_node_list::block_added(const cryptonote::block &block, const std::vector<cryptonote::transaction> &txs, cryptonote::checkpoint_t const *checkpoint)
   {
     if (block.major_version < cryptonote::network_version_9_service_nodes)
       return true;
@@ -1156,7 +1167,7 @@ namespace service_nodes
       size_t list_size,
       crypto::hash const &block_hash,
       quorum_type type,
-      size_t sublist_size  = 0,
+      size_t sublist_size = 0,
       size_t sublist_up_to = 0)
   {
     std::vector<size_t> result(list_size);
@@ -1183,12 +1194,14 @@ namespace service_nodes
     // includes values from [0,Y) then we do this using two shuffles: first of the [0,Y) sublist,
     // then of the [N,Z) sublist (which is already partially shuffled, but that doesn't matter).  We
     // reuse the same seed for both partial shuffles, but again, that isn't an issue.
-    if ((0 < sublist_size && sublist_size < list_size) && (0 < sublist_up_to && sublist_up_to < list_size)) {
+    if ((0 < sublist_size && sublist_size < list_size) && (0 < sublist_up_to && sublist_up_to < list_size))
+    {
       assert(sublist_size <= sublist_up_to); // Can't select N random items from M items when M < N
       tools::shuffle_portable(result.begin(), result.begin() + sublist_up_to, seed);
       tools::shuffle_portable(result.begin() + sublist_size, result.end(), seed);
     }
-    else {
+    else
+    {
       tools::shuffle_portable(result.begin(), result.end(), seed);
     }
     return result;
@@ -1211,19 +1224,19 @@ namespace service_nodes
     quorum_type const max_quorum_type = max_quorum_type_for_hf(hf_version);
     for (int type_int = 0; type_int <= (int)max_quorum_type; type_int++)
     {
-      auto type             = static_cast<quorum_type>(type_int);
+      auto type = static_cast<quorum_type>(type_int);
       size_t num_validators = 0, num_workers = 0;
-      auto quorum           = std::make_shared<service_nodes::quorum>();
+      auto quorum = std::make_shared<service_nodes::quorum>();
       std::vector<size_t> pub_keys_indexes;
 
       if (type == quorum_type::obligations)
       {
-        size_t total_nodes         = active_snode_list.size() + decomm_snode_list.size();
-        num_validators             = std::min(active_snode_list.size(), STATE_CHANGE_QUORUM_SIZE);
-        pub_keys_indexes           = generate_shuffled_service_node_index_list(total_nodes, state.block_hash, type, num_validators, active_snode_list.size());
-        result.obligations         = quorum;
+        size_t total_nodes = active_snode_list.size() + decomm_snode_list.size();
+        num_validators = std::min(active_snode_list.size(), STATE_CHANGE_QUORUM_SIZE);
+        pub_keys_indexes = generate_shuffled_service_node_index_list(total_nodes, state.block_hash, type, num_validators, active_snode_list.size());
+        result.obligations = quorum;
         size_t num_remaining_nodes = total_nodes - num_validators;
-        num_workers                = std::min(num_remaining_nodes, std::max(STATE_CHANGE_MIN_NODES_TO_TEST, num_remaining_nodes/STATE_CHANGE_NTH_OF_THE_NETWORK_TO_TEST));
+        num_workers = std::min(num_remaining_nodes, std::max(STATE_CHANGE_MIN_NODES_TO_TEST, num_remaining_nodes / STATE_CHANGE_NTH_OF_THE_NETWORK_TO_TEST));
       }
       else if (type == quorum_type::checkpointing)
       {
@@ -1244,7 +1257,7 @@ namespace service_nodes
         if (total_nodes >= CHECKPOINT_QUORUM_SIZE)
         {
           pub_keys_indexes = generate_shuffled_service_node_index_list(total_nodes, state.block_hash, type);
-          num_validators   = std::min(pub_keys_indexes.size(), CHECKPOINT_QUORUM_SIZE);
+          num_validators = std::min(pub_keys_indexes.size(), CHECKPOINT_QUORUM_SIZE);
         }
         result.checkpointing = quorum;
       }
@@ -1257,12 +1270,12 @@ namespace service_nodes
         // scheduled to finish unlocking between the quorum height and a few blocks after the
         // associated blink height.
         active_snode_list.erase(std::remove_if(active_snode_list.begin(), active_snode_list.end(),
-            [active_until = state.height + BLINK_EXPIRY_BUFFER](auto &info) {
-              auto ruh = info.second->requested_unlock_height;
-              return ruh != KEY_IMAGE_AWAITING_UNLOCK_HEIGHT && ruh <= active_until;
-            }),
-            active_snode_list.end()
-        );
+                                               [active_until = state.height + BLINK_EXPIRY_BUFFER](auto &info)
+                                               {
+                                                 auto ruh = info.second->requested_unlock_height;
+                                                 return ruh != KEY_IMAGE_AWAITING_UNLOCK_HEIGHT && ruh <= active_until;
+                                               }),
+                                active_snode_list.end());
         size_t total_nodes = active_snode_list.size();
 
         if (total_nodes >= BLINK_MIN_VOTES)
@@ -1313,10 +1326,10 @@ namespace service_nodes
   {
     ++height;
     bool need_swarm_update = false;
-    uint64_t block_height  = cryptonote::get_block_height(block);
+    uint64_t block_height = cryptonote::get_block_height(block);
     assert(height == block_height);
-    quorums                  = {};
-    block_hash               = cryptonote::get_block_hash(block);
+    quorums = {};
+    block_hash = cryptonote::get_block_hash(block);
     uint8_t const hf_version = block.major_version;
 
     //
@@ -1336,13 +1349,15 @@ namespace service_nodes
     //
     // Expire Nodes
     //
-    for (const crypto::public_key& pubkey : get_expired_nodes(db, nettype, block.major_version, block_height))
+    for (const crypto::public_key &pubkey : get_expired_nodes(db, nettype, block.major_version, block_height))
     {
       auto i = service_nodes_infos.find(pubkey);
       if (i != service_nodes_infos.end())
       {
-        if (my_keys && my_keys->pub == pubkey) MGINFO_GREEN("Service node expired (yours): " << pubkey << " at block height: " << block_height);
-        else                                   LOG_PRINT_L1("Service node expired: " << pubkey << " at block height: " << block_height);
+        if (my_keys && my_keys->pub == pubkey)
+          MGINFO_GREEN("Service node expired (yours): " << pubkey << " at block height: " << block_height);
+        else
+          LOG_PRINT_L1("Service node expired: " << pubkey << " at block height: " << block_height);
 
         need_swarm_update += i->second->is_active();
         service_nodes_infos.erase(i);
@@ -1367,11 +1382,11 @@ namespace service_nodes
     //
     // Process TXs in the Block
     //
-    cryptonote::txtype max_tx_type     = cryptonote::transaction::get_max_type_for_hf(hf_version);
+    cryptonote::txtype max_tx_type = cryptonote::transaction::get_max_type_for_hf(hf_version);
     cryptonote::txtype staking_tx_type = (max_tx_type < cryptonote::txtype::stake) ? cryptonote::txtype::standard : cryptonote::txtype::stake;
     for (uint32_t index = 0; index < txs.size(); ++index)
     {
-      const cryptonote::transaction& tx = txs[index];
+      const cryptonote::transaction &tx = txs[index];
       if (tx.type == staking_tx_type)
       {
         process_registration_tx(nettype, block, tx, index, my_keys);
@@ -1401,15 +1416,18 @@ namespace service_nodes
       calc_swarm_changes(existing_swarms, seed);
 
       /// Apply changes
-      for (const auto entry : existing_swarms) {
+      for (const auto entry : existing_swarms)
+      {
 
         const swarm_id_t swarm_id = entry.first;
-        const std::vector<crypto::public_key>& snodes = entry.second;
+        const std::vector<crypto::public_key> &snodes = entry.second;
 
-        for (const auto snode : snodes) {
+        for (const auto snode : snodes)
+        {
 
-          auto& sn_info_ptr = service_nodes_infos.at(snode);
-          if (sn_info_ptr->swarm_id == swarm_id) continue; /// nothing changed for this snode
+          auto &sn_info_ptr = service_nodes_infos.at(snode);
+          if (sn_info_ptr->swarm_id == swarm_id)
+            continue; /// nothing changed for this snode
           duplicate_info(sn_info_ptr).swarm_id = swarm_id;
         }
       }
@@ -1418,10 +1436,10 @@ namespace service_nodes
     quorums = generate_quorums(nettype, hf_version, *this);
   }
 
-  void service_node_list::process_block(const cryptonote::block& block, const std::vector<cryptonote::transaction>& txs)
+  void service_node_list::process_block(const cryptonote::block &block, const std::vector<cryptonote::transaction> &txs)
   {
     uint64_t block_height = cryptonote::get_block_height(block);
-    uint8_t hf_version    = block.major_version;
+    uint8_t hf_version = block.major_version;
 
     if (hf_version < 9)
       return;
@@ -1435,35 +1453,36 @@ namespace service_nodes
         if (m_store_quorum_history)
           m_transient.old_quorum_states.emplace_back(it->height, it->quorums);
 
-        uint64_t next_long_term_state         = ((it->height / STORE_LONG_TERM_STATE_INTERVAL) + 1) * STORE_LONG_TERM_STATE_INTERVAL;
+        uint64_t next_long_term_state = ((it->height / STORE_LONG_TERM_STATE_INTERVAL) + 1) * STORE_LONG_TERM_STATE_INTERVAL;
         uint64_t dist_to_next_long_term_state = next_long_term_state - it->height;
-        bool need_quorum_for_future_states    = (dist_to_next_long_term_state <= VOTE_LIFETIME + VOTE_OR_TX_VERIFY_HEIGHT_BUFFER);
+        bool need_quorum_for_future_states = (dist_to_next_long_term_state <= VOTE_LIFETIME + VOTE_OR_TX_VERIFY_HEIGHT_BUFFER);
         if ((it->height % STORE_LONG_TERM_STATE_INTERVAL) == 0 || need_quorum_for_future_states)
         {
           m_transient.state_added_to_archive = true;
           if (need_quorum_for_future_states) // Preserve just quorum
           {
-            state_t &state            = const_cast<state_t &>(*it); // safe: set order only depends on state_t.height
+            state_t &state = const_cast<state_t &>(*it); // safe: set order only depends on state_t.height
             state.service_nodes_infos = {};
             state.key_image_blacklist = {};
             state.only_loaded_quorums = true;
           }
           m_transient.state_archive.emplace_hint(m_transient.state_archive.end(), std::move(*it));
         }
-
       }
       m_transient.state_history.erase(m_transient.state_history.begin(), end_it);
 
       if (m_transient.old_quorum_states.size() > m_store_quorum_history)
-        m_transient.old_quorum_states.erase(m_transient.old_quorum_states.begin(), m_transient.old_quorum_states.begin() + (m_transient.old_quorum_states.size() -  m_store_quorum_history));
+        m_transient.old_quorum_states.erase(m_transient.old_quorum_states.begin(), m_transient.old_quorum_states.begin() + (m_transient.old_quorum_states.size() - m_store_quorum_history));
     }
 
     // Cull alt state history
-    for (auto it = m_transient.alt_state.begin(); it != m_transient.alt_state.end(); )
+    for (auto it = m_transient.alt_state.begin(); it != m_transient.alt_state.end();)
     {
       state_t const &alt_state = it->second;
-      if (alt_state.height < cull_height) it = m_transient.alt_state.erase(it);
-      else it++;
+      if (alt_state.height < cull_height)
+        it = m_transient.alt_state.erase(it);
+      else
+        it++;
     }
 
     cryptonote::network_type nettype = m_blockchain.nettype();
@@ -1476,8 +1495,8 @@ namespace service_nodes
     std::lock_guard<boost::recursive_mutex> lock(m_sn_mutex);
 
     uint64_t revert_to_height = height - 1;
-    bool reinitialise         = false;
-    bool using_archive        = false;
+    bool reinitialise = false;
+    bool using_archive = false;
     {
       auto it = m_transient.state_history.find(revert_to_height); // Try finding detached height directly
       reinitialise = (it == m_transient.state_history.end() || it->only_loaded_quorums);
@@ -1489,8 +1508,8 @@ namespace service_nodes
     if (reinitialise) // Try finding the next closest old state at 10k intervals
     {
       uint64_t prev_interval = revert_to_height - (revert_to_height % STORE_LONG_TERM_STATE_INTERVAL);
-      auto it                = m_transient.state_archive.find(prev_interval);
-      reinitialise           = (it == m_transient.state_archive.end() || it->only_loaded_quorums);
+      auto it = m_transient.state_archive.find(prev_interval);
+      reinitialise = (it == m_transient.state_archive.end() || it->only_loaded_quorums);
       if (!reinitialise)
       {
         m_transient.state_history.clear();
@@ -1514,9 +1533,9 @@ namespace service_nodes
   }
 
   std::vector<crypto::public_key> service_node_list::state_t::get_expired_nodes(cryptonote::BlockchainDB const &db,
-                                                                               cryptonote::network_type nettype,
-                                                                               uint8_t hf_version,
-                                                                               uint64_t block_height) const
+                                                                                cryptonote::network_type nettype,
+                                                                                uint8_t hf_version,
+                                                                                uint64_t block_height) const
   {
     std::vector<crypto::public_key> expired_nodes;
     uint64_t const lock_blocks = staking_num_lock_blocks(nettype);
@@ -1529,7 +1548,7 @@ namespace service_nodes
         return expired_nodes;
 
       const uint64_t expired_nodes_block_height = block_height - lock_blocks;
-      cryptonote::block block                   = {};
+      cryptonote::block block = {};
       try
       {
         block = db.get_block_from_height(expired_nodes_block_height);
@@ -1559,14 +1578,13 @@ namespace service_nodes
           expired_nodes.push_back(key);
         index++;
       }
-
     }
     else
     {
       for (auto it = service_nodes_infos.begin(); it != service_nodes_infos.end(); it++)
       {
         crypto::public_key const &snode_key = it->first;
-        const service_node_info &info       = *it->second;
+        const service_node_info &info = *it->second;
         if (info.registration_hf_version >= cryptonote::network_version_11_infinite_staking)
         {
           if (info.requested_unlock_height != KEY_IMAGE_AWAITING_UNLOCK_HEIGHT && block_height > info.requested_unlock_height)
@@ -1590,7 +1608,7 @@ namespace service_nodes
 
   block_winner service_node_list::state_t::get_block_winner() const
   {
-    block_winner result           = {};
+    block_winner result = {};
     service_node_info const *info = nullptr;
     {
       auto oldest_waiting = std::make_tuple(std::numeric_limits<uint64_t>::max(), std::numeric_limits<uint32_t>::max(), crypto::null_pkey);
@@ -1603,7 +1621,7 @@ namespace service_nodes
           if (waiting_since < oldest_waiting)
           {
             oldest_waiting = waiting_since;
-            info           = &sninfo;
+            info = &sninfo;
           }
         }
       }
@@ -1619,7 +1637,7 @@ namespace service_nodes
     // Add contributors and their portions to winners.
     result.payouts.reserve(info->contributors.size());
     const uint64_t remaining_portions = STAKING_PORTIONS - info->portions_for_operator;
-    for (const auto& contributor : info->contributors)
+    for (const auto &contributor : info->contributors)
     {
       uint64_t hi, lo, resulthi, resultlo;
       lo = mul128(contributor.amount, remaining_portions, &hi);
@@ -1633,11 +1651,12 @@ namespace service_nodes
   }
 
   template <typename T>
-  static constexpr bool within_one(T a, T b) {
-      return (a > b ? a - b : b - a) <= T{1};
+  static constexpr bool within_one(T a, T b)
+  {
+    return (a > b ? a - b : b - a) <= T{1};
   }
 
-  bool service_node_list::validate_miner_tx(const crypto::hash& prev_id, const cryptonote::transaction& miner_tx, uint64_t height, int hf_version, cryptonote::block_reward_parts const &reward_parts) const
+  bool service_node_list::validate_miner_tx(const crypto::hash &prev_id, const cryptonote::transaction &miner_tx, uint64_t height, int hf_version, cryptonote::block_reward_parts const &reward_parts) const
   {
     std::lock_guard<boost::recursive_mutex> lock(m_sn_mutex);
     if (hf_version < 9)
@@ -1650,7 +1669,7 @@ namespace service_nodes
     uint64_t base_reward = reward_parts.original_base_reward;
     uint64_t total_service_node_reward = cryptonote::service_node_reward_formula(base_reward, hf_version);
 
-    block_winner winner                    = m_state.get_block_winner();
+    block_winner winner = m_state.get_block_winner();
     crypto::public_key check_winner_pubkey = cryptonote::get_service_node_winner_from_tx_extra(miner_tx.extra);
     if (winner.key != check_winner_pubkey)
     {
@@ -1666,9 +1685,9 @@ namespace service_nodes
 
     for (size_t i = 0; i < winner.payouts.size(); i++)
     {
-      size_t vout_index          = i + 1;
+      size_t vout_index = i + 1;
       payout_entry const &payout = winner.payouts[i];
-      uint64_t reward            = cryptonote::get_portion_of_reward(payout.portions, total_service_node_reward);
+      uint64_t reward = cryptonote::get_portion_of_reward(payout.portions, total_service_node_reward);
 
       // Because FP math is involved in reward calculations (and compounded by CPUs, compilers,
       // expression contraction, and RandomX fiddling with the rounding modes) we can end up with a
@@ -1680,9 +1699,9 @@ namespace service_nodes
         return false;
       }
 
-      if (miner_tx.vout[vout_index].target.type() != typeid(cryptonote::txout_to_key))
+      if (miner_tx.vout[vout_index].target.type() != typeid(cryptonote::txout_sispop_tagged_key))
       {
-        MERROR("Service node output target type should be txout_to_key");
+        MERROR("Service node output target type should be txout_sispop_tagged_key");
         return false;
       }
 
@@ -1693,9 +1712,9 @@ namespace service_nodes
       bool r = crypto::generate_key_derivation(payout.address.m_view_public_key, gov_key.sec, derivation);
       CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to generate_key_derivation(" << payout.address.m_view_public_key << ", " << gov_key.sec << ")");
       r = crypto::derive_public_key(derivation, vout_index, payout.address.m_spend_public_key, out_eph_public_key);
-      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << vout_index << ", "<< payout.address.m_spend_public_key << ")");
+      CHECK_AND_ASSERT_MES(r, false, "while creating outs: failed to derive_public_key(" << derivation << ", " << vout_index << ", " << payout.address.m_spend_public_key << ")");
 
-      if (boost::get<cryptonote::txout_to_key>(miner_tx.vout[vout_index].target).key != out_eph_public_key)
+      if (boost::get<cryptonote::txout_sispop_tagged_key>(miner_tx.vout[vout_index].target).key != out_eph_public_key)
       {
         MERROR("Invalid service node reward output");
         return false;
@@ -1710,26 +1729,29 @@ namespace service_nodes
     if (block.major_version < cryptonote::network_version_9_service_nodes)
       return true;
 
-    uint64_t block_height         = cryptonote::get_block_height(block);
+    uint64_t block_height = cryptonote::get_block_height(block);
     state_t const *starting_state = nullptr;
     crypto::hash const block_hash = get_block_hash(block);
 
     auto it = m_transient.alt_state.find(block_hash);
-    if (it != m_transient.alt_state.end()) return true; // NOTE: Already processed alt-state for this block
+    if (it != m_transient.alt_state.end())
+      return true; // NOTE: Already processed alt-state for this block
 
     // NOTE: Check if alt block forks off some historical state on the canonical chain
     if (!starting_state)
     {
       auto it = m_transient.state_history.find(block_height - 1);
       if (it != m_transient.state_history.end())
-        if (block.prev_id == it->block_hash) starting_state = &(*it);
+        if (block.prev_id == it->block_hash)
+          starting_state = &(*it);
     }
 
     // NOTE: Check if alt block forks off some historical alt state on an alt chain
     if (!starting_state)
     {
       auto it = m_transient.alt_state.find(block.prev_id);
-      if (it != m_transient.alt_state.end()) starting_state = &it->second;
+      if (it != m_transient.alt_state.end())
+        starting_state = &it->second;
     }
 
     if (!starting_state)
@@ -1773,7 +1795,7 @@ namespace service_nodes
         }
 
         if (!verified_on_alt_quorum)
-            return false;
+          return false;
       }
     }
 
@@ -1785,48 +1807,51 @@ namespace service_nodes
   static service_node_list::quorum_for_serialization serialize_quorum_state(uint8_t hf_version, uint64_t height, quorum_manager const &quorums)
   {
     service_node_list::quorum_for_serialization result = {};
-    result.height                                      = height;
-    if (quorums.obligations)   result.quorums[static_cast<uint8_t>(quorum_type::obligations)] = *quorums.obligations;
-    if (quorums.checkpointing) result.quorums[static_cast<uint8_t>(quorum_type::checkpointing)] = *quorums.checkpointing;
+    result.height = height;
+    if (quorums.obligations)
+      result.quorums[static_cast<uint8_t>(quorum_type::obligations)] = *quorums.obligations;
+    if (quorums.checkpointing)
+      result.quorums[static_cast<uint8_t>(quorum_type::checkpointing)] = *quorums.checkpointing;
     return result;
   }
 
   static service_node_list::state_serialized serialize_service_node_state_object(uint8_t hf_version, service_node_list::state_t const &state, bool only_serialize_quorums = false)
   {
     service_node_list::state_serialized result = {};
-    result.version                             = service_node_list::state_serialized::get_version(hf_version);
-    result.height                              = state.height;
-    result.quorums                             = serialize_quorum_state(hf_version, state.height, state.quorums);
-    result.only_stored_quorums                 = state.only_loaded_quorums || only_serialize_quorums;
+    result.version = service_node_list::state_serialized::get_version(hf_version);
+    result.height = state.height;
+    result.quorums = serialize_quorum_state(hf_version, state.height, state.quorums);
+    result.only_stored_quorums = state.only_loaded_quorums || only_serialize_quorums;
 
     if (only_serialize_quorums)
-     return result;
+      return result;
 
     result.infos.reserve(state.service_nodes_infos.size());
     for (const auto &kv_pair : state.service_nodes_infos)
       result.infos.emplace_back(kv_pair);
 
     result.key_image_blacklist = state.key_image_blacklist;
-    result.block_hash          = state.block_hash;
+    result.block_hash = state.block_hash;
     return result;
   }
 
   bool service_node_list::store()
   {
     if (!m_blockchain.has_db())
-        return false; // Haven't been initialized yet
+      return false; // Haven't been initialized yet
 
     uint8_t hf_version = m_blockchain.get_current_hard_fork_version();
     if (hf_version < cryptonote::network_version_9_service_nodes)
       return true;
 
     data_for_serialization *data[] = {&m_transient.cache_long_term_data, &m_transient.cache_short_term_data};
-    auto const serialize_version   = data_for_serialization::get_version(hf_version);
+    auto const serialize_version = data_for_serialization::get_version(hf_version);
     std::lock_guard<boost::recursive_mutex> lock(m_sn_mutex);
 
     for (data_for_serialization *serialize_entry : data)
     {
-      if (serialize_entry->version != serialize_version) m_transient.state_added_to_archive = true;
+      if (serialize_entry->version != serialize_version)
+        m_transient.state_added_to_archive = true;
       serialize_entry->version = serialize_version;
       serialize_entry->clear();
     }
@@ -1834,7 +1859,6 @@ namespace service_nodes
     m_transient.cache_short_term_data.quorum_states.reserve(m_transient.old_quorum_states.size());
     for (const quorums_by_height &entry : m_transient.old_quorum_states)
       m_transient.cache_short_term_data.quorum_states.push_back(serialize_quorum_state(hf_version, entry.height, entry.quorums));
-
 
     if (m_transient.state_added_to_archive)
     {
@@ -1908,14 +1932,14 @@ namespace service_nodes
       const service_node_keys &keys, uint32_t public_ip, uint16_t storage_port, uint16_t storage_lmq_port, uint16_t quorumnet_port) const
   {
     cryptonote::NOTIFY_UPTIME_PROOF::request result = {};
-    result.snode_version                            = SISPOP_VERSION;
-    result.timestamp                                = time(nullptr);
-    result.pubkey                                   = keys.pub;
-    result.public_ip                                = public_ip;
-    result.storage_port                             = storage_port;
-    result.storage_lmq_port                         = storage_lmq_port;
-    result.qnet_port                                = quorumnet_port;
-    result.pubkey_ed25519                           = keys.pub_ed25519;
+    result.snode_version = SISPOP_VERSION;
+    result.timestamp = time(nullptr);
+    result.pubkey = keys.pub;
+    result.public_ip = public_ip;
+    result.storage_port = storage_port;
+    result.storage_lmq_port = storage_lmq_port;
+    result.qnet_port = quorumnet_port;
+    result.pubkey_ed25519 = keys.pub_ed25519;
 
     crypto::hash hash = hash_uptime_proof(result, m_blockchain.get_current_hard_fork_version());
     crypto::generate_signature(hash, keys.pub, keys.key, result.sig);
@@ -1927,8 +1951,10 @@ namespace service_nodes
   using std::erase_if;
 #else
   template <typename Container, typename Predicate>
-  static void erase_if(Container &c, Predicate pred) {
-    for (auto it = c.begin(), last = c.end(); it != last; ) {
+  static void erase_if(Container &c, Predicate pred)
+  {
+    for (auto it = c.begin(), last = c.end(); it != last;)
+    {
       if (pred(*it))
         it = c.erase(it);
       else
@@ -1938,8 +1964,10 @@ namespace service_nodes
 #endif
 
   template <typename T>
-  static bool update_val(T &val, const T &to) {
-    if (val != to) {
+  static bool update_val(T &val, const T &to)
+  {
+    if (val != to)
+    {
       val = to;
       return true;
     }
@@ -1959,8 +1987,8 @@ namespace service_nodes
                           uint16_t s_lmq_port,
                           uint16_t q_port,
                           std::array<uint16_t, 3> ver,
-                          const crypto::ed25519_public_key& pk_ed,
-                          const crypto::x25519_public_key& pk_x2)
+                          const crypto::ed25519_public_key &pk_ed,
+                          const crypto::x25519_public_key &pk_x2)
   {
     bool update_db = false;
     update_db |= update_val(timestamp, ts);
@@ -1991,24 +2019,33 @@ namespace service_nodes
     return update_db;
   };
 
-  void proof_info::update_pubkey(const crypto::ed25519_public_key &pk) {
+  void proof_info::update_pubkey(const crypto::ed25519_public_key &pk)
+  {
     if (pk == pubkey_ed25519)
       return;
-    if (pk && 0 == crypto_sign_ed25519_pk_to_curve25519(pubkey_x25519.data, pk.data)) {
+    if (pk && 0 == crypto_sign_ed25519_pk_to_curve25519(pubkey_x25519.data, pk.data))
+    {
       pubkey_ed25519 = pk;
-    } else {
+    }
+    else
+    {
       MWARNING("Failed to derive x25519 pubkey from ed25519 pubkey " << pubkey_ed25519);
       pubkey_x25519 = crypto::x25519_public_key::null();
       pubkey_ed25519 = crypto::ed25519_public_key::null();
     }
   }
 
-#define REJECT_PROOF(log) do { LOG_PRINT_L2("Rejecting uptime proof from " << proof.pubkey << ": " log); return false; } while (0)
+#define REJECT_PROOF(log)                                                     \
+  do                                                                          \
+  {                                                                           \
+    LOG_PRINT_L2("Rejecting uptime proof from " << proof.pubkey << ": " log); \
+    return false;                                                             \
+  } while (0)
 
   bool service_node_list::handle_uptime_proof(cryptonote::NOTIFY_UPTIME_PROOF::request const &proof, bool &my_uptime_proof_confirmation)
   {
     uint8_t const hf_version = m_blockchain.get_current_hard_fork_version();
-    uint64_t const now       = time(nullptr);
+    uint64_t const now = time(nullptr);
 
     // Validate proof version, timestamp range,
     if ((proof.timestamp < now - UPTIME_PROOF_BUFFER_IN_SECONDS) || (proof.timestamp > now + UPTIME_PROOF_BUFFER_IN_SECONDS))
@@ -2038,8 +2075,7 @@ namespace service_nodes
       if (0 != crypto_sign_verify_detached(proof.sig_ed25519.data, reinterpret_cast<unsigned char *>(hash.data), sizeof(hash.data), proof.pubkey_ed25519.data))
         REJECT_PROOF("ed25519 signature validation failed");
 
-      if (0 != crypto_sign_ed25519_pk_to_curve25519(derived_x25519_pubkey.data, proof.pubkey_ed25519.data)
-          || !derived_x25519_pubkey)
+      if (0 != crypto_sign_ed25519_pk_to_curve25519(derived_x25519_pubkey.data, proof.pubkey_ed25519.data) || !derived_x25519_pubkey)
         REJECT_PROOF("invalid ed25519 pubkey included in proof (x25519 derivation failed)");
     }
     if (hf_version >= cryptonote::network_version_14_blink)
@@ -2070,17 +2106,18 @@ namespace service_nodes
 
       if (m_service_node_keys && proof.pubkey_ed25519 == m_service_node_keys->pub_ed25519)
         MGINFO_RED("Uptime proof from SN " << proof.pubkey << " is not us, but is using our ed/x25519 keys; "
-            "this is likely to lead to deregistration of one or both service nodes.");
+                                                              "this is likely to lead to deregistration of one or both service nodes.");
     }
 
     auto old_x25519 = iproof.pubkey_x25519;
     if (iproof.update(now, proof.public_ip, proof.storage_port, proof.storage_lmq_port, proof.qnet_port, proof.snode_version, proof.pubkey_ed25519, derived_x25519_pubkey))
       iproof.store(proof.pubkey, m_blockchain);
 
-    if ((uint64_t) x25519_map_last_pruned + X25519_MAP_PRUNING_INTERVAL <= now)
+    if ((uint64_t)x25519_map_last_pruned + X25519_MAP_PRUNING_INTERVAL <= now)
     {
       time_t cutoff = now - X25519_MAP_PRUNING_LAG;
-      erase_if(x25519_to_pub, [&cutoff](const decltype(x25519_to_pub)::value_type &x) { return x.second.second < cutoff; });
+      erase_if(x25519_to_pub, [&cutoff](const decltype(x25519_to_pub)::value_type &x)
+               { return x.second.second < cutoff; });
       x25519_map_last_pruned = now;
     }
 
@@ -2098,16 +2135,16 @@ namespace service_nodes
     MDEBUG("Cleaning up expired SN proofs");
     auto locks = tools::unique_locks(m_sn_mutex, m_blockchain);
     uint64_t now = std::time(nullptr);
-    auto& db = m_blockchain.get_db();
+    auto &db = m_blockchain.get_db();
     cryptonote::db_wtxn_guard guard{db};
-    for (auto it = proofs.begin(); it != proofs.end(); )
+    for (auto it = proofs.begin(); it != proofs.end();)
     {
-      auto& pubkey = it->first;
-      auto& proof = it->second;
+      auto &pubkey = it->first;
+      auto &proof = it->second;
       // 6h here because there's no harm in leaving proofs around a bit longer (they aren't big, and
       // we only store one per SN), and it's possible that we could reorg a few blocks and resurrect
       // a service node but don't want to prematurely expire the proof.
-      if (!m_state.service_nodes_infos.count(pubkey) && proof.timestamp + 6*60*60 < now)
+      if (!m_state.service_nodes_infos.count(pubkey) && proof.timestamp + 6 * 60 * 60 < now)
       {
         db.remove_service_node_proof(pubkey);
         it = proofs.erase(it);
@@ -2117,7 +2154,8 @@ namespace service_nodes
     }
   }
 
-  crypto::public_key service_node_list::get_pubkey_from_x25519(const crypto::x25519_public_key &x25519) const {
+  crypto::public_key service_node_list::get_pubkey_from_x25519(const crypto::x25519_public_key &x25519) const
+  {
     auto lock = tools::shared_lock(m_x25519_map_mutex);
     auto it = x25519_to_pub.find(x25519);
     if (it != x25519_to_pub.end())
@@ -2125,7 +2163,8 @@ namespace service_nodes
     return crypto::null_pkey;
   }
 
-  void service_node_list::initialize_x25519_map() {
+  void service_node_list::initialize_x25519_map()
+  {
     auto locks = tools::unique_locks(m_sn_mutex, m_x25519_map_mutex);
 
     auto now = std::time(nullptr);
@@ -2133,7 +2172,7 @@ namespace service_nodes
     {
       auto it = proofs.find(pk_info.first);
       if (it == proofs.end())
-       continue;
+        continue;
       if (const auto &x2_pk = it->second.pubkey_x25519)
         x25519_to_pub.emplace(x2_pk, std::make_pair(pk_info.first, now));
     }
@@ -2147,15 +2186,16 @@ namespace service_nodes
 
     auto &info = proofs[pubkey];
     info.votes[info.vote_index].height = height;
-    info.votes[info.vote_index].voted  = voted;
-    info.vote_index                    = (info.vote_index + 1) % info.votes.size();
+    info.votes[info.vote_index].voted = voted;
+    info.vote_index = (info.vote_index + 1) % info.votes.size();
   }
 
   bool service_node_list::set_storage_server_peer_reachable(crypto::public_key const &pubkey, bool value)
   {
     std::lock_guard<boost::recursive_mutex> lock(m_sn_mutex);
 
-    if (!m_state.service_nodes_infos.count(pubkey)) {
+    if (!m_state.service_nodes_infos.count(pubkey))
+    {
       LOG_PRINT_L2("No Service Node is known by this pubkey: " << pubkey);
       return false;
     }
@@ -2183,12 +2223,8 @@ namespace service_nodes
     return result;
   }
 
-  service_node_list::state_t::state_t(service_node_list* snl, state_serialized &&state)
-  : height{state.height}
-  , key_image_blacklist{std::move(state.key_image_blacklist)}
-  , only_loaded_quorums{state.only_stored_quorums}
-  , block_hash{state.block_hash}
-  , sn_list{snl}
+  service_node_list::state_t::state_t(service_node_list *snl, state_serialized &&state)
+      : height{state.height}, key_image_blacklist{std::move(state.key_image_blacklist)}, only_loaded_quorums{state.only_stored_quorums}, block_hash{state.block_hash}, sn_list{snl}
   {
     if (!sn_list)
       throw std::logic_error("Cannot deserialize a state_t without a service_node_list");
@@ -2262,7 +2298,7 @@ namespace service_nodes
 
           for (size_t i = data_in.states.size() - 1; i >= 1; i--)
           {
-            state_serialized &serialized_entry      = data_in.states[i];
+            state_serialized &serialized_entry = data_in.states[i];
             state_serialized &prev_serialized_entry = data_in.states[i - 1];
 
             if ((prev_serialized_entry.height % STORE_LONG_TERM_STATE_INTERVAL) == 0)
@@ -2279,14 +2315,14 @@ namespace service_nodes
 
             if ((serialized_entry.height % STORE_LONG_TERM_STATE_INTERVAL) == 0)
             {
-              state_t long_term_state                  = entry;
-              cryptonote::block const &block           = db.get_block_from_height(long_term_state.height + 1);
+              state_t long_term_state = entry;
+              cryptonote::block const &block = db.get_block_from_height(long_term_state.height + 1);
               std::vector<cryptonote::transaction> txs = db.get_tx_list(block.tx_hashes);
               long_term_state.update_from_block(db, m_blockchain.nettype(), {} /*state_history*/, {} /*state_archive*/, {} /*alt_states*/, block, txs, nullptr /*my_keys*/);
 
-              entry.service_nodes_infos                = {};
-              entry.key_image_blacklist                = {};
-              entry.only_loaded_quorums                = true;
+              entry.service_nodes_infos = {};
+              entry.key_image_blacklist = {};
+              entry.only_loaded_quorums = true;
               m_transient.state_archive.emplace_hint(m_transient.state_archive.begin(), std::move(long_term_state));
             }
             m_transient.state_archive.emplace_hint(m_transient.state_archive.begin(), std::move(entry));
@@ -2310,7 +2346,7 @@ namespace service_nodes
     binary_archive<false> ba(ss);
 
     data_for_serialization data_in = {};
-    bool deserialized              = ::serialization::serialize(ba, data_in);
+    bool deserialized = ::serialization::serialize(ba, data_in);
     CHECK_AND_ASSERT_MES(deserialized, false, "Failed to parse service node data from blob");
 
     if (data_in.states.empty())
@@ -2325,8 +2361,8 @@ namespace service_nodes
           continue;
 
         quorums_by_height entry = {};
-        entry.height            = states.height;
-        entry.quorums           = quorum_for_serialization_to_quorum_manager(states);
+        entry.height = states.height;
+        entry.quorums = quorum_for_serialization_to_quorum_manager(states);
 
         if (states.height <= last_loaded_height)
         {
@@ -2351,22 +2387,25 @@ namespace service_nodes
       {
         for (size_t i = last_index; i >= 1; i--)
         {
-          state_serialized &serialized_entry      = data_in.states[i];
+          state_serialized &serialized_entry = data_in.states[i];
           state_serialized &prev_serialized_entry = data_in.states[i - 1];
           state_t entry{this, std::move(serialized_entry)};
           entry.quorums = quorum_for_serialization_to_quorum_manager(prev_serialized_entry.quorums);
           entry.height--;
-          if (i == last_index) m_state = std::move(entry);
-          else                 m_transient.state_archive.emplace_hint(m_transient.state_archive.end(), std::move(entry));
+          if (i == last_index)
+            m_state = std::move(entry);
+          else
+            m_transient.state_archive.emplace_hint(m_transient.state_archive.end(), std::move(entry));
         }
       }
       else
       {
-        size_t const last_index  = data_in.states.size() - 1;
+        size_t const last_index = data_in.states.size() - 1;
         for (size_t i = 0; i < last_index; i++)
         {
           state_serialized &entry = data_in.states[i];
-          if (entry.block_hash == crypto::null_hash) entry.block_hash = m_blockchain.get_block_id_by_height(entry.height);
+          if (entry.block_hash == crypto::null_hash)
+            entry.block_hash = m_blockchain.get_block_id_by_height(entry.height);
           m_transient.state_history.emplace_hint(m_transient.state_history.end(), this, std::move(entry));
         }
 
@@ -2399,7 +2438,7 @@ namespace service_nodes
   void service_node_list::reset(bool delete_db_entry)
   {
     m_transient = {};
-    m_state     = state_t{this};
+    m_state = state_t{this};
 
     if (m_blockchain.has_db() && delete_db_entry)
     {
@@ -2425,7 +2464,7 @@ namespace service_nodes
   }
 
   converted_registration_args convert_registration_args(cryptonote::network_type nettype,
-                                                        const std::vector<std::string>& args,
+                                                        const std::vector<std::string> &args,
                                                         uint64_t staking_requirement,
                                                         uint8_t hf_version)
   {
@@ -2436,7 +2475,7 @@ namespace service_nodes
       return result;
     }
 
-    if ((args.size()-1)/ 2 > MAX_NUMBER_OF_CONTRIBUTORS)
+    if ((args.size() - 1) / 2 > MAX_NUMBER_OF_CONTRIBUTORS)
     {
       result.err_msg = tr("Exceeds the maximum number of contributors, which is ") + std::to_string(MAX_NUMBER_OF_CONTRIBUTORS);
       return result;
@@ -2464,7 +2503,7 @@ namespace service_nodes
     };
 
     std::vector<addr_to_portion_t> addr_to_portions;
-    size_t const OPERATOR_ARG_INDEX     = 1;
+    size_t const OPERATOR_ARG_INDEX = 1;
     for (size_t i = OPERATOR_ARG_INDEX, num_contributions = 0;
          i < args.size();
          i += 2, ++num_contributions)
@@ -2490,12 +2529,12 @@ namespace service_nodes
 
       try
       {
-        uint64_t num_portions = boost::lexical_cast<uint64_t>(args[i+1]);
+        uint64_t num_portions = boost::lexical_cast<uint64_t>(args[i + 1]);
         addr_to_portions.push_back({info, num_portions});
       }
       catch (const std::exception &e)
       {
-        result.err_msg = tr("Invalid amount for contributor: ") + args[i] + tr(", with portion amount that could not be converted to a number: ") + args[i+1];
+        result.err_msg = tr("Invalid amount for contributor: ") + args[i] + tr(", with portion amount that could not be converted to a number: ") + args[i + 1];
         return result;
       }
     }
@@ -2513,20 +2552,20 @@ namespace service_nodes
       for (size_t index = 0; index < addr_to_portions.size(); ++index)
       {
         addr_to_portion_t const &addr_to_portion = addr_to_portions[index];
-        uint64_t min_contribution_portions       = service_nodes::get_min_node_contribution_in_portions(hf_version, staking_requirement, sispop_reserved, index);
-        uint64_t sispop_amount                     = service_nodes::portions_to_amount(staking_requirement, addr_to_portion.portions);
-        sispop_reserved                           += sispop_amount;
+        uint64_t min_contribution_portions = service_nodes::get_min_node_contribution_in_portions(hf_version, staking_requirement, sispop_reserved, index);
+        uint64_t sispop_amount = service_nodes::portions_to_amount(staking_requirement, addr_to_portion.portions);
+        sispop_reserved += sispop_amount;
 
         uint64_t excess = 0;
         if (addr_to_portion.portions > min_contribution_portions)
           excess = addr_to_portion.portions - min_contribution_portions;
 
         min_contributions[index] = min_contribution_portions;
-        excess_portions[index]   = excess;
+        excess_portions[index] = excess;
       }
     }
 
-    uint64_t portions_left  = STAKING_PORTIONS;
+    uint64_t portions_left = STAKING_PORTIONS;
     uint64_t total_reserved = 0;
     for (size_t i = 0; i < addr_to_portions.size(); ++i)
     {
@@ -2536,41 +2575,42 @@ namespace service_nodes
       uint64_t portions_to_steal = 0;
       if (addr_to_portion.portions < min_portions)
       {
-          // NOTE: Steal dust portions from other contributor if we fall below
-          // the minimum by a dust amount.
-          uint64_t needed             = min_portions - addr_to_portion.portions;
-          const uint64_t FUDGE_FACTOR = 10;
-          const uint64_t DUST_UNIT    = (STAKING_PORTIONS / staking_requirement);
-          const uint64_t DUST         = DUST_UNIT * FUDGE_FACTOR;
-          if (needed > DUST)
+        // NOTE: Steal dust portions from other contributor if we fall below
+        // the minimum by a dust amount.
+        uint64_t needed = min_portions - addr_to_portion.portions;
+        const uint64_t FUDGE_FACTOR = 10;
+        const uint64_t DUST_UNIT = (STAKING_PORTIONS / staking_requirement);
+        const uint64_t DUST = DUST_UNIT * FUDGE_FACTOR;
+        if (needed > DUST)
+          continue;
+
+        for (size_t sub_index = 0; sub_index < addr_to_portions.size(); sub_index++)
+        {
+          if (i == sub_index)
             continue;
-
-          for (size_t sub_index = 0; sub_index < addr_to_portions.size(); sub_index++)
+          uint64_t &contributor_excess = excess_portions[sub_index];
+          if (contributor_excess > 0)
           {
-            if (i == sub_index) continue;
-            uint64_t &contributor_excess = excess_portions[sub_index];
-            if (contributor_excess > 0)
-            {
-              portions_to_steal = std::min(needed, contributor_excess);
-              addr_to_portion.portions += portions_to_steal;
-              contributor_excess -= portions_to_steal;
-              needed -= portions_to_steal;
-              result.portions[sub_index] -= portions_to_steal;
+            portions_to_steal = std::min(needed, contributor_excess);
+            addr_to_portion.portions += portions_to_steal;
+            contributor_excess -= portions_to_steal;
+            needed -= portions_to_steal;
+            result.portions[sub_index] -= portions_to_steal;
 
-              if (needed == 0)
-                break;
-            }
+            if (needed == 0)
+              break;
           }
+        }
 
-          // NOTE: Operator is sending in the minimum amount and it falls below
-          // the minimum by dust, just increase the portions so it passes
-          if (needed > 0 && addr_to_portions.size() < MAX_NUMBER_OF_CONTRIBUTORS)
-            addr_to_portion.portions += needed;
+        // NOTE: Operator is sending in the minimum amount and it falls below
+        // the minimum by dust, just increase the portions so it passes
+        if (needed > 0 && addr_to_portions.size() < MAX_NUMBER_OF_CONTRIBUTORS)
+          addr_to_portion.portions += needed;
       }
 
       if (addr_to_portion.portions < min_portions || (addr_to_portion.portions - portions_to_steal) > portions_left)
       {
-        result.err_msg = tr("Invalid amount for contributor: ") + args[i] + tr(", with portion amount: ") + args[i+1] + tr(". The contributors must each have at least 25%, except for the last contributor which may have the remaining amount");
+        result.err_msg = tr("Invalid amount for contributor: ") + args[i] + tr(", with portion amount: ") + args[i + 1] + tr(". The contributors must each have at least 25%, except for the last contributor which may have the remaining amount");
         return result;
       }
 
@@ -2585,7 +2625,7 @@ namespace service_nodes
       result.addresses.push_back(addr_to_portion.info.address);
       result.portions.push_back(addr_to_portion.portions);
       uint64_t sispop_amount = service_nodes::portions_to_amount(addr_to_portion.portions, staking_requirement);
-      total_reserved      += sispop_amount;
+      total_reserved += sispop_amount;
     }
 
     result.success = true;
@@ -2593,13 +2633,13 @@ namespace service_nodes
   }
 
   bool make_registration_cmd(cryptonote::network_type nettype,
-      uint8_t hf_version,
-      uint64_t staking_requirement,
-      const std::vector<std::string>& args,
-      const service_node_keys &keys,
-      std::string &cmd,
-      bool make_friendly,
-      boost::optional<std::string&> err_msg)
+                             uint8_t hf_version,
+                             uint64_t staking_requirement,
+                             const std::vector<std::string> &args,
+                             const service_node_keys &keys,
+                             std::string &cmd,
+                             bool make_friendly,
+                             boost::optional<std::string &> err_msg)
   {
 
     converted_registration_args converted_args = convert_registration_args(nettype, args, staking_requirement, hf_version);
@@ -2660,14 +2700,17 @@ namespace service_nodes
   bool service_node_info::can_be_voted_on(uint64_t height) const
   {
     // If the SN expired and was reregistered since the height we'll be voting on it prematurely
-    if (!this->is_fully_funded() || this->registration_height >= height) return false;
-    if (this->is_decommissioned() && this->last_decommission_height >= height) return false;
+    if (!this->is_fully_funded() || this->registration_height >= height)
+      return false;
+    if (this->is_decommissioned() && this->last_decommission_height >= height)
+      return false;
 
     if (this->is_active())
     {
       // NOTE: This cast is safe. The definition of is_active() is that active_since_height >= 0
       assert(this->active_since_height >= 0);
-      if (static_cast<uint64_t>(this->active_since_height) >= height) return false;
+      if (static_cast<uint64_t>(this->active_since_height) >= height)
+        return false;
     }
 
     return true;
@@ -2702,7 +2745,8 @@ namespace service_nodes
     {
       if (proposed_state == new_state::deregister)
       {
-        if (height < this->registration_height) return false;
+        if (height < this->registration_height)
+          return false;
       }
 
       if (this->is_decommissioned())
@@ -2717,4 +2761,3 @@ namespace service_nodes
   }
 
 }
-

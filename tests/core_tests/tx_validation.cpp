@@ -1,21 +1,21 @@
 // Copyright (c) 2014-2018, The Monero Project
-// 
+//
 // All rights reserved.
-// 
+//
 // Redistribution and use in source and binary forms, with or without modification, are
 // permitted provided that the following conditions are met:
-// 
+//
 // 1. Redistributions of source code must retain the above copyright notice, this list of
 //    conditions and the following disclaimer.
-// 
+//
 // 2. Redistributions in binary form must reproduce the above copyright notice, this list
 //    of conditions and the following disclaimer in the documentation and/or other
 //    materials provided with the distribution.
-// 
+//
 // 3. Neither the name of the copyright holder nor the names of its contributors may be
 //    used to endorse or promote products derived from this software without specific
 //    prior written permission.
-// 
+//
 // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY
 // EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
 // MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
@@ -25,7 +25,7 @@
 // INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-// 
+//
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include "chaingen.h"
@@ -53,20 +53,20 @@ namespace
       add_tx_pub_key_to_extra(m_tx, m_tx_key.pub);
     }
 
-    void step2_fill_inputs(const account_keys& sender_account_keys, const std::vector<tx_source_entry>& sources)
+    void step2_fill_inputs(const account_keys &sender_account_keys, const std::vector<tx_source_entry> &sources)
     {
       for (const auto &src_entr : sources)
       {
         m_in_contexts.push_back(keypair());
-        keypair& in_ephemeral = m_in_contexts.back();
+        keypair &in_ephemeral = m_in_contexts.back();
         crypto::key_image img;
         std::unordered_map<crypto::public_key, cryptonote::subaddress_index> subaddresses;
-        subaddresses[sender_account_keys.m_account_address.m_spend_public_key] = {0,0};
-        auto& out_key = reinterpret_cast<const crypto::public_key&>(src_entr.outputs[src_entr.real_output].second.dest);
+        subaddresses[sender_account_keys.m_account_address.m_spend_public_key] = {0, 0};
+        auto &out_key = reinterpret_cast<const crypto::public_key &>(src_entr.outputs[src_entr.real_output].second.dest);
         generate_key_image_helper(sender_account_keys, subaddresses, out_key, src_entr.real_out_tx_key, src_entr.real_out_additional_tx_keys, src_entr.real_output_in_tx_index, in_ephemeral, img, hw::get_device(("default")));
 
         // put key image into tx input
-        txin_to_key input_to_key;
+        txin_sispop_key input_to_key;
         input_to_key.amount = src_entr.amount;
         input_to_key.k_image = img;
 
@@ -79,7 +79,7 @@ namespace
       }
     }
 
-    void step3_fill_outputs(const std::vector<tx_destination_entry>& destinations)
+    void step3_fill_outputs(const std::vector<tx_destination_entry> &destinations)
     {
       size_t output_index = 0;
       for (const auto &dst_entr : destinations)
@@ -91,7 +91,7 @@ namespace
 
         tx_out out;
         out.amount = dst_entr.amount;
-        txout_to_key tk;
+        txout_sispop_tagged_key tk;
         tk.key = out_eph_public_key;
         out.target = tk;
         m_tx.vout.push_back(out);
@@ -104,14 +104,14 @@ namespace
       get_transaction_prefix_hash(m_tx, m_tx_prefix_hash);
     }
 
-    void step5_sign(const std::vector<tx_source_entry>& sources)
+    void step5_sign(const std::vector<tx_source_entry> &sources)
     {
       m_tx.signatures.clear();
 
       size_t i = 0;
       for (const auto &src_entr : sources)
       {
-        std::vector<const crypto::public_key*> keys_ptrs;
+        std::vector<const crypto::public_key *> keys_ptrs;
         std::vector<crypto::public_key> keys(src_entr.outputs.size());
         size_t j = 0;
         for (const auto &o : src_entr.outputs)
@@ -122,9 +122,9 @@ namespace
         }
 
         m_tx.signatures.push_back(std::vector<crypto::signature>());
-        std::vector<crypto::signature>& sigs = m_tx.signatures.back();
+        std::vector<crypto::signature> &sigs = m_tx.signatures.back();
         sigs.resize(src_entr.outputs.size());
-        generate_ring_signature(m_tx_prefix_hash, boost::get<txin_to_key>(m_tx.vin[i]).k_image, keys_ptrs, m_in_contexts[i].sec, src_entr.real_output, sigs.data());
+        generate_ring_signature(m_tx_prefix_hash, boost::get<txin_sispop_key>(m_tx.vin[i]).k_image, keys_ptrs, m_in_contexts[i].sec, src_entr.real_output, sigs.data());
         i++;
       }
     }
@@ -135,9 +135,9 @@ namespace
     crypto::hash m_tx_prefix_hash;
   };
 
-  transaction make_simple_tx_with_unlock_time(const std::vector<test_event_entry>& events,
-    const cryptonote::block& blk_head, const cryptonote::account_base& from, const cryptonote::account_base& to,
-    uint64_t amount, uint64_t unlock_time)
+  transaction make_simple_tx_with_unlock_time(const std::vector<test_event_entry> &events,
+                                              const cryptonote::block &blk_head, const cryptonote::account_base &from, const cryptonote::account_base &to,
+                                              uint64_t amount, uint64_t unlock_time)
   {
     std::vector<tx_source_entry> sources;
     std::vector<tx_destination_entry> destinations;
@@ -181,7 +181,7 @@ namespace
 //----------------------------------------------------------------------------------------------------------------------
 // Tests
 
-bool gen_tx_big_version::generate(std::vector<test_event_entry>& events) const
+bool gen_tx_big_version::generate(std::vector<test_event_entry> &events) const
 {
   uint64_t ts_start = 1338224400;
 
@@ -202,54 +202,54 @@ bool gen_tx_big_version::generate(std::vector<test_event_entry>& events) const
   return true;
 }
 
-bool gen_tx_unlock_time::generate(std::vector<test_event_entry>& events) const
+bool gen_tx_unlock_time::generate(std::vector<test_event_entry> &events) const
 {
   uint64_t ts_start = 1338224400;
 
-  GENERATE_ACCOUNT  (miner_account);
+  GENERATE_ACCOUNT(miner_account);
   MAKE_GENESIS_BLOCK(events, blk_tail, miner_account, ts_start);
-  REWIND_BLOCKS_N   (events, blk_money_unlocked, blk_tail,           miner_account, 40);
-  REWIND_BLOCKS     (events, blk_head,           blk_money_unlocked, miner_account);
+  REWIND_BLOCKS_N(events, blk_money_unlocked, blk_tail, miner_account, 40);
+  REWIND_BLOCKS(events, blk_head, blk_money_unlocked, miner_account);
 
   std::list<transaction> txs_0;
 
-  transaction tx       = {};
+  transaction tx = {};
   uint64_t unlock_time = 0;
   sispop_tx_builder(events, tx, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(1), cryptonote::network_version_7).with_unlock_time(unlock_time).build();
   events.push_back(tx);
   txs_0.push_back(tx);
 
-  tx          = {};
+  tx = {};
   unlock_time = get_block_height(blk_money_unlocked) - 1;
   sispop_tx_builder(events, tx, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(1), cryptonote::network_version_7).with_unlock_time(unlock_time).build();
   events.push_back(tx);
   txs_0.push_back(tx);
 
-  tx          = {};
+  tx = {};
   unlock_time = get_block_height(blk_money_unlocked);
   sispop_tx_builder(events, tx, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(1), cryptonote::network_version_7).with_unlock_time(unlock_time).build();
   events.push_back(tx);
   txs_0.push_back(tx);
 
-  tx          = {};
+  tx = {};
   unlock_time = get_block_height(blk_money_unlocked) + 1;
   sispop_tx_builder(events, tx, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(1), cryptonote::network_version_7).with_unlock_time(unlock_time).build();
   events.push_back(tx);
   txs_0.push_back(tx);
 
-  tx          = {};
+  tx = {};
   unlock_time = get_block_height(blk_money_unlocked) + 2;
   sispop_tx_builder(events, tx, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(1), cryptonote::network_version_7).with_unlock_time(unlock_time).build();
   events.push_back(tx);
   txs_0.push_back(tx);
 
-  tx          = {};
+  tx = {};
   unlock_time = ts_start - 1;
   sispop_tx_builder(events, tx, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(1), cryptonote::network_version_7).with_unlock_time(unlock_time).build();
   events.push_back(tx);
   txs_0.push_back(tx);
 
-  tx          = {};
+  tx = {};
   unlock_time = time(0) + 60 * 60;
   sispop_tx_builder(events, tx, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(1), cryptonote::network_version_7).with_unlock_time(unlock_time).build();
   events.push_back(tx);
@@ -259,14 +259,14 @@ bool gen_tx_unlock_time::generate(std::vector<test_event_entry>& events) const
   return true;
 }
 
-bool gen_tx_input_is_not_txin_to_key::generate(std::vector<test_event_entry>& events) const
+bool gen_tx_input_is_not_txin_sispop_key::generate(std::vector<test_event_entry> &events) const
 {
   uint64_t ts_start = 1338224400;
 
   GENERATE_ACCOUNT(miner_account);
   MAKE_GENESIS_BLOCK(events, blk_tail, miner_account, ts_start);
-  REWIND_BLOCKS_N   (events, blk_money_unlocked, blk_tail,           miner_account, 40);
-  REWIND_BLOCKS     (events, blk_head,           blk_money_unlocked, miner_account);
+  REWIND_BLOCKS_N(events, blk_money_unlocked, blk_tail, miner_account, 40);
+  REWIND_BLOCKS(events, blk_head, blk_money_unlocked, miner_account);
 
   MAKE_NEXT_BLOCK(events, blk_tmp, blk_head, miner_account);
   events.pop_back();
@@ -289,7 +289,7 @@ bool gen_tx_input_is_not_txin_to_key::generate(std::vector<test_event_entry>& ev
   return true;
 }
 
-bool gen_tx_no_inputs_no_outputs::generate(std::vector<test_event_entry>& events) const
+bool gen_tx_no_inputs_no_outputs::generate(std::vector<test_event_entry> &events) const
 {
   uint64_t ts_start = 1338224400;
 
@@ -297,7 +297,7 @@ bool gen_tx_no_inputs_no_outputs::generate(std::vector<test_event_entry>& events
   MAKE_GENESIS_BLOCK(events, blk_0, miner_account, ts_start);
 
   transaction tx = {};
-  tx.version     = cryptonote::txversion::v2_ringct;
+  tx.version = cryptonote::txversion::v2_ringct;
   add_tx_pub_key_to_extra(tx, keypair::generate(hw::get_device("default")).pub);
 
   DO_CALLBACK(events, "mark_invalid_tx");
@@ -305,14 +305,14 @@ bool gen_tx_no_inputs_no_outputs::generate(std::vector<test_event_entry>& events
   return true;
 }
 
-bool gen_tx_no_inputs_has_outputs::generate(std::vector<test_event_entry>& events) const
+bool gen_tx_no_inputs_has_outputs::generate(std::vector<test_event_entry> &events) const
 {
   uint64_t ts_start = 1338224400;
 
-  GENERATE_ACCOUNT  (miner_account);
+  GENERATE_ACCOUNT(miner_account);
   MAKE_GENESIS_BLOCK(events, blk_tail, miner_account, ts_start);
-  REWIND_BLOCKS_N   (events, blk_money_unlocked, blk_tail,           miner_account, 40);
-  REWIND_BLOCKS     (events, blk_head,           blk_money_unlocked, miner_account);
+  REWIND_BLOCKS_N(events, blk_money_unlocked, blk_tail, miner_account, 40);
+  REWIND_BLOCKS(events, blk_head, blk_money_unlocked, miner_account);
 
   transaction tx = {};
   sispop_tx_builder(events, tx, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(1), cryptonote::network_version_7).build();
@@ -323,14 +323,14 @@ bool gen_tx_no_inputs_has_outputs::generate(std::vector<test_event_entry>& event
   return true;
 }
 
-bool gen_tx_has_inputs_no_outputs::generate(std::vector<test_event_entry>& events) const
+bool gen_tx_has_inputs_no_outputs::generate(std::vector<test_event_entry> &events) const
 {
   uint64_t ts_start = 1338224400;
 
-  GENERATE_ACCOUNT  (miner_account);
+  GENERATE_ACCOUNT(miner_account);
   MAKE_GENESIS_BLOCK(events, blk_tail, miner_account, ts_start);
-  REWIND_BLOCKS_N   (events, blk_money_unlocked, blk_tail,           miner_account, 40);
-  REWIND_BLOCKS     (events, blk_head,           blk_money_unlocked, miner_account);
+  REWIND_BLOCKS_N(events, blk_money_unlocked, blk_tail, miner_account, 40);
+  REWIND_BLOCKS(events, blk_head, blk_money_unlocked, miner_account);
 
   transaction tx = {};
   sispop_tx_builder(events, tx, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(1), cryptonote::network_version_7).build();
@@ -341,23 +341,23 @@ bool gen_tx_has_inputs_no_outputs::generate(std::vector<test_event_entry>& event
   return true;
 }
 
-bool gen_tx_invalid_input_amount::generate(std::vector<test_event_entry>& events) const
+bool gen_tx_invalid_input_amount::generate(std::vector<test_event_entry> &events) const
 {
   uint64_t ts_start = 1338224400;
 
   GENERATE_ACCOUNT(miner_account);
   MAKE_GENESIS_BLOCK(events, blk_tail, miner_account, ts_start);
-  REWIND_BLOCKS_N   (events, blk_money_unlocked, blk_tail,           miner_account, 40);
-  REWIND_BLOCKS     (events, blk_head,           blk_money_unlocked, miner_account);
+  REWIND_BLOCKS_N(events, blk_money_unlocked, blk_tail, miner_account, 40);
+  REWIND_BLOCKS(events, blk_head, blk_money_unlocked, miner_account);
 
-  std::vector<tx_source_entry>      sources;
+  std::vector<tx_source_entry> sources;
   std::vector<tx_destination_entry> destinations;
-  uint64_t                          change_amount;
+  uint64_t change_amount;
   fill_tx_sources_and_destinations(events, blk_money_unlocked, miner_account, get_address(miner_account), MK_COINS(1), TESTS_DEFAULT_FEE, CRYPTONOTE_DEFAULT_TX_MIXIN, sources, destinations, &change_amount);
   sources.front().amount++;
 
   transaction tx = {};
-  cryptonote::tx_destination_entry change_addr{ change_amount, miner_account.get_keys().m_account_address, false /*is_subaddress*/ };
+  cryptonote::tx_destination_entry change_addr{change_amount, miner_account.get_keys().m_account_address, false /*is_subaddress*/};
   assert(cryptonote::construct_tx(miner_account.get_keys(), sources, destinations, change_addr, {} /*tx_extra*/, tx, 0 /*unlock_time*/, {}));
 
   DO_CALLBACK(events, "mark_invalid_tx");
@@ -365,14 +365,14 @@ bool gen_tx_invalid_input_amount::generate(std::vector<test_event_entry>& events
   return true;
 }
 
-bool gen_tx_input_wo_key_offsets::generate(std::vector<test_event_entry>& events) const
+bool gen_tx_input_wo_key_offsets::generate(std::vector<test_event_entry> &events) const
 {
   uint64_t ts_start = 1338224400;
 
   GENERATE_ACCOUNT(miner_account);
   MAKE_GENESIS_BLOCK(events, blk_tail, miner_account, ts_start);
-  REWIND_BLOCKS_N   (events, blk_money_unlocked, blk_tail,           miner_account, 40);
-  REWIND_BLOCKS     (events, blk_head,           blk_money_unlocked, miner_account);
+  REWIND_BLOCKS_N(events, blk_money_unlocked, blk_tail, miner_account, 40);
+  REWIND_BLOCKS(events, blk_head, blk_money_unlocked, miner_account);
 
   std::vector<tx_source_entry> sources;
   std::vector<tx_destination_entry> destinations;
@@ -380,7 +380,7 @@ bool gen_tx_input_wo_key_offsets::generate(std::vector<test_event_entry>& events
 
   transaction tx = {};
   sispop_tx_builder(events, tx, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(1), cryptonote::network_version_7).build();
-  txin_to_key& in_to_key = boost::get<txin_to_key>(tx.vin.front());
+  txin_sispop_key &in_to_key = boost::get<txin_sispop_key>(tx.vin.front());
   while (!in_to_key.key_offsets.empty())
     in_to_key.key_offsets.pop_back();
 
@@ -389,30 +389,30 @@ bool gen_tx_input_wo_key_offsets::generate(std::vector<test_event_entry>& events
   return true;
 }
 
-bool gen_tx_key_offset_points_to_foreign_key::generate(std::vector<test_event_entry>& events) const
+bool gen_tx_key_offset_points_to_foreign_key::generate(std::vector<test_event_entry> &events) const
 {
   uint64_t ts_start = 1338224400;
-  GENERATE_ACCOUNT  (miner_account);
+  GENERATE_ACCOUNT(miner_account);
   MAKE_GENESIS_BLOCK(events, blk_tail, miner_account, ts_start);
-  REWIND_BLOCKS_N   (events, blk_1, blk_tail, miner_account, 40);
-  REWIND_BLOCKS     (events, blk_2, blk_1,    miner_account);
+  REWIND_BLOCKS_N(events, blk_1, blk_tail, miner_account, 40);
+  REWIND_BLOCKS(events, blk_2, blk_1, miner_account);
 
-  MAKE_ACCOUNT      (events, alice_account);
-  MAKE_ACCOUNT      (events, bob_account);
+  MAKE_ACCOUNT(events, alice_account);
+  MAKE_ACCOUNT(events, bob_account);
 
-  MAKE_TX_LIST_START     (events, txs_0, miner_account, bob_account,   MK_COINS(15) + 1, blk_2);
-  MAKE_TX_LIST           (events, txs_0, miner_account, alice_account, MK_COINS(15) + 1, blk_2);
-  MAKE_NEXT_BLOCK_TX_LIST(events, blk_money_unlocked, blk_2,              miner_account, txs_0);
-  REWIND_BLOCKS          (events, blk_head,           blk_money_unlocked, miner_account);
+  MAKE_TX_LIST_START(events, txs_0, miner_account, bob_account, MK_COINS(15) + 1, blk_2);
+  MAKE_TX_LIST(events, txs_0, miner_account, alice_account, MK_COINS(15) + 1, blk_2);
+  MAKE_NEXT_BLOCK_TX_LIST(events, blk_money_unlocked, blk_2, miner_account, txs_0);
+  REWIND_BLOCKS(events, blk_head, blk_money_unlocked, miner_account);
 
   transaction bob_tx = {};
   sispop_tx_builder(events, bob_tx, blk_money_unlocked, bob_account, miner_account.get_keys().m_account_address, MK_COINS(15) + 1 - TESTS_DEFAULT_FEE, cryptonote::network_version_7).with_fee(TESTS_DEFAULT_FEE).build();
 
-  std::vector<tx_source_entry>      sources_alice;
+  std::vector<tx_source_entry> sources_alice;
   std::vector<tx_destination_entry> destinations_alice;
   fill_tx_sources_and_destinations(events, blk_money_unlocked, alice_account, get_address(miner_account), MK_COINS(15) + 1 - TESTS_DEFAULT_FEE, TESTS_DEFAULT_FEE, CRYPTONOTE_DEFAULT_TX_MIXIN, sources_alice, destinations_alice);
 
-  txin_to_key& bob_in_to_key        = boost::get<txin_to_key>(bob_tx.vin.front());
+  txin_sispop_key &bob_in_to_key = boost::get<txin_sispop_key>(bob_tx.vin.front());
   bob_in_to_key.key_offsets.front() = sources_alice.front().outputs.back().first;
 
   // TODO(sispop): This used to be first(), but in the debugger bob's front() is
@@ -427,18 +427,18 @@ bool gen_tx_key_offset_points_to_foreign_key::generate(std::vector<test_event_en
   return true;
 }
 
-bool gen_tx_sender_key_offset_not_exist::generate(std::vector<test_event_entry>& events) const
+bool gen_tx_sender_key_offset_not_exist::generate(std::vector<test_event_entry> &events) const
 {
   uint64_t ts_start = 1338224400;
 
-  GENERATE_ACCOUNT  (miner_account);
+  GENERATE_ACCOUNT(miner_account);
   MAKE_GENESIS_BLOCK(events, blk_tail, miner_account, ts_start);
-  REWIND_BLOCKS_N   (events, blk_money_unlocked, blk_tail,           miner_account, 40);
-  REWIND_BLOCKS     (events, blk_head,           blk_money_unlocked, miner_account);
+  REWIND_BLOCKS_N(events, blk_money_unlocked, blk_tail, miner_account, 40);
+  REWIND_BLOCKS(events, blk_head, blk_money_unlocked, miner_account);
 
   transaction tx = {};
   sispop_tx_builder(events, tx, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(1), cryptonote::network_version_7).build();
-  txin_to_key& in_to_key        = boost::get<txin_to_key>(tx.vin.front());
+  txin_sispop_key &in_to_key = boost::get<txin_sispop_key>(tx.vin.front());
   in_to_key.key_offsets.front() = std::numeric_limits<uint64_t>::max();
 
   DO_CALLBACK(events, "mark_invalid_tx");
@@ -446,7 +446,7 @@ bool gen_tx_sender_key_offset_not_exist::generate(std::vector<test_event_entry>&
   return true;
 }
 
-bool gen_tx_mixed_key_offset_not_exist::generate(std::vector<test_event_entry>& events) const
+bool gen_tx_mixed_key_offset_not_exist::generate(std::vector<test_event_entry> &events) const
 {
   uint64_t ts_start = 1338224400;
 
@@ -516,17 +516,17 @@ bool gen_tx_mixed_key_offset_not_exist::generate(std::vector<test_event_entry>& 
   return true;
 }
 
-bool gen_tx_key_image_not_derive_from_tx_key::generate(std::vector<test_event_entry>& events) const
+bool gen_tx_key_image_not_derive_from_tx_key::generate(std::vector<test_event_entry> &events) const
 {
   uint64_t ts_start = 1338224400;
-  GENERATE_ACCOUNT  (miner_account);
+  GENERATE_ACCOUNT(miner_account);
   MAKE_GENESIS_BLOCK(events, blk_tail, miner_account, ts_start);
-  REWIND_BLOCKS_N   (events, blk_money_unlocked, blk_tail,           miner_account, 40);
-  REWIND_BLOCKS     (events, blk_head,           blk_money_unlocked, miner_account);
+  REWIND_BLOCKS_N(events, blk_money_unlocked, blk_tail, miner_account, 40);
+  REWIND_BLOCKS(events, blk_head, blk_money_unlocked, miner_account);
 
   transaction tx = {};
   sispop_tx_builder(events, tx, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(1), cryptonote::network_version_7).build();
-  txin_to_key& in_to_key        = boost::get<txin_to_key>(tx.vin.front());
+  txin_sispop_key &in_to_key = boost::get<txin_sispop_key>(tx.vin.front());
 
   // Use fake key image
   keypair keys = keypair::generate(hw::get_device("default"));
@@ -544,18 +544,18 @@ bool gen_tx_key_image_not_derive_from_tx_key::generate(std::vector<test_event_en
   return true;
 }
 
-bool gen_tx_key_image_is_invalid::generate(std::vector<test_event_entry>& events) const
+bool gen_tx_key_image_is_invalid::generate(std::vector<test_event_entry> &events) const
 {
   uint64_t ts_start = 1338224400;
-  GENERATE_ACCOUNT  (miner_account);
+  GENERATE_ACCOUNT(miner_account);
   MAKE_GENESIS_BLOCK(events, blk_tail, miner_account, ts_start);
-  REWIND_BLOCKS_N   (events, blk_money_unlocked, blk_tail,           miner_account, 40);
-  REWIND_BLOCKS     (events, blk_head,           blk_money_unlocked, miner_account);
+  REWIND_BLOCKS_N(events, blk_money_unlocked, blk_tail, miner_account, 40);
+  REWIND_BLOCKS(events, blk_head, blk_money_unlocked, miner_account);
 
   transaction tx = {};
   sispop_tx_builder(events, tx, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(1), cryptonote::network_version_7).build();
-  txin_to_key& in_to_key = boost::get<txin_to_key>(tx.vin.front());
-  in_to_key.k_image      = generate_invalid_key_image();
+  txin_sispop_key &in_to_key = boost::get<txin_sispop_key>(tx.vin.front());
+  in_to_key.k_image = generate_invalid_key_image();
 
   // Tx with invalid key image can't be subscribed, so create empty signature
   tx.signatures.resize(1);
@@ -567,16 +567,16 @@ bool gen_tx_key_image_is_invalid::generate(std::vector<test_event_entry>& events
   return true;
 }
 
-bool gen_tx_check_input_unlock_time::generate(std::vector<test_event_entry>& events) const
+bool gen_tx_check_input_unlock_time::generate(std::vector<test_event_entry> &events) const
 {
   static const size_t tests_count = 6;
 
   uint64_t ts_start = 1338224400;
 
-  GENERATE_ACCOUNT  (miner_account);
+  GENERATE_ACCOUNT(miner_account);
   MAKE_GENESIS_BLOCK(events, blk_0, miner_account, ts_start);
-  REWIND_BLOCKS_N   (events, blk_1, blk_0, miner_account, tests_count - 1);
-  REWIND_BLOCKS     (events, blk_1r, blk_1, miner_account);
+  REWIND_BLOCKS_N(events, blk_1, blk_0, miner_account, tests_count - 1);
+  REWIND_BLOCKS(events, blk_1r, blk_1, miner_account);
 
   std::array<account_base, tests_count> accounts;
   for (size_t i = 0; i < tests_count; ++i)
@@ -589,7 +589,7 @@ bool gen_tx_check_input_unlock_time::generate(std::vector<test_event_entry>& eve
   auto make_tx_to_acc = [&](size_t acc_idx, uint64_t unlock_time)
   {
     txs_0.push_back(make_simple_tx_with_unlock_time(events, blk_1, miner_account, accounts[acc_idx],
-      MK_COINS(1) + TESTS_DEFAULT_FEE, unlock_time));
+                                                    MK_COINS(1) + TESTS_DEFAULT_FEE, unlock_time));
     events.push_back(txs_0.back());
   };
 
@@ -628,51 +628,51 @@ bool gen_tx_check_input_unlock_time::generate(std::vector<test_event_entry>& eve
   return true;
 }
 
-bool gen_tx_txout_to_key_has_invalid_key::generate(std::vector<test_event_entry>& events) const
+bool gen_tx_txout_sispop_tagged_key_has_invalid_key::generate(std::vector<test_event_entry> &events) const
 {
   uint64_t ts_start = 1338224400;
-  GENERATE_ACCOUNT  (miner_account);
+  GENERATE_ACCOUNT(miner_account);
   MAKE_GENESIS_BLOCK(events, blk_tail, miner_account, ts_start);
-  REWIND_BLOCKS_N   (events, blk_money_unlocked, blk_tail,           miner_account, 40);
-  REWIND_BLOCKS     (events, blk_head,           blk_money_unlocked, miner_account);
+  REWIND_BLOCKS_N(events, blk_money_unlocked, blk_tail, miner_account, 40);
+  REWIND_BLOCKS(events, blk_head, blk_money_unlocked, miner_account);
 
-  transaction tx           = {};
+  transaction tx = {};
   sispop_tx_builder(events, tx, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(1), cryptonote::network_version_7).build();
-  txout_to_key& out_to_key = boost::get<txout_to_key>(tx.vout.front().target);
-  out_to_key.key           = generate_invalid_pub_key();
+  txout_sispop_tagged_key &out_to_key = boost::get<txout_sispop_tagged_key>(tx.vout.front().target);
+  out_to_key.key = generate_invalid_pub_key();
 
   DO_CALLBACK(events, "mark_invalid_tx");
   events.push_back(tx);
   return true;
 }
 
-bool gen_tx_output_with_zero_amount::generate(std::vector<test_event_entry>& events) const
+bool gen_tx_output_with_zero_amount::generate(std::vector<test_event_entry> &events) const
 {
   uint64_t ts_start = 1338224400;
-  GENERATE_ACCOUNT  (miner_account);
+  GENERATE_ACCOUNT(miner_account);
   MAKE_GENESIS_BLOCK(events, blk_tail, miner_account, ts_start);
-  REWIND_BLOCKS_N   (events, blk_money_unlocked, blk_tail,           miner_account, 40);
-  REWIND_BLOCKS     (events, blk_head,           blk_money_unlocked, miner_account);
+  REWIND_BLOCKS_N(events, blk_money_unlocked, blk_tail, miner_account, 40);
+  REWIND_BLOCKS(events, blk_head, blk_money_unlocked, miner_account);
 
   // TODO(sispop): Hmm. Can't use sispop_tx_builder approach because RCT masks amounts
   // after it's constructed, so vout amounts is already zero. It seems to be
   // valid to be able to send a transaction whos output is zero, so this test
   // might not be valid anymore post RCT.
 #if 1
-  std::vector<tx_source_entry>      sources;
+  std::vector<tx_source_entry> sources;
   std::vector<tx_destination_entry> destinations;
-  uint64_t                          change_amount;
+  uint64_t change_amount;
   fill_tx_sources_and_destinations(events, blk_money_unlocked, miner_account, get_address(miner_account), MK_COINS(1), TESTS_DEFAULT_FEE, CRYPTONOTE_DEFAULT_TX_MIXIN, sources, destinations, &change_amount);
 
   for (tx_destination_entry &entry : destinations)
     entry.amount = 0;
 
   transaction tx = {};
-  cryptonote::tx_destination_entry change_addr{ change_amount, miner_account.get_keys().m_account_address, false /*is_subaddress*/ };
+  cryptonote::tx_destination_entry change_addr{change_amount, miner_account.get_keys().m_account_address, false /*is_subaddress*/};
   assert(cryptonote::construct_tx(miner_account.get_keys(), sources, destinations, change_addr, {} /*tx_extra*/, tx, 0 /*unlock_time*/, {}));
 
 #else
-  transaction tx           = {};
+  transaction tx = {};
   sispop_tx_builder(events, tx, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(1), cryptonote::network_version_7).build();
   tx.vout.front().amount = 0;
 
@@ -683,13 +683,13 @@ bool gen_tx_output_with_zero_amount::generate(std::vector<test_event_entry>& eve
   return true;
 }
 
-bool gen_tx_output_is_not_txout_to_key::generate(std::vector<test_event_entry>& events) const
+bool gen_tx_output_is_not_txout_sispop_tagged_key::generate(std::vector<test_event_entry> &events) const
 {
   uint64_t ts_start = 1338224400;
-  GENERATE_ACCOUNT  (miner_account);
+  GENERATE_ACCOUNT(miner_account);
   MAKE_GENESIS_BLOCK(events, blk_tail, miner_account, ts_start);
-  REWIND_BLOCKS_N   (events, blk_money_unlocked, blk_tail,           miner_account, 40);
-  REWIND_BLOCKS     (events, blk_head,           blk_money_unlocked, miner_account);
+  REWIND_BLOCKS_N(events, blk_money_unlocked, blk_tail, miner_account, 40);
+  REWIND_BLOCKS(events, blk_head, blk_money_unlocked, miner_account);
 
   transaction tx = {};
   sispop_tx_builder(events, tx, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(1), cryptonote::network_version_7).build();
@@ -707,21 +707,21 @@ bool gen_tx_output_is_not_txout_to_key::generate(std::vector<test_event_entry>& 
   return true;
 }
 
-bool gen_tx_signatures_are_invalid::generate(std::vector<test_event_entry>& events) const
+bool gen_tx_signatures_are_invalid::generate(std::vector<test_event_entry> &events) const
 {
   uint64_t ts_start = 1338224400;
-  GENERATE_ACCOUNT  (miner_account);
+  GENERATE_ACCOUNT(miner_account);
   MAKE_GENESIS_BLOCK(events, blk_tail, miner_account, ts_start);
-  REWIND_BLOCKS_N   (events, blk_1, blk_tail, miner_account, 40);
-  REWIND_BLOCKS     (events, blk_2, blk_1,    miner_account);
+  REWIND_BLOCKS_N(events, blk_1, blk_tail, miner_account, 40);
+  REWIND_BLOCKS(events, blk_2, blk_1, miner_account);
 
-  MAKE_ACCOUNT      (events, alice_account);
-  MAKE_ACCOUNT      (events, bob_account);
+  MAKE_ACCOUNT(events, alice_account);
+  MAKE_ACCOUNT(events, bob_account);
 
-  MAKE_TX_LIST_START     (events, txs_0, miner_account, bob_account,   MK_COINS(1) + TESTS_DEFAULT_FEE, blk_2);
-  MAKE_TX_LIST           (events, txs_0, miner_account, alice_account, MK_COINS(1) + TESTS_DEFAULT_FEE, blk_2);
-  MAKE_NEXT_BLOCK_TX_LIST(events, blk_money_unlocked, blk_2,              miner_account, txs_0);
-  REWIND_BLOCKS          (events, blk_head,           blk_money_unlocked, miner_account);
+  MAKE_TX_LIST_START(events, txs_0, miner_account, bob_account, MK_COINS(1) + TESTS_DEFAULT_FEE, blk_2);
+  MAKE_TX_LIST(events, txs_0, miner_account, alice_account, MK_COINS(1) + TESTS_DEFAULT_FEE, blk_2);
+  MAKE_NEXT_BLOCK_TX_LIST(events, blk_money_unlocked, blk_2, miner_account, txs_0);
+  REWIND_BLOCKS(events, blk_head, blk_money_unlocked, miner_account);
 
   transaction miner_tx = {};
   sispop_tx_builder(events, miner_tx, blk_money_unlocked, miner_account, miner_account.get_keys().m_account_address, MK_COINS(60), cryptonote::network_version_7).with_fee(TESTS_DEFAULT_FEE).build();
