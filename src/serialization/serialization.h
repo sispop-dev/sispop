@@ -264,6 +264,26 @@ inline bool do_serialize(Archive &ar, bool &v)
     ar.serialize_varint(f);			\
     if (!ar.stream().good()) return false;	\
   } while(0);
+/*! \macro MAGIC_FIELD(m)
+ */
+#define MAGIC_FIELD(m)				\
+  std::string magic = m;			\
+  do {						\
+    ar.tag("magic");				\
+    ar.serialize_blob((void*)magic.data(), magic.size()); \
+    if (!ar.good()) return false;		\
+    if (magic != m) return false;		\
+  } while(0);
+
+/*! \macro VERSION_FIELD(v)
+ */
+#define VERSION_FIELD(v)			\
+  uint32_t version = v;				\
+  do {						\
+    ar.tag("version");				\
+    ar.serialize_varint(version);		\
+    if (!ar.good()) return false;		\
+  } while(0);
 
 /*! \macro ENUM_FIELD(f, test)
  *  \brief tags and serializes (as a varint) the scoped enum \a f with a requirement that expression
