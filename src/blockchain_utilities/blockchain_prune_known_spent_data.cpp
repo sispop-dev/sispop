@@ -27,7 +27,7 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #ifdef _WIN32
- #define __STDC_FORMAT_MACROS // NOTE(sispop): Explicitly define the PRIu64 macro on Mingw
+#define __STDC_FORMAT_MACROS // NOTE(sispop): Explicitly define the PRIu64 macro on Mingw
 #endif
 
 #include <boost/algorithm/string.hpp>
@@ -99,7 +99,7 @@ static std::map<uint64_t, uint64_t> load_outputs(const std::string &filename)
   return outputs;
 }
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   TRY_ENTRY();
 
@@ -116,12 +116,11 @@ int main(int argc, char* argv[])
 
   po::options_description desc_cmd_only("Command line options");
   po::options_description desc_cmd_sett("Command line options and settings options");
-  const command_line::arg_descriptor<std::string> arg_log_level  = {"log-level",  "0-4 or categories", ""};
+  const command_line::arg_descriptor<std::string> arg_log_level = {"log-level", "0-4 or categories", ""};
   const command_line::arg_descriptor<std::string> arg_database = {
-    "database", available_dbs.c_str(), default_db_type
-  };
-  const command_line::arg_descriptor<bool> arg_verbose  = {"verbose", "Verbose output", false};
-  const command_line::arg_descriptor<bool> arg_dry_run  = {"dry-run", "Do not actually prune", false};
+      "database", available_dbs.c_str(), default_db_type};
+  const command_line::arg_descriptor<bool> arg_verbose = {"verbose", "Verbose output", false};
+  const command_line::arg_descriptor<bool> arg_dry_run = {"dry-run", "Do not actually prune", false};
   const command_line::arg_descriptor<std::string> arg_input = {"input", "Path to the known spent outputs file"};
 
   command_line::add_arg(desc_cmd_sett, cryptonote::arg_data_dir);
@@ -139,13 +138,12 @@ int main(int argc, char* argv[])
 
   po::variables_map vm;
   bool r = command_line::handle_error_helper(desc_options, [&]()
-  {
+                                             {
     auto parser = po::command_line_parser(argc, argv).options(desc_options);
     po::store(parser.run(), vm);
     po::notify(vm);
-    return true;
-  });
-  if (! r)
+    return true; });
+  if (!r)
     return 1;
 
   if (command_line::get_arg(vm, command_line::arg_help))
@@ -166,7 +164,8 @@ int main(int argc, char* argv[])
   std::string opt_data_dir = command_line::get_arg(vm, cryptonote::arg_data_dir);
   bool opt_testnet = command_line::get_arg(vm, cryptonote::arg_testnet_on);
   bool opt_stagenet = command_line::get_arg(vm, cryptonote::arg_stagenet_on);
-  network_type net_type = opt_testnet ? TESTNET : opt_stagenet ? STAGENET : MAINNET;
+  network_type net_type = opt_testnet ? TESTNET : opt_stagenet ? STAGENET
+                                                               : MAINNET;
   bool opt_verbose = command_line::get_arg(vm, arg_verbose);
   bool opt_dry_run = command_line::get_arg(vm, arg_dry_run);
 
@@ -197,7 +196,7 @@ int main(int argc, char* argv[])
   {
     db->open(filename, core_storage->nettype(), 0);
   }
-  catch (const std::exception& e)
+  catch (const std::exception &e)
   {
     LOG_PRINT_L0("Error opening database: " << e.what());
     return 1;
@@ -213,13 +212,14 @@ int main(int argc, char* argv[])
     std::map<uint64_t, std::pair<uint64_t, uint64_t>> outputs;
 
     LOG_PRINT_L0("Scanning for known spent data...");
-    db->for_all_transactions([&](const crypto::hash &txid, const cryptonote::transaction &tx){
+    db->for_all_transactions([&](const crypto::hash &txid, const cryptonote::transaction &tx)
+                             {
       const bool miner_tx = tx.vin.size() == 1 && tx.vin[0].type() == typeid(txin_gen);
       for (const auto &in: tx.vin)
       {
-        if (in.type() != typeid(txin_to_key))
+        if (in.type() != typeid(txin_sispop_key))
           continue;
-        const auto &txin = boost::get<txin_to_key>(in);
+        const auto &txin = boost::get<txin_sispop_key>(in);
         if (txin.amount == 0)
           continue;
 
@@ -233,15 +233,15 @@ int main(int argc, char* argv[])
           amount = 0;
         if (amount == 0)
           continue;
-        if (out.target.type() != typeid(txout_to_key))
+        if (out.target.type() != typeid(txout_sispop_tagged_key))
           continue;
 
         outputs[amount].first++;
       }
-      return true;
-    }, true);
+      return true; },
+                             true);
 
-    for (const auto &i: outputs)
+    for (const auto &i : outputs)
     {
       known_spent_outputs[i.first] = i.second.second;
     }
@@ -255,9 +255,8 @@ int main(int argc, char* argv[])
   LOG_PRINT_L0("Pruning known spent data...");
 
   bool stop_requested = false;
-  tools::signal_handler::install([&stop_requested](int type) {
-    stop_requested = true;
-  });
+  tools::signal_handler::install([&stop_requested](int type)
+                                 { stop_requested = true; });
 
   db->batch_start();
 

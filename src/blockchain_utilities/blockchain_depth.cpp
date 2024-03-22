@@ -43,7 +43,7 @@ namespace po = boost::program_options;
 using namespace epee;
 using namespace cryptonote;
 
-int main(int argc, char* argv[])
+int main(int argc, char *argv[])
 {
   TRY_ENTRY();
 
@@ -62,13 +62,12 @@ int main(int argc, char* argv[])
 
   po::options_description desc_cmd_only("Command line options");
   po::options_description desc_cmd_sett("Command line options and settings options");
-  const command_line::arg_descriptor<std::string> arg_log_level  = {"log-level",  "0-4 or categories", ""};
+  const command_line::arg_descriptor<std::string> arg_log_level = {"log-level", "0-4 or categories", ""};
   const command_line::arg_descriptor<std::string> arg_database = {
-    "database", available_dbs.c_str(), default_db_type
-  };
-  const command_line::arg_descriptor<std::string> arg_txid  = {"txid", "Get min depth for this txid", ""};
-  const command_line::arg_descriptor<uint64_t> arg_height  = {"height", "Get min depth for all txes at this height", 0};
-  const command_line::arg_descriptor<bool> arg_include_coinbase  = {"include-coinbase", "Include coinbase in the average", false};
+      "database", available_dbs.c_str(), default_db_type};
+  const command_line::arg_descriptor<std::string> arg_txid = {"txid", "Get min depth for this txid", ""};
+  const command_line::arg_descriptor<uint64_t> arg_height = {"height", "Get min depth for all txes at this height", 0};
+  const command_line::arg_descriptor<bool> arg_include_coinbase = {"include-coinbase", "Include coinbase in the average", false};
 
   command_line::add_arg(desc_cmd_sett, cryptonote::arg_data_dir);
   command_line::add_arg(desc_cmd_sett, cryptonote::arg_testnet_on);
@@ -85,13 +84,12 @@ int main(int argc, char* argv[])
 
   po::variables_map vm;
   bool r = command_line::handle_error_helper(desc_options, [&]()
-  {
+                                             {
     auto parser = po::command_line_parser(argc, argv).options(desc_options);
     po::store(parser.run(), vm);
     po::notify(vm);
-    return true;
-  });
-  if (! r)
+    return true; });
+  if (!r)
     return 1;
 
   if (command_line::get_arg(vm, command_line::arg_help))
@@ -112,7 +110,8 @@ int main(int argc, char* argv[])
   std::string opt_data_dir = command_line::get_arg(vm, cryptonote::arg_data_dir);
   bool opt_testnet = command_line::get_arg(vm, cryptonote::arg_testnet_on);
   bool opt_stagenet = command_line::get_arg(vm, cryptonote::arg_stagenet_on);
-  network_type net_type = opt_testnet ? TESTNET : opt_stagenet ? STAGENET : MAINNET;
+  network_type net_type = opt_testnet ? TESTNET : opt_stagenet ? STAGENET
+                                                               : MAINNET;
   std::string opt_txid_string = command_line::get_arg(vm, arg_txid);
   uint64_t opt_height = command_line::get_arg(vm, arg_height);
   bool opt_include_coinbase = command_line::get_arg(vm, arg_include_coinbase);
@@ -157,7 +156,7 @@ int main(int argc, char* argv[])
   {
     db->open(filename, core_storage->nettype(), DBF_RDONLY);
   }
-  catch (const std::exception& e)
+  catch (const std::exception &e)
   {
     LOG_PRINT_L0("Error opening database: " << e.what());
     return 1;
@@ -181,7 +180,7 @@ int main(int argc, char* argv[])
       LOG_PRINT_L0("Bad block from db");
       return 1;
     }
-    for (const crypto::hash &txid: b.tx_hashes)
+    for (const crypto::hash &txid : b.tx_hashes)
       start_txids.push_back(txid);
     if (opt_include_coinbase)
       start_txids.push_back(cryptonote::get_transaction_hash(b.miner_tx));
@@ -194,7 +193,7 @@ int main(int argc, char* argv[])
   }
 
   std::vector<uint64_t> depths;
-  for (const crypto::hash &start_txid: start_txids)
+  for (const crypto::hash &start_txid : start_txids)
   {
     uint64_t depth = 0;
     bool coinbase = false;
@@ -203,9 +202,9 @@ int main(int argc, char* argv[])
     std::vector<crypto::hash> txids(1, start_txid);
     while (!coinbase)
     {
-      LOG_PRINT_L0("Considering "<< txids.size() << " transaction(s) at depth " << depth);
+      LOG_PRINT_L0("Considering " << txids.size() << " transaction(s) at depth " << depth);
       std::vector<crypto::hash> new_txids;
-      for (const crypto::hash &txid: txids)
+      for (const crypto::hash &txid : txids)
       {
         cryptonote::blobdata bd;
         if (!db->get_pruned_tx_blob(txid, bd))
@@ -227,12 +226,12 @@ int main(int argc, char* argv[])
             coinbase = true;
             goto done;
           }
-          if (tx.vin[ring].type() == typeid(cryptonote::txin_to_key))
+          if (tx.vin[ring].type() == typeid(cryptonote::txin_sispop_key))
           {
-            const cryptonote::txin_to_key &txin = boost::get<cryptonote::txin_to_key>(tx.vin[ring]);
+            const cryptonote::txin_sispop_key &txin = boost::get<cryptonote::txin_sispop_key>(tx.vin[ring]);
             const uint64_t amount = txin.amount;
             auto absolute_offsets = cryptonote::relative_output_offsets_to_absolute(txin.key_offsets);
-            for (uint64_t offset: absolute_offsets)
+            for (uint64_t offset : absolute_offsets)
             {
               const output_data_t od = db->get_output_key(amount, offset);
               const crypto::hash block_hash = db->get_block_hash_from_height(od.height);
@@ -247,9 +246,9 @@ int main(int argc, char* argv[])
               bool found = false;
               for (size_t out = 0; out < b.miner_tx.vout.size(); ++out)
               {
-                if (b.miner_tx.vout[out].target.type() == typeid(cryptonote::txout_to_key))
+                if (b.miner_tx.vout[out].target.type() == typeid(cryptonote::txout_sispop_tagged_key))
                 {
-                  const auto &txout = boost::get<cryptonote::txout_to_key>(b.miner_tx.vout[out].target);
+                  const auto &txout = boost::get<cryptonote::txout_sispop_tagged_key>(b.miner_tx.vout[out].target);
                   if (txout.key == od.pubkey)
                   {
                     found = true;
@@ -264,7 +263,7 @@ int main(int argc, char* argv[])
                   return 1;
                 }
               }
-              for (const crypto::hash &block_txid: b.tx_hashes)
+              for (const crypto::hash &block_txid : b.tx_hashes)
               {
                 if (found)
                   break;
@@ -281,9 +280,9 @@ int main(int argc, char* argv[])
                 }
                 for (size_t out = 0; out < tx2.vout.size(); ++out)
                 {
-                  if (tx2.vout[out].target.type() == typeid(cryptonote::txout_to_key))
+                  if (tx2.vout[out].target.type() == typeid(cryptonote::txout_sispop_tagged_key))
                   {
-                    const auto &txout = boost::get<cryptonote::txout_to_key>(tx2.vout[out].target);
+                    const auto &txout = boost::get<cryptonote::txout_sispop_tagged_key>(tx2.vout[out].target);
                     if (txout.key == od.pubkey)
                     {
                       found = true;
@@ -319,15 +318,15 @@ int main(int argc, char* argv[])
         ++depth;
       }
     }
-done:
+  done:
     LOG_PRINT_L0("Min depth for txid " << start_txid << ": " << depth);
     depths.push_back(depth);
   }
 
   uint64_t cumulative_depth = 0;
-  for (uint64_t depth: depths)
+  for (uint64_t depth : depths)
     cumulative_depth += depth;
-  LOG_PRINT_L0("Average min depth for " << start_txids.size() << " transaction(s): " << cumulative_depth/(float)depths.size());
+  LOG_PRINT_L0("Average min depth for " << start_txids.size() << " transaction(s): " << cumulative_depth / (float)depths.size());
   LOG_PRINT_L0("Median min depth for " << start_txids.size() << " transaction(s): " << epee::misc_utils::median(depths));
 
   core_storage->deinit();

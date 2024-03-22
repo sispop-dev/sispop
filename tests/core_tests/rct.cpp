@@ -1,21 +1,21 @@
 // Copyright (c) 2014-2018, The Monero Project
-// 
+//
 // All rights reserved.
-// 
+//
 // Redistribution and use in source and binary forms, with or without modification, are
 // permitted provided that the following conditions are met:
-// 
+//
 // 1. Redistributions of source code must retain the above copyright notice, this list of
 //    conditions and the following disclaimer.
-// 
+//
 // 2. Redistributions in binary form must reproduce the above copyright notice, this list
 //    of conditions and the following disclaimer in the documentation and/or other
 //    materials provided with the distribution.
-// 
+//
 // 3. Neither the name of the copyright holder nor the names of its contributors may be
 //    used to endorse or promote products derived from this software without specific
 //    prior written permission.
-// 
+//
 // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY
 // EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
 // MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
@@ -25,7 +25,7 @@
 // INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-// 
+//
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include "ringct/rctSigs.h"
@@ -40,10 +40,10 @@ using namespace cryptonote;
 //----------------------------------------------------------------------------------------------------------------------
 // Tests
 
-bool gen_rct_tx_validation_base::generate_with(std::vector<test_event_entry>& events,
-    const int *out_idx, int mixin, uint64_t amount_paid, bool valid,
-    const std::function<void(std::vector<tx_source_entry> &sources, std::vector<tx_destination_entry> &destinations)> &pre_tx,
-    const std::function<void(transaction &tx)> &post_tx) const
+bool gen_rct_tx_validation_base::generate_with(std::vector<test_event_entry> &events,
+                                               const int *out_idx, int mixin, uint64_t amount_paid, bool valid,
+                                               const std::function<void(std::vector<tx_source_entry> &sources, std::vector<tx_destination_entry> &destinations)> &pre_tx,
+                                               const std::function<void(transaction &tx)> &post_tx) const
 {
   uint64_t ts_start = 1338224400;
 
@@ -54,13 +54,14 @@ bool gen_rct_tx_validation_base::generate_with(std::vector<test_event_entry>& ev
   cryptonote::account_base miner_accounts[4];
   const cryptonote::block *prev_block = &blk_0;
   cryptonote::block blocks[4];
-  for (size_t n = 0; n < 4; ++n) {
+  for (size_t n = 0; n < 4; ++n)
+  {
     miner_accounts[n].generate();
     CHECK_AND_ASSERT_MES(generator.construct_block_manually(blocks[n], *prev_block, miner_accounts[n],
-        test_generator::bf_major_ver | test_generator::bf_minor_ver | test_generator::bf_timestamp | test_generator::bf_hf_version,
-        2, 2, prev_block->timestamp + DIFFICULTY_BLOCKS_ESTIMATE_TIMESPAN * 2, // v2 has blocks twice as long
-          crypto::hash(), 0, transaction(), std::vector<crypto::hash>(), 0),
-        false, "Failed to generate block");
+                                                            test_generator::bf_major_ver | test_generator::bf_minor_ver | test_generator::bf_timestamp | test_generator::bf_hf_version,
+                                                            2, 2, prev_block->timestamp + DIFFICULTY_BLOCKS_ESTIMATE_TIMESPAN * 2, // v2 has blocks twice as long
+                                                            crypto::hash(), 0, transaction(), std::vector<crypto::hash>(), 0),
+                         false, "Failed to generate block");
     events.push_back(blocks[n]);
     prev_block = blocks + n;
     LOG_PRINT_L0("Initial miner tx " << n << ": " << obj_to_json_str(blocks[n].miner_tx));
@@ -74,10 +75,10 @@ bool gen_rct_tx_validation_base::generate_with(std::vector<test_event_entry>& ev
     {
       cryptonote::block blk;
       CHECK_AND_ASSERT_MES(generator.construct_block_manually(blk, blk_last, miner_account,
-          test_generator::bf_major_ver | test_generator::bf_minor_ver | test_generator::bf_timestamp | test_generator::bf_hf_version,
-          2, 2, blk_last.timestamp + DIFFICULTY_BLOCKS_ESTIMATE_TIMESPAN * 2, // v2 has blocks twice as long
-          crypto::hash(), 0, transaction(), std::vector<crypto::hash>(), 0),
-          false, "Failed to generate block");
+                                                              test_generator::bf_major_ver | test_generator::bf_minor_ver | test_generator::bf_timestamp | test_generator::bf_hf_version,
+                                                              2, 2, blk_last.timestamp + DIFFICULTY_BLOCKS_ESTIMATE_TIMESPAN * 2, // v2 has blocks twice as long
+                                                              crypto::hash(), 0, transaction(), std::vector<crypto::hash>(), 0),
+                           false, "Failed to generate block");
       events.push_back(blk);
       blk_last = blk;
     }
@@ -94,12 +95,13 @@ bool gen_rct_tx_validation_base::generate_with(std::vector<test_event_entry>& ev
     std::vector<tx_source_entry> sources;
 
     sources.resize(1);
-    tx_source_entry& src = sources.back();
+    tx_source_entry &src = sources.back();
 
     const size_t index_in_tx = 5;
     src.amount = 30000000000000;
-    for (int m = 0; m < 4; ++m) {
-      src.push_output(m, boost::get<txout_to_key>(blocks[m].miner_tx.vout[index_in_tx].target).key, src.amount);
+    for (int m = 0; m < 4; ++m)
+    {
+      src.push_output(m, boost::get<txout_sispop_tagged_key>(blocks[m].miner_tx.vout[index_in_tx].target).key, src.amount);
     }
     src.real_out_tx_key = cryptonote::get_tx_pub_key_from_extra(blocks[n].miner_tx);
     src.real_output = n;
@@ -107,7 +109,7 @@ bool gen_rct_tx_validation_base::generate_with(std::vector<test_event_entry>& ev
     src.mask = rct::identity();
     src.rct = false;
 
-    //fill outputs entry
+    // fill outputs entry
     tx_destination_entry td;
     td.addr = miner_accounts[n].get_keys().m_account_address;
     td.amount = 7390000000000;
@@ -120,7 +122,7 @@ bool gen_rct_tx_validation_base::generate_with(std::vector<test_event_entry>& ev
     crypto::secret_key tx_key;
     std::vector<crypto::secret_key> additional_tx_keys;
     std::unordered_map<crypto::public_key, cryptonote::subaddress_index> subaddresses;
-    subaddresses[miner_accounts[n].get_keys().m_account_address.m_spend_public_key] = {0,0};
+    subaddresses[miner_accounts[n].get_keys().m_account_address.m_spend_public_key] = {0, 0};
     sispop_construct_tx_params tx_params;
     tx_params.hf_version = cryptonote::network_version_8;
     bool r = construct_tx_and_get_tx_key(miner_accounts[n].get_keys(), subaddresses, sources, destinations, cryptonote::tx_destination_entry{}, std::vector<uint8_t>(), rct_txes[n], 0, tx_key, additional_tx_keys, {}, nullptr, tx_params);
@@ -137,16 +139,16 @@ bool gen_rct_tx_validation_base::generate_with(std::vector<test_event_entry>& ev
       crypto::derivation_to_scalar(derivation, o, amount_key);
       const uint8_t type = rct_txes[n].rct_signatures.type;
       if (type == rct::RCTTypeSimple || type == rct::RCTTypeBulletproof || type == rct::RCTTypeBulletproof2)
-        rct::decodeRctSimple(rct_txes[n].rct_signatures, rct::sk2rct(amount_key), o, rct_tx_masks[o+n*4], hw::get_device("default"));
+        rct::decodeRctSimple(rct_txes[n].rct_signatures, rct::sk2rct(amount_key), o, rct_tx_masks[o + n * 4], hw::get_device("default"));
       else
-        rct::decodeRct(rct_txes[n].rct_signatures, rct::sk2rct(amount_key), o, rct_tx_masks[o+n*4], hw::get_device("default"));
+        rct::decodeRct(rct_txes[n].rct_signatures, rct::sk2rct(amount_key), o, rct_tx_masks[o + n * 4], hw::get_device("default"));
     }
 
     CHECK_AND_ASSERT_MES(generator.construct_block_manually(blk_txes[n], blk_last, miner_account,
-        test_generator::bf_major_ver | test_generator::bf_minor_ver | test_generator::bf_timestamp | test_generator::bf_tx_hashes | test_generator::bf_hf_version,
-        4, 4, blk_last.timestamp + DIFFICULTY_BLOCKS_ESTIMATE_TIMESPAN * 2, // v2 has blocks twice as long
-        crypto::hash(), 0, transaction(), starting_rct_tx_hashes, 0),
-        false, "Failed to generate block");
+                                                            test_generator::bf_major_ver | test_generator::bf_minor_ver | test_generator::bf_timestamp | test_generator::bf_tx_hashes | test_generator::bf_hf_version,
+                                                            4, 4, blk_last.timestamp + DIFFICULTY_BLOCKS_ESTIMATE_TIMESPAN * 2, // v2 has blocks twice as long
+                                                            crypto::hash(), 0, transaction(), starting_rct_tx_hashes, 0),
+                         false, "Failed to generate block");
     events.push_back(blk_txes[n]);
     blk_last = blk_txes[n];
   }
@@ -157,10 +159,10 @@ bool gen_rct_tx_validation_base::generate_with(std::vector<test_event_entry>& ev
     {
       cryptonote::block blk;
       CHECK_AND_ASSERT_MES(generator.construct_block_manually(blk, blk_last, miner_account,
-          test_generator::bf_major_ver | test_generator::bf_minor_ver | test_generator::bf_timestamp | test_generator::bf_hf_version,
-          4, 4, blk_last.timestamp + DIFFICULTY_BLOCKS_ESTIMATE_TIMESPAN * 2, // v2 has blocks twice as long
-          crypto::hash(), 0, transaction(), std::vector<crypto::hash>(), 0),
-          false, "Failed to generate block");
+                                                              test_generator::bf_major_ver | test_generator::bf_minor_ver | test_generator::bf_timestamp | test_generator::bf_hf_version,
+                                                              4, 4, blk_last.timestamp + DIFFICULTY_BLOCKS_ESTIMATE_TIMESPAN * 2, // v2 has blocks twice as long
+                                                              crypto::hash(), 0, transaction(), std::vector<crypto::hash>(), 0),
+                           false, "Failed to generate block");
       events.push_back(blk);
       blk_last = blk;
     }
@@ -172,22 +174,25 @@ bool gen_rct_tx_validation_base::generate_with(std::vector<test_event_entry>& ev
   size_t global_rct_idx = 6; // skip first coinbase (6 outputs)
   size_t rct_idx = 0;
   size_t pre_rct_idx = 0;
-  for (size_t out_idx_idx = 0; out_idx[out_idx_idx] >= 0; ++out_idx_idx) {
-    sources.resize(sources.size()+1);
-    tx_source_entry& src = sources.back();
+  for (size_t out_idx_idx = 0; out_idx[out_idx_idx] >= 0; ++out_idx_idx)
+  {
+    sources.resize(sources.size() + 1);
+    tx_source_entry &src = sources.back();
 
     src.real_output = 0;
-    if (out_idx[out_idx_idx]) {
+    if (out_idx[out_idx_idx])
+    {
       // rct
       src.amount = 7390000000000;
-      src.real_out_tx_key = get_tx_pub_key_from_extra(rct_txes[rct_idx/4]);
-      src.real_output_in_tx_index = rct_idx&3;
+      src.real_out_tx_key = get_tx_pub_key_from_extra(rct_txes[rct_idx / 4]);
+      src.real_output_in_tx_index = rct_idx & 3;
       src.mask = rct_tx_masks[rct_idx];
       src.rct = true;
-      for (int m = 0; m <= mixin; ++m) {
+      for (int m = 0; m <= mixin; ++m)
+      {
         rct::ctkey ctkey;
-        ctkey.dest = rct::pk2rct(boost::get<txout_to_key>(rct_txes[rct_idx/4].vout[rct_idx&3].target).key);
-        ctkey.mask = rct_txes[rct_idx/4].rct_signatures.outPk[rct_idx&3].mask;
+        ctkey.dest = rct::pk2rct(boost::get<txout_sispop_tagged_key>(rct_txes[rct_idx / 4].vout[rct_idx & 3].target).key);
+        ctkey.mask = rct_txes[rct_idx / 4].rct_signatures.outPk[rct_idx & 3].mask;
         src.outputs.push_back(std::make_pair(global_rct_idx, ctkey));
         ++rct_idx;
         ++global_rct_idx;
@@ -203,14 +208,15 @@ bool gen_rct_tx_validation_base::generate_with(std::vector<test_event_entry>& ev
       src.real_output_in_tx_index = 4;
       src.mask = rct::identity();
       src.rct = false;
-      for (int m = 0; m <= mixin; ++m) {
-        src.push_output(m, boost::get<txout_to_key>(blocks[pre_rct_idx].miner_tx.vout[4].target).key, src.amount);
+      for (int m = 0; m <= mixin; ++m)
+      {
+        src.push_output(m, boost::get<txout_sispop_tagged_key>(blocks[pre_rct_idx].miner_tx.vout[4].target).key, src.amount);
         ++pre_rct_idx;
       }
     }
   }
 
-  //fill outputs entry
+  // fill outputs entry
   tx_destination_entry td;
   td.addr = miner_account.get_keys().m_account_address;
   td.amount = amount_paid;
@@ -224,7 +230,7 @@ bool gen_rct_tx_validation_base::generate_with(std::vector<test_event_entry>& ev
   crypto::secret_key tx_key;
   std::vector<crypto::secret_key> additional_tx_keys;
   std::unordered_map<crypto::public_key, cryptonote::subaddress_index> subaddresses;
-  subaddresses[miner_accounts[0].get_keys().m_account_address.m_spend_public_key] = {0,0};
+  subaddresses[miner_accounts[0].get_keys().m_account_address.m_spend_public_key] = {0, 0};
   sispop_construct_tx_params tx_params;
   tx_params.hf_version = cryptonote::network_version_8;
   bool r = construct_tx_and_get_tx_key(miner_accounts[0].get_keys(), subaddresses, sources, destinations, cryptonote::tx_destination_entry{}, std::vector<uint8_t>(), tx, 0, tx_key, additional_tx_keys, {}, nullptr, tx_params);
@@ -241,7 +247,7 @@ bool gen_rct_tx_validation_base::generate_with(std::vector<test_event_entry>& ev
   return true;
 }
 
-bool gen_rct_tx_valid_from_pre_rct::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_valid_from_pre_rct::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {0, -1};
@@ -249,7 +255,7 @@ bool gen_rct_tx_valid_from_pre_rct::generate(std::vector<test_event_entry>& even
   return generate_with(events, out_idx, mixin, amount_paid, true, NULL, NULL);
 }
 
-bool gen_rct_tx_valid_from_rct::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_valid_from_rct::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {1, -1};
@@ -257,7 +263,7 @@ bool gen_rct_tx_valid_from_rct::generate(std::vector<test_event_entry>& events) 
   return generate_with(events, out_idx, mixin, amount_paid, true, NULL, NULL);
 }
 
-bool gen_rct_tx_valid_from_mixed::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_valid_from_mixed::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {1, 0, -1};
@@ -265,148 +271,174 @@ bool gen_rct_tx_valid_from_mixed::generate(std::vector<test_event_entry>& events
   return generate_with(events, out_idx, mixin, amount_paid, true, NULL, NULL);
 }
 
-bool gen_rct_tx_pre_rct_bad_real_dest::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_pre_rct_bad_real_dest::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {0, -1};
   const uint64_t amount_paid = 10000;
   bool tx_creation_succeeded = false;
   // in the case, the tx will fail to create, due to mismatched sk/pk
-  bool ret = generate_with(events, out_idx, mixin, amount_paid, false,
-    [](std::vector<tx_source_entry> &sources, std::vector<tx_destination_entry> &destinations) {rct::key sk; rct::skpkGen(sk, sources[0].outputs[0].second.dest);},
-    [&tx_creation_succeeded](const transaction &tx){tx_creation_succeeded=true;});
+  bool ret = generate_with(
+      events, out_idx, mixin, amount_paid, false,
+      [](std::vector<tx_source_entry> &sources, std::vector<tx_destination_entry> &destinations)
+      {rct::key sk; rct::skpkGen(sk, sources[0].outputs[0].second.dest); },
+      [&tx_creation_succeeded](const transaction &tx)
+      { tx_creation_succeeded = true; });
   return !ret && !tx_creation_succeeded;
 }
 
-bool gen_rct_tx_pre_rct_bad_real_mask::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_pre_rct_bad_real_mask::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {0, -1};
   const uint64_t amount_paid = 10000;
-  return generate_with(events, out_idx, mixin, amount_paid, false,
-    [](std::vector<tx_source_entry> &sources, std::vector<tx_destination_entry> &destinations) {sources[0].outputs[0].second.mask = rct::zeroCommit(99999);},
-    NULL);
+  return generate_with(
+      events, out_idx, mixin, amount_paid, false,
+      [](std::vector<tx_source_entry> &sources, std::vector<tx_destination_entry> &destinations)
+      { sources[0].outputs[0].second.mask = rct::zeroCommit(99999); },
+      NULL);
 }
 
-bool gen_rct_tx_pre_rct_bad_fake_dest::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_pre_rct_bad_fake_dest::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {0, -1};
   const uint64_t amount_paid = 10000;
-  return generate_with(events, out_idx, mixin, amount_paid, false,
-    [](std::vector<tx_source_entry> &sources, std::vector<tx_destination_entry> &destinations) {rct::key sk; rct::skpkGen(sk, sources[0].outputs[1].second.dest);},
-    NULL);
+  return generate_with(
+      events, out_idx, mixin, amount_paid, false,
+      [](std::vector<tx_source_entry> &sources, std::vector<tx_destination_entry> &destinations)
+      {rct::key sk; rct::skpkGen(sk, sources[0].outputs[1].second.dest); },
+      NULL);
 }
 
-bool gen_rct_tx_pre_rct_bad_fake_mask::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_pre_rct_bad_fake_mask::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {0, -1};
   const uint64_t amount_paid = 10000;
-  return generate_with(events, out_idx, mixin, amount_paid, false,
-    [](std::vector<tx_source_entry> &sources, std::vector<tx_destination_entry> &destinations) {sources[0].outputs[1].second.mask = rct::zeroCommit(99999);},
-    NULL);
+  return generate_with(
+      events, out_idx, mixin, amount_paid, false,
+      [](std::vector<tx_source_entry> &sources, std::vector<tx_destination_entry> &destinations)
+      { sources[0].outputs[1].second.mask = rct::zeroCommit(99999); },
+      NULL);
 }
 
-bool gen_rct_tx_rct_bad_real_dest::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_rct_bad_real_dest::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {1, -1};
   const uint64_t amount_paid = 10000;
   bool tx_creation_succeeded = false;
   // in the case, the tx will fail to create, due to mismatched sk/pk
-  bool ret = generate_with(events, out_idx, mixin, amount_paid, false,
-    [](std::vector<tx_source_entry> &sources, std::vector<tx_destination_entry> &destinations) {rct::key sk; rct::skpkGen(sk, sources[0].outputs[0].second.dest);},
-    [&tx_creation_succeeded](const transaction &tx){tx_creation_succeeded=true;});
+  bool ret = generate_with(
+      events, out_idx, mixin, amount_paid, false,
+      [](std::vector<tx_source_entry> &sources, std::vector<tx_destination_entry> &destinations)
+      {rct::key sk; rct::skpkGen(sk, sources[0].outputs[0].second.dest); },
+      [&tx_creation_succeeded](const transaction &tx)
+      { tx_creation_succeeded = true; });
   return !ret && !tx_creation_succeeded;
 }
 
-bool gen_rct_tx_rct_bad_real_mask::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_rct_bad_real_mask::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {1, -1};
   const uint64_t amount_paid = 10000;
-  return generate_with(events, out_idx, mixin, amount_paid, false,
-    [](std::vector<tx_source_entry> &sources, std::vector<tx_destination_entry> &destinations) {sources[0].outputs[0].second.mask = rct::zeroCommit(99999);},
-    NULL);
+  return generate_with(
+      events, out_idx, mixin, amount_paid, false,
+      [](std::vector<tx_source_entry> &sources, std::vector<tx_destination_entry> &destinations)
+      { sources[0].outputs[0].second.mask = rct::zeroCommit(99999); },
+      NULL);
 }
 
-bool gen_rct_tx_rct_bad_fake_dest::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_rct_bad_fake_dest::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {1, -1};
   const uint64_t amount_paid = 10000;
-  return generate_with(events, out_idx, mixin, amount_paid, false,
-    [](std::vector<tx_source_entry> &sources, std::vector<tx_destination_entry> &destinations) {rct::key sk; rct::skpkGen(sk, sources[0].outputs[1].second.dest);},
-    NULL);
+  return generate_with(
+      events, out_idx, mixin, amount_paid, false,
+      [](std::vector<tx_source_entry> &sources, std::vector<tx_destination_entry> &destinations)
+      {rct::key sk; rct::skpkGen(sk, sources[0].outputs[1].second.dest); },
+      NULL);
 }
 
-bool gen_rct_tx_rct_bad_fake_mask::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_rct_bad_fake_mask::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {1, -1};
   const uint64_t amount_paid = 10000;
-  return generate_with(events, out_idx, mixin, amount_paid, false,
-    [](std::vector<tx_source_entry> &sources, std::vector<tx_destination_entry> &destinations) {sources[0].outputs[1].second.mask = rct::zeroCommit(99999);},
-    NULL);
+  return generate_with(
+      events, out_idx, mixin, amount_paid, false,
+      [](std::vector<tx_source_entry> &sources, std::vector<tx_destination_entry> &destinations)
+      { sources[0].outputs[1].second.mask = rct::zeroCommit(99999); },
+      NULL);
 }
 
-bool gen_rct_tx_rct_spend_with_zero_commit::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_rct_spend_with_zero_commit::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {1, -1};
   const uint64_t amount_paid = 10000;
-  return generate_with(events, out_idx, mixin, amount_paid, false,
-    [](std::vector<tx_source_entry> &sources, std::vector<tx_destination_entry> &destinations) {sources[0].outputs[0].second.mask = rct::zeroCommit(sources[0].amount); sources[0].mask = rct::identity();},
-    [](transaction &tx){boost::get<txin_to_key>(tx.vin[0]).amount = 0;});
+  return generate_with(
+      events, out_idx, mixin, amount_paid, false,
+      [](std::vector<tx_source_entry> &sources, std::vector<tx_destination_entry> &destinations)
+      {sources[0].outputs[0].second.mask = rct::zeroCommit(sources[0].amount); sources[0].mask = rct::identity(); },
+      [](transaction &tx)
+      { boost::get<txin_sispop_key>(tx.vin[0]).amount = 0; });
 }
 
-bool gen_rct_tx_pre_rct_zero_vin_amount::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_pre_rct_zero_vin_amount::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {0, -1};
   const uint64_t amount_paid = 10000;
   return generate_with(events, out_idx, mixin, amount_paid, false,
-    NULL, [](transaction &tx) {boost::get<txin_to_key>(tx.vin[0]).amount = 0;});
+                       NULL, [](transaction &tx)
+                       { boost::get<txin_sispop_key>(tx.vin[0]).amount = 0; });
 }
 
-bool gen_rct_tx_rct_non_zero_vin_amount::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_rct_non_zero_vin_amount::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {1, -1};
   const uint64_t amount_paid = 10000;
   return generate_with(events, out_idx, mixin, amount_paid, false,
-    NULL, [](transaction &tx) {boost::get<txin_to_key>(tx.vin[0]).amount = 5000000000000;}); // one that we know exists
+                       NULL, [](transaction &tx)
+                       { boost::get<txin_sispop_key>(tx.vin[0]).amount = 5000000000000; }); // one that we know exists
 }
 
-bool gen_rct_tx_non_zero_vout_amount::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_non_zero_vout_amount::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {1, -1};
   const uint64_t amount_paid = 10000;
   return generate_with(events, out_idx, mixin, amount_paid, false,
-    NULL, [](transaction &tx) {tx.vout[0].amount = 5000000000000;}); // one that we know exists
+                       NULL, [](transaction &tx)
+                       { tx.vout[0].amount = 5000000000000; }); // one that we know exists
 }
 
-bool gen_rct_tx_pre_rct_duplicate_key_image::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_pre_rct_duplicate_key_image::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {0, -1};
   const uint64_t amount_paid = 10000;
   return generate_with(events, out_idx, mixin, amount_paid, false,
-    NULL, [&events](transaction &tx) {boost::get<txin_to_key>(tx.vin[0]).k_image = boost::get<txin_to_key>(boost::get<transaction>(events[67]).vin[0]).k_image;});
+                       NULL, [&events](transaction &tx)
+                       { boost::get<txin_sispop_key>(tx.vin[0]).k_image = boost::get<txin_sispop_key>(boost::get<transaction>(events[67]).vin[0]).k_image; });
 }
 
-bool gen_rct_tx_rct_duplicate_key_image::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_rct_duplicate_key_image::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {1, -1};
   const uint64_t amount_paid = 10000;
   return generate_with(events, out_idx, mixin, amount_paid, false,
-    NULL, [&events](transaction &tx) {boost::get<txin_to_key>(tx.vin[0]).k_image = boost::get<txin_to_key>(boost::get<transaction>(events[67]).vin[0]).k_image;});
+                       NULL, [&events](transaction &tx)
+                       { boost::get<txin_sispop_key>(tx.vin[0]).k_image = boost::get<txin_sispop_key>(boost::get<transaction>(events[67]).vin[0]).k_image; });
 }
 
-bool gen_rct_tx_pre_rct_wrong_key_image::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_pre_rct_wrong_key_image::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {0, -1};
@@ -414,10 +446,11 @@ bool gen_rct_tx_pre_rct_wrong_key_image::generate(std::vector<test_event_entry>&
   // some random key image from the monero blockchain, so we get something that is a valid key image
   static const uint8_t k_image[33] = "\x49\x3b\x56\x16\x54\x76\xa8\x75\xb7\xf4\xa8\x51\xf5\x55\xd3\x44\xe7\x3e\xea\x73\xee\xc1\x06\x7c\x7d\xb6\x57\x28\x46\x85\xe1\x07";
   return generate_with(events, out_idx, mixin, amount_paid, false,
-    NULL, [](transaction &tx) {memcpy(&boost::get<txin_to_key>(tx.vin[0]).k_image, k_image, 32);});
+                       NULL, [](transaction &tx)
+                       { memcpy(&boost::get<txin_sispop_key>(tx.vin[0]).k_image, k_image, 32); });
 }
 
-bool gen_rct_tx_rct_wrong_key_image::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_rct_wrong_key_image::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {1, -1};
@@ -425,89 +458,100 @@ bool gen_rct_tx_rct_wrong_key_image::generate(std::vector<test_event_entry>& eve
   // some random key image from the monero blockchain, so we get something that is a valid key image
   static const uint8_t k_image[33] = "\x49\x3b\x56\x16\x54\x76\xa8\x75\xb7\xf4\xa8\x51\xf5\x55\xd3\x44\xe7\x3e\xea\x73\xee\xc1\x06\x7c\x7d\xb6\x57\x28\x46\x85\xe1\x07";
   return generate_with(events, out_idx, mixin, amount_paid, false,
-    NULL, [](transaction &tx) {memcpy(&boost::get<txin_to_key>(tx.vin[0]).k_image, k_image, 32);});
+                       NULL, [](transaction &tx)
+                       { memcpy(&boost::get<txin_sispop_key>(tx.vin[0]).k_image, k_image, 32); });
 }
 
-bool gen_rct_tx_pre_rct_wrong_fee::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_pre_rct_wrong_fee::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {0, -1};
   const uint64_t amount_paid = 10000;
   return generate_with(events, out_idx, mixin, amount_paid, false,
-    NULL, [](transaction &tx) {tx.rct_signatures.txnFee++;});
+                       NULL, [](transaction &tx)
+                       { tx.rct_signatures.txnFee++; });
 }
 
-bool gen_rct_tx_rct_wrong_fee::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_rct_wrong_fee::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {1, -1};
   const uint64_t amount_paid = 10000;
   return generate_with(events, out_idx, mixin, amount_paid, false,
-    NULL, [](transaction &tx) {tx.rct_signatures.txnFee++;});
+                       NULL, [](transaction &tx)
+                       { tx.rct_signatures.txnFee++; });
 }
 
-bool gen_rct_tx_pre_rct_increase_vin_and_fee::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_pre_rct_increase_vin_and_fee::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {0, -1};
   const uint64_t amount_paid = 10000;
   return generate_with(events, out_idx, mixin, amount_paid, false,
-    NULL, [](transaction &tx) {boost::get<txin_to_key>(tx.vin[0]).amount++;tx.rct_signatures.txnFee++;});
+                       NULL, [](transaction &tx)
+                       {boost::get<txin_sispop_key>(tx.vin[0]).amount++;tx.rct_signatures.txnFee++; });
 }
 
-bool gen_rct_tx_pre_rct_remove_vin::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_pre_rct_remove_vin::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {0, -1};
   const uint64_t amount_paid = 10000;
   return generate_with(events, out_idx, mixin, amount_paid, false,
-    NULL, [](transaction &tx) {tx.vin.pop_back();});
+                       NULL, [](transaction &tx)
+                       { tx.vin.pop_back(); });
 }
 
-bool gen_rct_tx_rct_remove_vin::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_rct_remove_vin::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {1, -1};
   const uint64_t amount_paid = 10000;
   return generate_with(events, out_idx, mixin, amount_paid, false,
-    NULL, [](transaction &tx) {tx.vin.pop_back();});
+                       NULL, [](transaction &tx)
+                       { tx.vin.pop_back(); });
 }
 
-bool gen_rct_tx_pre_rct_add_vout::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_pre_rct_add_vout::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {0, -1};
   const uint64_t amount_paid = 10000;
   return generate_with(events, out_idx, mixin, amount_paid, false,
-    NULL, [](transaction &tx) {tx.vout.push_back(tx.vout.back());});
+                       NULL, [](transaction &tx)
+                       { tx.vout.push_back(tx.vout.back()); });
 }
 
-bool gen_rct_tx_rct_add_vout::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_rct_add_vout::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {1, -1};
   const uint64_t amount_paid = 10000;
   return generate_with(events, out_idx, mixin, amount_paid, false,
-    NULL, [](transaction &tx) {tx.vout.push_back(tx.vout.back());});
+                       NULL, [](transaction &tx)
+                       { tx.vout.push_back(tx.vout.back()); });
 }
 
-bool gen_rct_tx_pre_rct_altered_extra::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_pre_rct_altered_extra::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {0, -1};
   const uint64_t amount_paid = 10000;
   bool failed = false;
   return generate_with(events, out_idx, mixin, amount_paid, false,
-    NULL, [&failed](transaction &tx) {std::string extra_nonce; crypto::hash pid = crypto::null_hash; set_payment_id_to_tx_extra_nonce(extra_nonce, pid); if (!add_extra_nonce_to_tx_extra(tx.extra, extra_nonce)) failed = true; }) && !failed;
+                       NULL, [&failed](transaction &tx)
+                       {std::string extra_nonce; crypto::hash pid = crypto::null_hash; set_payment_id_to_tx_extra_nonce(extra_nonce, pid); if (!add_extra_nonce_to_tx_extra(tx.extra, extra_nonce)) failed = true; }) &&
+         !failed;
 }
 
-bool gen_rct_tx_rct_altered_extra::generate(std::vector<test_event_entry>& events) const
+bool gen_rct_tx_rct_altered_extra::generate(std::vector<test_event_entry> &events) const
 {
   const int mixin = 2;
   const int out_idx[] = {1, -1};
   const uint64_t amount_paid = 10000;
   bool failed = false;
   return generate_with(events, out_idx, mixin, amount_paid, false,
-    NULL, [&failed](transaction &tx) {std::string extra_nonce; crypto::hash pid = crypto::null_hash; set_payment_id_to_tx_extra_nonce(extra_nonce, pid); if (!add_extra_nonce_to_tx_extra(tx.extra, extra_nonce)) failed = true; }) && !failed;
+                       NULL, [&failed](transaction &tx)
+                       {std::string extra_nonce; crypto::hash pid = crypto::null_hash; set_payment_id_to_tx_extra_nonce(extra_nonce, pid); if (!add_extra_nonce_to_tx_extra(tx.extra, extra_nonce)) failed = true; }) &&
+         !failed;
 }
-
