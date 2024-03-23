@@ -2117,8 +2117,8 @@ namespace cryptonote
     LOG_PRINT_L2("Block template filled with " << bl.tx_hashes.size() << " txes, weight "
                                                << total_weight << "/" << max_total_weight << ", coinbase " << print_money(best_coinbase)
                                                << " (including " << print_money(fee_map["SISPOP"]) << " SISPOP in fees | "
-                                               << print_money(fee_map["SISPOPUSD"]) << " ZSD in fees | "
-                                               << print_money(fee_map["SISPOPRSV"]) << " ZRS in fees)");
+                                               << print_money(fee_map["SISPOPUSD"]) << " SSD in fees | "
+                                               << print_money(fee_map["SISPOPRSV"]) << " SISS in fees)");
     return true;
   }
   //---------------------------------------------------------------------------------
