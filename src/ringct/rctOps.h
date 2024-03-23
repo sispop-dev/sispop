@@ -144,6 +144,9 @@ namespace rct {
     //B must be input after applying "precomp"
     void addKeys3(key &aAbB, const key &a, const key &A, const key &b, const ge_dsmp B);
     void addKeys3(key &aAbB, const key &a, const ge_dsmp A, const key &b, const ge_dsmp B);
+
+    void addKeys_aGbBcC(key &aGbBcC, const key &a, const key &b, const ge_dsmp B, const key &c, const ge_dsmp C);
+    void addKeys_aAbBcC(key &aAbBcC, const key &a, const ge_dsmp A, const key &b, const ge_dsmp B, const key &c, const ge_dsmp C);
     //AB = A - B where A, B are curve points
     void subKeys(key &AB, const key &A, const  key &B);
     //checks if A, B are equal as curve points
@@ -171,6 +174,8 @@ namespace rct {
     //for ANSL
     key cn_fast_hash(const key64 keys);
     key hash_to_scalar(const key64 keys);
+
+    void hash_to_p3(ge_p3 &hash8_p3, const key &k);
 
     //returns hashToPoint as described in https://github.com/ShenNoether/ge_fromfe_writeup 
     key hashToPointSimple(const key &in);

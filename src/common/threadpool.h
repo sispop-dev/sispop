@@ -42,6 +42,16 @@ namespace tools
 class threadpool
 {
 public:
+  static threadpool &getInstanceForCompute()
+  {
+    static threadpool instance;
+    return instance;
+  }
+  static threadpool &getInstanceForIO()
+  {
+    static threadpool instance(8);
+    return instance;
+  }
   static threadpool& getInstance() {
     static threadpool instance;
     return instance;

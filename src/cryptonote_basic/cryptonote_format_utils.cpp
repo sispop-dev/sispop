@@ -1480,7 +1480,8 @@ namespace cryptonote
       binary_archive<true> ba(ss);
       const size_t inputs = t.vin.size();
       const size_t outputs = t.vout.size();
-      bool r = tt.rct_signatures.serialize_rctsig_base(ba, inputs, outputs);
+      const bool conversion_tx = t.amount_burnt > 0 && t.amount_minted > 0;
+      bool r = tt.rct_signatures.serialize_rctsig_base(ba, inputs, outputs, conversion_tx);
       CHECK_AND_ASSERT_THROW_MES(r, "Failed to serialize rct signatures base");
       cryptonote::get_blob_hash(ss.str(), hashes[1]);
     }
@@ -1530,7 +1531,8 @@ namespace cryptonote
       transaction &tt = const_cast<transaction &>(t);
       std::stringstream ss;
       binary_archive<true> ba(ss);
-      bool r = tt.rct_signatures.serialize_rctsig_base(ba, t.vin.size(), t.vout.size());
+      const bool conversion_tx = t.amount_burnt > 0 && t.amount_minted > 0;
+      bool r = tt.rct_signatures.serialize_rctsig_base(ba, t.vin.size(), t.vout.size(), conversion_tx);
       CHECK_AND_ASSERT_MES(r, false, "Failed to serialize rct signatures base");
       cryptonote::get_blob_hash(ss.str(), hashes[1]);
     }
