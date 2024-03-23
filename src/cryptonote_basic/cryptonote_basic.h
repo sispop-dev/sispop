@@ -214,6 +214,14 @@ namespace cryptonote
     std::vector<uint8_t> extra;
     std::vector<uint64_t> output_unlock_times;
 
+    // Block height to use PR from
+    uint64_t pricing_record_height;
+
+    // Circulating supply information
+    uint64_t amount_burnt;
+    uint64_t amount_minted;
+
+
     BEGIN_SERIALIZE()
     ENUM_FIELD(version, version >= txversion::v1 && version < txversion::_count);
     if (version >= txversion::v3_per_output_unlock_times)
@@ -227,6 +235,9 @@ namespace cryptonote
       }
     }
     VARINT_FIELD(unlock_time)
+    VARINT_FIELD(pricing_record_height)
+    VARINT_FIELD(amount_burnt)
+    VARINT_FIELD(amount_minted)
     FIELD(vin)
     FIELD(vout)
     if (version >= txversion::v3_per_output_unlock_times && vout.size() != output_unlock_times.size())
@@ -241,6 +252,9 @@ namespace cryptonote
     {
       version = txversion::v1;
       unlock_time = 0;
+      pricing_record_height = 0;
+      amount_burnt = 0;
+      amount_minted = 0;
       vin.clear();
       vout.clear();
       extra.clear();
@@ -391,8 +405,9 @@ namespace cryptonote
       ar.tag("rct_signatures");
       if (!vin.empty())
       {
+        const bool conversion_tx = this->amount_burnt > 0 && this->amount_minted > 0;
         ar.begin_object();
-        bool r = rct_signatures.serialize_rctsig_base(ar, vin.size(), vout.size());
+        bool r = rct_signatures.serialize_rctsig_base(ar, vin.size(), vout.size(), conversion_tx);
         if (!r || !ar.stream().good())
           return false;
         ar.end_object();
@@ -429,8 +444,9 @@ namespace cryptonote
         ar.tag("rct_signatures");
         if (!vin.empty())
         {
+          const bool conversion_tx = this->amount_burnt > 0 && this->amount_minted > 0;
           ar.begin_object();
-          bool r = rct_signatures.serialize_rctsig_base(ar, vin.size(), vout.size());
+          bool r = rct_signatures.serialize_rctsig_base(ar, vin.size(), vout.size(), conversion_tx);
           if (!r || !ar.stream().good())
             return false;
           ar.end_object();
