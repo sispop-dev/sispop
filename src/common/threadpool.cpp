@@ -116,7 +116,7 @@ threadpool::waiter::~waiter()
   catch (...) { /* ignore */ }
   try
   {
-    wait(NULL);
+    wait();
   }
   catch (const std::exception &e)
   {
@@ -124,12 +124,12 @@ threadpool::waiter::~waiter()
   }
 }
 
-void threadpool::waiter::wait(threadpool *tpool) {
-  if (tpool)
-    tpool->run(true);
+bool threadpool::waiter::wait() {
+  pool.run(true);
   boost::unique_lock<boost::mutex> lock(mt);
   while(num)
     cv.wait(lock);
+  return !error();
 }
 
 void threadpool::waiter::inc() {
