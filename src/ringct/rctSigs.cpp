@@ -30,6 +30,7 @@
 
 #include "misc_log_ex.h"
 #include "common/perf_timer.h"
+#include "misc_language.h"
 #include "common/threadpool.h"
 #include "common/util.h"
 #include "rctSigs.h"
@@ -382,7 +383,7 @@ namespace rct {
     // Gen creates a signature which proves that for some column in the keymatrix "pk"
     //   the signer knows a secret key for each row in that column
     // Ver verifies that the MG sig was created correctly        
-    mgSig MLSAG_Gen(const key &message, const keyM & pk, const keyV & xx, const multisig_kLRki *kLRki, key *mscout, const unsigned int index, size_t dsRows, hw::device &hwdev) {
+    mgSig MLSAG_Gen(const key &message, const keyM & pk, const keyV & xx, const unsigned int index, size_t dsRows, hw::device &hwdev) {
         mgSig rv;
         size_t cols = pk.size();
         CHECK_AND_ASSERT_THROW_MES(cols >= 2, "Error! What is c if cols = 1!");
@@ -394,15 +395,15 @@ namespace rct {
         }
         CHECK_AND_ASSERT_THROW_MES(xx.size() == rows, "Bad xx size");
         CHECK_AND_ASSERT_THROW_MES(dsRows <= rows, "Bad dsRows size");
-        CHECK_AND_ASSERT_THROW_MES((kLRki && mscout) || (!kLRki && !mscout), "Only one of kLRki/mscout is present");
-        CHECK_AND_ASSERT_THROW_MES(!kLRki || dsRows == 1, "Multisig requires exactly 1 dsRows");
 
         size_t i = 0, j = 0, ii = 0;
         key c, c_old, L, R, Hi;
+        ge_p3 Hi_p3;
         sc_0(c_old.bytes);
         vector<geDsmp> Ip(dsRows);
         rv.II = keyV(dsRows);
         keyV alpha(rows);
+        auto wiper = epee::misc_utils::create_scope_leave_handler([&](){memwipe(alpha.data(), alpha.size() * sizeof(alpha[0]));});
         keyV aG(rows);
         rv.ss = keyM(cols, aG);
         keyV aHP(dsRows);
@@ -411,19 +412,11 @@ namespace rct {
         DP("here1");
         for (i = 0; i < dsRows; i++) {
             toHash[3 * i + 1] = pk[index][i];
-            if (kLRki) {
-              // multisig
-              alpha[i] = kLRki->k;
-              toHash[3 * i + 2] = kLRki->L;
-              toHash[3 * i + 3] = kLRki->R;
-              rv.II[i] = kLRki->ki;
-            }
-            else {
-              Hi = hashToPoint(pk[index][i]);
-              hwdev.mlsag_prepare(Hi, xx[i], alpha[i] , aG[i] , aHP[i] , rv.II[i]);
-              toHash[3 * i + 2] = aG[i];
-              toHash[3 * i + 3] = aHP[i];
-            }
+            hash_to_p3(Hi_p3, pk[index][i]);
+            ge_p3_tobytes(Hi.bytes, &Hi_p3);
+            hwdev.mlsag_prepare(Hi, xx[i], alpha[i] , aG[i] , aHP[i] , rv.II[i]);
+            toHash[3 * i + 2] = aG[i];
+            toHash[3 * i + 3] = aHP[i];
             precomp(Ip[i].k, rv.II[i]);
         }
         size_t ndsRows = 3 * dsRows; //non Double Spendable Rows (see identity chains paper)
@@ -446,7 +439,8 @@ namespace rct {
             sc_0(c.bytes);
             for (j = 0; j < dsRows; j++) {
                 addKeys2(L, rv.ss[i][j], c_old, pk[i][j]);
-                hashToPoint(Hi, pk[i][j]);
+                hash_to_p3(Hi_p3, pk[i][j]);
+                ge_p3_tobytes(Hi.bytes, &Hi_p3);
                 addKeys3(R, rv.ss[i][j], Hi, c_old, Ip[j].k);
                 toHash[3 * j + 1] = pk[i][j];
                 toHash[3 * j + 2] = L; 
@@ -466,11 +460,9 @@ namespace rct {
             }   
         }
         hwdev.mlsag_sign(c, xx, alpha, rows, dsRows, rv.ss[index]);
-        if (mscout)
-          *mscout = c;
         return rv;
     }
-    
+
     //Multilayered Spontaneous Anonymous Group Signatures (MLSAG signatures)
     //This is a just slghtly more efficient version than the ones described below
     //(will be explained in more detail in Ring Multisig paper
@@ -755,12 +747,11 @@ namespace rct {
     //   inSk is x, a_in corresponding to signing index
     //       a_out, Cout is for the output commitment
     //       index is the signing index..
-    mgSig proveRctMGSimple(const key &message, const ctkeyV & pubs, const ctkey & inSk, const key &a , const key &Cout, const multisig_kLRki *kLRki, key *mscout, unsigned int index, hw::device &hwdev) {
+    mgSig proveRctMGSimple(const key &message, const ctkeyV & pubs, const ctkey & inSk, const key &a , const key &Cout, unsigned int index, hw::device &hwdev) {
         //setup vars
         size_t rows = 1;
         size_t cols = pubs.size();
         CHECK_AND_ASSERT_THROW_MES(cols >= 1, "Empty pubs");
-        CHECK_AND_ASSERT_THROW_MES((kLRki && mscout) || (!kLRki && !mscout), "Only one of kLRki/mscout is present");
         keyV tmp(rows + 1);
         keyV sk(rows + 1);
         size_t i;
@@ -772,8 +763,8 @@ namespace rct {
             M[i][0] = pubs[i].dest;
             subKeys(M[i][1], pubs[i].mask, Cout);
         }
-        mgSig result = MLSAG_Gen(message, M, sk, kLRki, mscout, index, rows, hwdev);
-        memwipe(&sk[0], sizeof(key));
+        mgSig result = MLSAG_Gen(message, M, sk, index, rows, hwdev);
+        memwipe(sk.data(), sk.size() * sizeof(key));
         return result;
     }
 
@@ -883,6 +874,121 @@ namespace rct {
         }
         catch (...) { return false; }
     }
+
+
+    bool verRctCLSAGSimple(const key &message, const clsag &sig, const ctkeyV & pubs, const key & C_offset) {
+        try
+        {
+            PERF_TIMER(verRctCLSAGSimple);
+            const size_t n = pubs.size();
+
+            // Check data
+            CHECK_AND_ASSERT_MES(n >= 1, false, "Empty pubs");
+            CHECK_AND_ASSERT_MES(n == sig.s.size(), false, "Signature scalar vector is the wrong size!");
+            for (size_t i = 0; i < n; ++i)
+                CHECK_AND_ASSERT_MES(sc_check(sig.s[i].bytes) == 0, false, "Bad signature scalar!");
+            CHECK_AND_ASSERT_MES(sc_check(sig.c1.bytes) == 0, false, "Bad signature commitment!");
+            CHECK_AND_ASSERT_MES(!(sig.I == rct::identity()), false, "Bad key image!");
+
+            // Cache commitment offset for efficient subtraction later
+            ge_p3 C_offset_p3;
+            CHECK_AND_ASSERT_MES(ge_frombytes_vartime(&C_offset_p3, C_offset.bytes) == 0, false, "point conv failed");
+            ge_cached C_offset_cached;
+            ge_p3_to_cached(&C_offset_cached, &C_offset_p3);
+
+            // Prepare key images
+            key c = copy(sig.c1);
+            key D_8 = scalarmult8(sig.D);
+            CHECK_AND_ASSERT_MES(!(D_8 == rct::identity()), false, "Bad auxiliary key image!");
+            geDsmp I_precomp;
+            geDsmp D_precomp;
+            precomp(I_precomp.k,sig.I);
+            precomp(D_precomp.k,D_8);
+
+            // Aggregation hashes
+            keyV mu_P_to_hash(2*n+4); // domain, I, D, P, C, C_offset
+            keyV mu_C_to_hash(2*n+4); // domain, I, D, P, C, C_offset
+            sc_0(mu_P_to_hash[0].bytes);
+            memcpy(mu_P_to_hash[0].bytes,config::HASH_KEY_CLSAG_AGG_0,sizeof(config::HASH_KEY_CLSAG_AGG_0)-1);
+            sc_0(mu_C_to_hash[0].bytes);
+            memcpy(mu_C_to_hash[0].bytes,config::HASH_KEY_CLSAG_AGG_1,sizeof(config::HASH_KEY_CLSAG_AGG_1)-1);
+            for (size_t i = 1; i < n+1; ++i) {
+                mu_P_to_hash[i] = pubs[i-1].dest;
+                mu_C_to_hash[i] = pubs[i-1].dest;
+            }
+            for (size_t i = n+1; i < 2*n+1; ++i) {
+                mu_P_to_hash[i] = pubs[i-n-1].mask;
+                mu_C_to_hash[i] = pubs[i-n-1].mask;
+            }
+            mu_P_to_hash[2*n+1] = sig.I;
+            mu_P_to_hash[2*n+2] = sig.D;
+            mu_P_to_hash[2*n+3] = C_offset;
+            mu_C_to_hash[2*n+1] = sig.I;
+            mu_C_to_hash[2*n+2] = sig.D;
+            mu_C_to_hash[2*n+3] = C_offset;
+            key mu_P, mu_C;
+            mu_P = hash_to_scalar(mu_P_to_hash);
+            mu_C = hash_to_scalar(mu_C_to_hash);
+
+            // Set up round hash
+            keyV c_to_hash(2*n+5); // domain, P, C, C_offset, message, L, R
+            sc_0(c_to_hash[0].bytes);
+            memcpy(c_to_hash[0].bytes,config::HASH_KEY_CLSAG_ROUND,sizeof(config::HASH_KEY_CLSAG_ROUND)-1);
+            for (size_t i = 1; i < n+1; ++i)
+            {
+                c_to_hash[i] = pubs[i-1].dest;
+                c_to_hash[i+n] = pubs[i-1].mask;
+            }
+            c_to_hash[2*n+1] = C_offset;
+            c_to_hash[2*n+2] = message;
+            key c_p; // = c[i]*mu_P
+            key c_c; // = c[i]*mu_C
+            key c_new;
+            key L;
+            key R;
+            geDsmp P_precomp;
+            geDsmp C_precomp;
+            size_t i = 0;
+            ge_p3 hash8_p3;
+            geDsmp hash_precomp;
+            ge_p3 temp_p3;
+            ge_p1p1 temp_p1;
+
+            while (i < n) {
+                sc_0(c_new.bytes);
+                sc_mul(c_p.bytes,mu_P.bytes,c.bytes);
+                sc_mul(c_c.bytes,mu_C.bytes,c.bytes);
+
+                // Precompute points for L/R
+                precomp(P_precomp.k,pubs[i].dest);
+
+                CHECK_AND_ASSERT_MES(ge_frombytes_vartime(&temp_p3, pubs[i].mask.bytes) == 0, false, "point conv failed");
+                ge_sub(&temp_p1,&temp_p3,&C_offset_cached);
+                ge_p1p1_to_p3(&temp_p3,&temp_p1);
+                ge_dsm_precomp(C_precomp.k,&temp_p3);
+
+                // Compute L
+                addKeys_aGbBcC(L,sig.s[i],c_p,P_precomp.k,c_c,C_precomp.k);
+
+                // Compute R
+                hash_to_p3(hash8_p3,pubs[i].dest);
+                ge_dsm_precomp(hash_precomp.k, &hash8_p3);
+                addKeys_aAbBcC(R,sig.s[i],hash_precomp.k,c_p,I_precomp.k,c_c,D_precomp.k);
+
+                c_to_hash[2*n+3] = L;
+                c_to_hash[2*n+4] = R;
+                c_new = hash_to_scalar(c_to_hash);
+                CHECK_AND_ASSERT_MES(!(c_new == rct::zero()), false, "Bad signature hash");
+                copy(c,c_new);
+
+                i = i + 1;
+            }
+            sc_sub(c_new.bytes,c.bytes,sig.c1.bytes);
+            return sc_isnonzero(c_new.bytes) == 0;
+        }
+        catch (...) { return false; }
+    }
+
 
 
     //These functions get keys from blockchain
@@ -1384,12 +1490,12 @@ namespace rct {
         {
           if (semantics) {
             tools::threadpool& tpool = tools::threadpool::getInstance();
-            tools::threadpool::waiter waiter;
+            tools::threadpool::waiter waiter(tpool);
             std::deque<bool> results(rv.outPk.size(), false);
             DP("range proofs verified?");
             for (size_t i = 0; i < rv.outPk.size(); i++)
               tpool.submit(&waiter, [&, i] { results[i] = verRange(rv.outPk[i].mask, rv.p.rangeSigs[i]); });
-            waiter.wait(&tpool);
+            waiter.wait();
 
             for (size_t i = 0; i < results.size(); ++i) {
               if (!results[i]) {
@@ -1433,7 +1539,7 @@ namespace rct {
         PERF_TIMER(verRctSemanticsSimple);
 
         tools::threadpool& tpool = tools::threadpool::getInstance();
-        tools::threadpool::waiter waiter;
+        tools::threadpool::waiter waiter(tpool);
         std::deque<bool> results;
         std::vector<const Bulletproof*> proofs;
         size_t max_non_bp_proofs = 0, offset = 0;
@@ -1507,7 +1613,7 @@ namespace rct {
           return false;
         }
 
-        waiter.wait(&tpool);
+        waiter.wait();
         for (size_t i = 0; i < results.size(); ++i) {
           if (!results[i]) {
             LOG_PRINT_L1("Range proof verified failed for proof " << i);
@@ -1530,10 +1636,6 @@ namespace rct {
       }
     }
 
-    bool verRctSemanticsSimple(const rctSig & rv)
-    {
-      return verRctSemanticsSimple(std::vector<const rctSig*>(1, &rv));
-    }
 
     //ver RingCT simple
     //assumes only post-rct style inputs (at least for max anonymity)
