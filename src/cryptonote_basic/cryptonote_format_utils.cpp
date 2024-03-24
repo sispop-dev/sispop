@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2019, The Monero Project
+// Copyright (c) 2014-2024, The Monero Project
 // Copyright (c)      2018-2023, The Oxen Project
 //
 // All rights reserved.
@@ -1164,6 +1164,14 @@ namespace cryptonote
     }
     return outputs_amount;
   }
+  //---------------------------------------------------------------
+  boost::optional<crypto::view_tag> get_output_view_tag(const cryptonote::tx_out& out)
+  {
+    return out.target.type() == typeid(txout_sispop_tagged_key)
+      ? boost::optional<crypto::view_tag>(boost::get< txout_sispop_tagged_key >(out.target).view_tag)
+      : boost::optional<crypto::view_tag>();
+  }
+  //-------
   //---------------------------------------------------------------
   std::string short_hash_str(const crypto::hash &h)
   {
