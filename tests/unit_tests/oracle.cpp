@@ -1,4 +1,4 @@
-// Copyright (c) 2024, Zephyr Protocol
+// Copyright (c) 2024,
 // Portions copyright (c) 2016-2019, The Monero Project
 // 
 // All rights reserved.
