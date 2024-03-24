@@ -149,6 +149,9 @@ namespace cryptonote
   crypto::hash get_blob_hash(const epee::span<const char> &blob);
   std::string short_hash_str(const crypto::hash &h);
 
+  bool get_output_asset_type(const cryptonote::tx_out& out, std::string& output_asset_type);
+  boost::optional<crypto::view_tag> get_output_view_tag(const cryptonote::tx_out& out);
+
   bool get_registration_hash(const std::vector<cryptonote::account_public_address> &addresses, uint64_t operator_portions, const std::vector<uint64_t> &portions, uint64_t expiration_timestamp, crypto::hash &hash);
 
   crypto::hash get_transaction_hash(const transaction &t);
@@ -159,7 +162,6 @@ namespace cryptonote
   crypto::hash get_transaction_prunable_hash(const transaction &t, const cryptonote::blobdata *blob = NULL);
   bool calculate_transaction_hash(const transaction &t, crypto::hash &res, size_t *blob_size);
   crypto::hash get_pruned_transaction_hash(const transaction &t, const crypto::hash &pruned_data_hash);
-
   blobdata get_block_hashing_blob(const block &b);
   bool calculate_block_hash(const block &b, crypto::hash &res, const blobdata *blob = NULL);
   bool get_block_hash(const block &b, crypto::hash &res);
