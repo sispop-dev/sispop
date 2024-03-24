@@ -1,5 +1,5 @@
-// Copyright (c) 2014-2019, The Monero Project
-// Copyright (c) 2018-2019, The Sispop Project
+// Copyright (c) 2014-2024, The Monero Project
+// Copyright (c) 2018-2024, The Sispop Project
 // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without modification, are
@@ -32,6 +32,7 @@
 #include <boost/format.hpp>
 #include <boost/circular_buffer.hpp>
 #include <boost/endian/conversion.hpp>
+#include <boost/multiprecision/cpp_int.hpp>
 #include <memory>  // std::unique_ptr
 #include <cstring> // memcpy
 
@@ -249,6 +250,9 @@ namespace
   const char *const LMDB_PROPERTIES = "properties";
 
   constexpr unsigned int LMDB_DB_COUNT = 23; // Should agree with the number of db's above
+
+  const char* const LMDB_CIRC_SUPPLY = "circ_supply";
+  const char* const LMDB_CIRC_SUPPLY_TALLY = "circ_supply_tally";
 
   const char zerokey[8] = {0};
   const MDB_val zerokval = {sizeof(zerokey), (void *)zerokey};
@@ -4127,34 +4131,34 @@ namespace cryptonote
     memset(&m_tinfo->m_ti_rflags, 0, sizeof(m_tinfo->m_ti_rflags));
   }
 
-  uint64_t BlockchainLMDB::add_block(const std::pair<block, blobdata> &blk, size_t block_weight, uint64_t long_term_block_weight, const difficulty_type &cumulative_difficulty, const uint64_t &coins_generated,
-                                     const std::vector<std::pair<transaction, blobdata>> &txs)
+uint64_t BlockchainLMDB::add_block(const std::pair<block, blobdata>& blk, size_t block_weight, uint64_t long_term_block_weight, const difficulty_type& cumulative_difficulty, const uint64_t& coins_generated,
+    const uint64_t& reserve_reward, const std::vector<std::pair<transaction, blobdata>>& txs)
+{
+  LOG_PRINT_L3("BlockchainLMDB::" << __func__);
+  check_open();
+  uint64_t m_height = height();
+
+  if (m_height % 1024 == 0)
   {
-    LOG_PRINT_L3("BlockchainLMDB::" << __func__);
-    check_open();
-    uint64_t m_height = height();
-
-    if (m_height % 1024 == 0)
+    // for batch mode, DB resize check is done at start of batch transaction
+    if (! m_batch_active && need_resize())
     {
-      // for batch mode, DB resize check is done at start of batch transaction
-      if (!m_batch_active && need_resize())
-      {
-        LOG_PRINT_L0("LMDB memory map needs to be resized, doing that now.");
-        do_resize();
-      }
+      LOG_PRINT_L0("LMDB memory map needs to be resized, doing that now.");
+      do_resize();
     }
-
-    try
-    {
-      BlockchainDB::add_block(blk, block_weight, long_term_block_weight, cumulative_difficulty, coins_generated, txs);
-    }
-    catch (const DB_ERROR_TXN_START &e)
-    {
-      throw;
-    }
-
-    return ++m_height;
   }
+
+  try
+  {
+    BlockchainDB::add_block(blk, block_weight, long_term_block_weight, cumulative_difficulty, coins_generated, reserve_reward, txs);
+  }
+  catch (const DB_ERROR_TXN_START& e)
+  {
+    throw;
+  }
+
+  return ++m_height;
+}
 
   struct checkpoint_mdb_buffer
   {
