@@ -61,7 +61,9 @@ namespace crypto {
     char data[32];
   };
 
-  struct public_key : ec_point {};
+  struct public_key : ec_point {
+    friend class crypto_ops;
+  };
 
   using secret_key = epee::mlocked<tools::scrubbed<ec_scalar>>;
 
