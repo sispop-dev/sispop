@@ -39,8 +39,8 @@
 #include <boost/type_traits/make_unsigned.hpp>
 
 #include "common/varint.h"
+#include "span.h"
 #include "warnings.h"
-
 /* I have no clue what these lines means */
 PUSH_WARNINGS
 DISABLE_VS_WARNINGS(4244)
@@ -98,12 +98,19 @@ template <>
 struct binary_archive<false> : public binary_archive_base<std::istream, false>
 {
 
-  explicit binary_archive(stream_type &s) : base_type(s) {
+  explicit binary_archive(stream_type &s) : base_type(s), begin_(reinterpret_cast<const std::uint8_t*>(s.beg)){
     stream_type::pos_type pos = stream_.tellg();
     stream_.seekg(0, std::ios_base::end);
     eof_pos_ = stream_.tellg();
     stream_.seekg(pos);
+    good_ = true;
+    bytes_ = epee::span<const std::uint8_t>();
   }
+
+  
+  bool good() const noexcept { return good_; }
+  void set_fail() noexcept { good_ = false; }
+  std::size_t getpos() const noexcept { return bytes_.begin() - begin_; }
 
   template <class T>
   void serialize_int(T &v)
@@ -134,6 +141,9 @@ struct binary_archive<false> : public binary_archive_base<std::istream, false>
   void serialize_blob(void *buf, size_t len, const char *delimiter="")
   {
     stream_.read((char *)buf, len);
+    const std::size_t actual = bytes_.remove_prefix(len);
+    good_ &= (len == actual);
+    std::memcpy(buf, bytes_.data() - actual, actual);
   }
   
   template <class T>
@@ -145,9 +155,14 @@ struct binary_archive<false> : public binary_archive_base<std::istream, false>
   template <class T>
   void serialize_uvarint(T &v)
   {
+    auto current = bytes_.cbegin();
+    auto end = bytes_.cend();
     typedef std::istreambuf_iterator<char> it;
+    good_ &= (0 <= tools::read_varint(current, end, v));
     if (tools::read_varint(it(stream_), it(), v) < 0)
       stream_.setstate(std::ios_base::failbit);
+    current = std::min(current, bytes_.cend());
+    bytes_ = {current, std::size_t(bytes_.cend() - current)};
   }
 
   void begin_array(size_t &s)
@@ -174,13 +189,20 @@ struct binary_archive<false> : public binary_archive_base<std::istream, false>
     return eof_pos_ - stream_.tellg();
   }
 protected:
+  epee::span<const std::uint8_t> bytes_;
+  std::uint8_t const* const begin_;
   std::streamoff eof_pos_;
+  bool good_;
 };
 
 template <>
 struct binary_archive<true> : public binary_archive_base<std::ostream, true>
 {
   explicit binary_archive(stream_type &s) : base_type(s) { }
+  std::streampos getpos() const { return stream_.tellp(); }
+
+  bool good() const { return stream_.good(); }
+  void set_fail() { stream_.setstate(std::ios::failbit); }
 
   template <class T>
   void serialize_int(T v)
