@@ -147,6 +147,7 @@ namespace cryptonote
   void get_blob_hash(const epee::span<const char> &blob, crypto::hash &res);
   crypto::hash get_blob_hash(const blobdata &blob);
   crypto::hash get_blob_hash(const epee::span<const char> &blob);
+  crypto::hash get_blob_hash(const blobdata_ref& blob);
   std::string short_hash_str(const crypto::hash &h);
 
   bool get_output_asset_type(const cryptonote::tx_out& out, std::string& output_asset_type);
@@ -158,7 +159,7 @@ namespace cryptonote
   bool get_transaction_hash(const transaction &t, crypto::hash &res);
   bool get_transaction_hash(const transaction &t, crypto::hash &res, size_t &blob_size);
   bool get_transaction_hash(const transaction &t, crypto::hash &res, size_t *blob_size);
-  bool calculate_transaction_prunable_hash(const transaction &t, const cryptonote::blobdata *blob, crypto::hash &res);
+  bool calculate_transaction_prunable_hash(const transaction& t, const cryptonote::blobdata_ref *blob, crypto::hash& res);
   crypto::hash get_transaction_prunable_hash(const transaction &t, const cryptonote::blobdata *blob = NULL);
   bool calculate_transaction_hash(const transaction &t, crypto::hash &res, size_t *blob_size);
   crypto::hash get_pruned_transaction_hash(const transaction &t, const crypto::hash &pruned_data_hash);
@@ -202,9 +203,7 @@ namespace cryptonote
   template <class t_object>
   bool t_serializable_object_from_blob(t_object &to, const blobdata &b_blob)
   {
-    std::stringstream ss;
-    ss << b_blob;
-    binary_archive<false> ba(ss);
+    binary_archive<false> ba{epee::strspan<std::uint8_t>(b_blob)};
     bool r = ::serialization::serialize(ba, to);
     return r;
   }
