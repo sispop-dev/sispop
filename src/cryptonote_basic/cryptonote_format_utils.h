@@ -38,6 +38,7 @@
 #include "crypto/crypto.h"
 #include "crypto/hash.h"
 #include <unordered_map>
+#include <boost/multiprecision/cpp_int.hpp>
 
 namespace epee
 {
@@ -54,8 +55,10 @@ namespace cryptonote
   struct tx_verification_context;
   struct vote_verification_context;
   //---------------------------------------------------------------
-  void get_transaction_prefix_hash(const transaction_prefix &tx, crypto::hash &h);
-  crypto::hash get_transaction_prefix_hash(const transaction_prefix &tx);
+  void get_transaction_prefix_hash(const transaction_prefix& tx, crypto::hash& h, hw::device &hwdev);
+  crypto::hash get_transaction_prefix_hash(const transaction_prefix& tx, hw::device &hwdev);
+  void get_transaction_prefix_hash(const transaction_prefix& tx, crypto::hash& h);
+  crypto::hash get_transaction_prefix_hash(const transaction_prefix& tx);
   bool parse_and_validate_tx_prefix_from_blob(const blobdata &tx_blob, transaction_prefix &tx);
   bool parse_and_validate_tx_from_blob(const blobdata &tx_blob, transaction &tx, crypto::hash &tx_hash, crypto::hash &tx_prefix_hash);
   bool parse_and_validate_tx_from_blob(const blobdata &tx_blob, transaction &tx, crypto::hash &tx_hash);
@@ -88,7 +91,7 @@ namespace cryptonote
   }
 
   bool parse_tx_extra(const std::vector<uint8_t> &tx_extra, std::vector<tx_extra_field> &tx_extra_fields);
-  bool sort_tx_extra(const std::vector<uint8_t> &tx_extra, std::vector<uint8_t> &sorted_tx_extra, bool allow_partial = false);
+  bool sort_tx_extra(const std::vector<uint8_t>& tx_extra, std::vector<uint8_t> &sorted_tx_extra, bool allow_partial = false);
   crypto::public_key get_tx_pub_key_from_extra(const std::vector<uint8_t> &tx_extra, size_t pk_index = 0);
   crypto::public_key get_tx_pub_key_from_extra(const transaction_prefix &tx, size_t pk_index = 0);
   crypto::public_key get_tx_pub_key_from_extra(const transaction &tx, size_t pk_index = 0);
@@ -161,6 +164,7 @@ namespace cryptonote
   bool get_transaction_hash(const transaction &t, crypto::hash &res, size_t *blob_size);
   bool calculate_transaction_prunable_hash(const transaction& t, const cryptonote::blobdata_ref *blob, crypto::hash& res);
   crypto::hash get_transaction_prunable_hash(const transaction &t, const cryptonote::blobdata *blob = NULL);
+  crypto::hash get_transaction_prunable_hash(const transaction& t, const cryptonote::blobdata_ref *blob = NULL);
   bool calculate_transaction_hash(const transaction &t, crypto::hash &res, size_t *blob_size);
   crypto::hash get_pruned_transaction_hash(const transaction &t, const crypto::hash &pruned_data_hash);
   blobdata get_block_hashing_blob(const block &b);
@@ -213,7 +217,7 @@ namespace cryptonote
   {
     std::stringstream ss;
     binary_archive<true> ba(ss);
-    bool r = ::serialization::serialize(ba, const_cast<t_object &>(to));
+    bool r = ::serialization::serialize(ba, const_cast<t_object&>(to));
     b_blob = ss.str();
     return r;
   }
