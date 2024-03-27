@@ -318,7 +318,7 @@ namespace rct {
         {
           FIELD(type)
           if (type == RCTTypeNull)
-            return ar.stream().good();
+            return ar.good();
           if (type != RCTTypeFull && type != RCTTypeSimple && type != RCTTypeBulletproof && type != RCTTypeBulletproof2 && type != RCTTypeCLSAG && type != RCTTypeBulletproofPlus)
             return false;
           VARINT_FIELD(txnFee)
@@ -393,7 +393,7 @@ namespace rct {
             ar.end_array();
           }
 
-          return ar.stream().good();
+          return ar.good();
         }
         
         BEGIN_SERIALIZE_OBJECT()
@@ -425,7 +425,7 @@ namespace rct {
           if (mixin >= 0xffffffff)
             return false;
           if (type == RCTTypeNull)
-            return ar.stream().good();
+            return ar.good();
           if (type != RCTTypeFull && type != RCTTypeSimple && type != RCTTypeBulletproof && type != RCTTypeBulletproof2 && type != RCTTypeCLSAG && type != RCTTypeBulletproofPlus)
             return false;
           if (type == RCTTypeBulletproofPlus)
@@ -590,7 +590,7 @@ namespace rct {
             }
             ar.end_array();
           }
-          return ar.stream().good();
+          return ar.good();
         }
 
         BEGIN_SERIALIZE_OBJECT()
