@@ -1,4 +1,4 @@
-// Copyright (c) 2017-2019, The Monero Project
+// Copyright (c) 2017-2024, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -280,6 +280,11 @@ namespace hw {
             cryptonote::keypair txkey = cryptonote::keypair::generate(*this);
             tx_key = txkey.sec;
             return true;
+        }
+
+        void device_default::get_transaction_prefix_hash(const cryptonote::transaction_prefix &tx, crypto::hash &h)
+        {
+            cryptonote::get_transaction_prefix_hash(tx, h);
         }
 
         bool device_default::generate_output_ephemeral_keys(const size_t tx_version,
