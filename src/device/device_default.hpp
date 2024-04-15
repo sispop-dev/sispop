@@ -112,6 +112,9 @@ namespace hw {
                                    crypto::signature &sig) override;
 
             bool  open_tx(crypto::secret_key &tx_key) override;
+            void get_transaction_prefix_hash(const cryptonote::transaction_prefix& tx, crypto::hash& h) override;
+
+            bool generate_output_ephemeral_keys(const size_t tx_version, const cryptonote::account_keys &sender_account_keys, const crypto::public_key &txkey_pub, const crypto::secret_key &tx_key, const cryptonote::tx_destination_entry &dst_entr, const boost::optional<cryptonote::account_public_address> &change_addr, const size_t output_index, const bool &need_additional_txkeys, const std::vector<crypto::secret_key> &additional_tx_keys, std::vector<crypto::public_key> &additional_tx_public_keys, std::vector<rct::key> &amount_keys, crypto::public_key &out_eph_public_key);
 
             bool  encrypt_payment_id(crypto::hash8 &payment_id, const crypto::public_key &public_key, const crypto::secret_key &secret_key) override;
 
@@ -132,6 +135,10 @@ namespace hw {
             bool  mlsag_prepare(rct::key &a, rct::key &aG) override;
             bool  mlsag_hash(const rct::keyV &long_message, rct::key &c) override;
             bool  mlsag_sign(const rct::key &c, const rct::keyV &xx, const rct::keyV &alpha, const size_t rows, const size_t dsRows, rct::keyV &ss) override;
+
+            bool clsag_prepare(const rct::key &p, const rct::key &z, rct::key &I, rct::key &D, const rct::key &H, rct::key &a, rct::key &aG, rct::key &aH) override;
+            bool clsag_hash(const rct::keyV &data, rct::key &hash) override;
+            bool clsag_sign(const rct::key &c, const rct::key &a, const rct::key &p, const rct::key &z, const rct::key &mu_P, const rct::key &mu_C, rct::key &s) override;
 
             bool  close_tx(void) override;
         };

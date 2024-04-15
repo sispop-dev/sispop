@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2019, The Monero Project
+// Copyright (c) 2014-2024, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -37,6 +37,7 @@
 #include <vector>
 #include <random>
 
+#include "common/pod-class.h"
 #include "memwipe.h"
 #include "mlocker.h"
 #include "generic-ops.h"
@@ -60,7 +61,9 @@ namespace crypto {
     char data[32];
   };
 
-  struct public_key : ec_point {};
+  struct public_key : ec_point {
+    friend class crypto_ops;
+  };
 
   using secret_key = epee::mlocked<tools::scrubbed<ec_scalar>>;
 
@@ -89,6 +92,11 @@ namespace crypto {
 
     // Returns true if non-null, i.e. not 0.
     operator bool() const { static constexpr char null[64] = {0}; return memcmp(this, null, sizeof(null)); }
+  };
+
+  POD_CLASS view_tag
+  {
+    char data;
   };
 
   // The sizes below are all provided by sodium.h, but we don't want to depend on it here; we check

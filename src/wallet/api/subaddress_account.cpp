@@ -53,20 +53,19 @@ void SubaddressAccountImpl::setLabel(uint32_t accountIndex, const std::string &l
   refresh();
 }
 
-void SubaddressAccountImpl::refresh() 
+void SubaddressAccountImpl::refresh()
 {
   LOG_PRINT_L2("Refreshing subaddress account");
-  
+
   clearRows();
   for (uint32_t i = 0; i < m_wallet->m_wallet->get_num_subaddress_accounts(); ++i)
   {
     m_rows.push_back(new SubaddressAccountRow(
-      i,
-      m_wallet->m_wallet->get_subaddress_as_str({i,0}),
-      m_wallet->m_wallet->get_subaddress_label({i,0}),
-      cryptonote::print_money(m_wallet->m_wallet->balance(i)),
-      cryptonote::print_money(m_wallet->m_wallet->unlocked_balance(i))
-    ));
+        i,
+        m_wallet->m_wallet->get_subaddress_as_str({i, 0}),
+        m_wallet->m_wallet->get_subaddress_label({i, 0}),
+        cryptonote::print_money(m_wallet->m_wallet->balance("SISPOP", i, false)),
+        cryptonote::print_money(m_wallet->m_wallet->unlocked_balance("SISPOP", i, false))));
   }
 }
 

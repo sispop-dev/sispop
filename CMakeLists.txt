@@ -256,6 +256,33 @@ if (BUILD_TESTS)
   add_definitions(-DUNIT_TEST)
 endif()
 
+function (monero_set_target_strip target)
+  if (STRIP_TARGETS)
+    set_target_properties("${target}" PROPERTIES LINK_FLAGS_RELEASE -s)
+    set_target_properties("${target}" PROPERTIES LINK_FLAGS_DEBUG -s)
+    # Stripping from Debug might make sense if you're low on disk space, but want to test if debug version builds properly.
+  endif()
+endfunction()
+  
+function (monero_set_target_no_relink target)
+  if (RELINK_TARGETS MATCHES OFF)
+    # Will not relink the target, when just its dependant .so has changed, but not it's interface
+    set_target_properties("${target}" PROPERTIES LINK_DEPENDS_NO_SHARED true)
+  endif()
+endfunction()
+
+function (monero_add_minimal_executable name)
+  source_group("${name}"
+    FILES
+      ${ARGN})
+
+  add_executable("${name}"
+    ${ARGN})
+    monero_set_target_no_relink("${name}")
+    monero_set_target_strip    ("${name}")
+endfunction()
+
+
 find_package(Git)
 if(NOT MANUAL_SUBMODULES)
   if(GIT_FOUND)

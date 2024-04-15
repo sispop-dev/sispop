@@ -236,6 +236,17 @@ namespace rct {
         }
     }
 
+    bool is_rct_bulletproof_plus(int type)
+    {
+        switch (type)
+        {
+        case RCTTypeBulletproofPlus:
+            return true;
+        default:
+            return false;
+        }
+    }
+
     bool is_rct_borromean(int type)
     {
         switch (type)

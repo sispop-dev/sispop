@@ -1,21 +1,21 @@
 // Copyright (c) 2014-2018, The Monero Project
-// 
+//
 // All rights reserved.
-// 
+//
 // Redistribution and use in source and binary forms, with or without modification, are
 // permitted provided that the following conditions are met:
-// 
+//
 // 1. Redistributions of source code must retain the above copyright notice, this list of
 //    conditions and the following disclaimer.
-// 
+//
 // 2. Redistributions in binary form must reproduce the above copyright notice, this list
 //    of conditions and the following disclaimer in the documentation and/or other
 //    materials provided with the distribution.
-// 
+//
 // 3. Neither the name of the copyright holder nor the names of its contributors may be
 //    used to endorse or promote products derived from this software without specific
 //    prior written permission.
-// 
+//
 // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY
 // EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
 // MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
@@ -25,7 +25,7 @@
 // INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-// 
+//
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include <cstring>
@@ -60,7 +60,8 @@ struct Struct
 template <class Archive>
 struct serializer<Archive, Struct>
 {
-  static bool serialize(Archive &ar, Struct &s) {
+  static bool serialize(Archive &ar, Struct &s)
+  {
     ar.begin_object();
     ar.tag("a");
     ar.serialize_int(s.a);
@@ -79,8 +80,8 @@ struct Struct1
   vector<int16_t> vi;
 
   BEGIN_SERIALIZE_OBJECT()
-    FIELD(si)
-    FIELD(vi)
+  FIELD(si)
+  FIELD(vi)
   END_SERIALIZE()
   /*template <bool W, template <bool> class Archive>
   bool do_serialize(Archive<W> &ar)
@@ -99,7 +100,7 @@ struct Blob
   uint64_t a;
   uint32_t b;
 
-  bool operator==(const Blob& rhs) const
+  bool operator==(const Blob &rhs) const
   {
     return a == rhs.a;
   }
@@ -121,7 +122,8 @@ bool try_parse(const string &blob)
   return serialization::parse_binary(blob, s1);
 }
 
-TEST(Serialization, BinaryArchiveInts) {
+TEST(Serialization, BinaryArchiveInts)
+{
   uint64_t x = 0xff00000000, x1;
 
   ostringstream oss;
@@ -140,7 +142,8 @@ TEST(Serialization, BinaryArchiveInts) {
   ASSERT_EQ(x, x1);
 }
 
-TEST(Serialization, BinaryArchiveVarInts) {
+TEST(Serialization, BinaryArchiveVarInts)
+{
   uint64_t x = 0xff00000000, x1;
 
   ostringstream oss;
@@ -157,7 +160,8 @@ TEST(Serialization, BinaryArchiveVarInts) {
   ASSERT_EQ(x, x1);
 }
 
-TEST(Serialization, Test1) {
+TEST(Serialization, Test1)
+{
   ostringstream str;
   binary_archive<true> ar(str);
 
@@ -185,8 +189,9 @@ TEST(Serialization, Test1) {
   ASSERT_FALSE(try_parse(blob));
 }
 
-TEST(Serialization, Overflow) {
-  Blob x = { 0xff00000000 };
+TEST(Serialization, Overflow)
+{
+  Blob x = {0xff00000000};
   Blob x1;
 
   string blob;
@@ -291,11 +296,11 @@ TEST(Serialization, serializes_vector_int64_as_fixed_int)
 
 namespace
 {
-  template<typename T>
-  std::vector<T> linearize_vector2(const std::vector< std::vector<T> >& vec_vec)
+  template <typename T>
+  std::vector<T> linearize_vector2(const std::vector<std::vector<T>> &vec_vec)
   {
     std::vector<T> res;
-    for (const auto& vec : vec_vec)
+    for (const auto &vec : vec_vec)
     {
       res.insert(res.end(), vec.begin(), vec.end());
     }
@@ -406,14 +411,14 @@ TEST(Serialization, serializes_transacion_signatures_correctly)
   ASSERT_FALSE(serialization::parse_binary(blob, tx1));
 
   // Not enough signature vectors for all inputs
-  txin_to_key txin_to_key1;
-  txin_to_key1.amount = 1;
-  memset(&txin_to_key1.k_image, 0x42, sizeof(crypto::key_image));
-  txin_to_key1.key_offsets.push_back(12);
-  txin_to_key1.key_offsets.push_back(3453);
+  txin_sispop_key txin_sispop_key1;
+  txin_sispop_key1.amount = 1;
+  memset(&txin_sispop_key1.k_image, 0x42, sizeof(crypto::key_image));
+  txin_sispop_key1.key_offsets.push_back(12);
+  txin_sispop_key1.key_offsets.push_back(3453);
   tx.vin.clear();
-  tx.vin.push_back(txin_to_key1);
-  tx.vin.push_back(txin_to_key1);
+  tx.vin.push_back(txin_sispop_key1);
+  tx.vin.push_back(txin_sispop_key1);
   tx.signatures.resize(1);
   tx.signatures[0].resize(2);
   tx.invalidate_hashes();
@@ -578,20 +583,20 @@ TEST(Serialization, serializes_ringct_types)
   pc.push_back(pctmp);
   vector<uint64_t> amounts;
   rct::keyV amount_keys;
-  //add output 500
+  // add output 500
   amounts.push_back(500);
   amount_keys.push_back(rct::hash_to_scalar(rct::zero()));
   rct::keyV destinations;
   rct::key Sk, Pk;
   rct::skpkGen(Sk, Pk);
   destinations.push_back(Pk);
-  //add output for 12500
+  // add output for 12500
   amounts.push_back(12500);
   amount_keys.push_back(rct::hash_to_scalar(rct::zero()));
   rct::skpkGen(Sk, Pk);
   destinations.push_back(Pk);
-  //compute rct data with mixin 3
-  const rct::RCTConfig rct_config{ rct::RangeProofPaddedBulletproof, 0 };
+  // compute rct data with mixin 3
+  const rct::RCTConfig rct_config{rct::RangeProofPaddedBulletproof, 0};
   s0 = rct::genRctSimple(rct::zero(), sc, pc, destinations, inamounts, amounts, amount_keys, NULL, NULL, 0, 3, rct_config, hw::get_device("default"));
 
   mg0 = s0.p.MGs[0];
