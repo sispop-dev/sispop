@@ -34,6 +34,7 @@
 #include <boost/thread/tss.hpp>
 
 #include <lmdb.h>
+#include "oracle/asset_types.h"
 
 #define ENABLE_AUTO_RESIZE
 
@@ -297,14 +298,16 @@ public:
   bool for_all_outputs(std::function<bool(uint64_t amount, const crypto::hash &tx_hash, uint64_t height, size_t tx_idx)> f) const override;
   bool for_all_outputs(uint64_t amount, const std::function<bool(uint64_t height)> &f) const override;
   bool for_all_alt_blocks(std::function<bool(const crypto::hash &blkid, const alt_block_data_t &data, const cryptonote::blobdata *block_blob, const cryptonote::blobdata *checkpoint_blob)> f, bool include_blob = false) const override;
-
-  uint64_t add_block( const std::pair<block, blobdata>& blk
+  
+  virtual uint64_t add_block( const std::pair<block, blobdata>& blk
                             , size_t block_weight
                             , uint64_t long_term_block_weight
                             , const difficulty_type& cumulative_difficulty
                             , const uint64_t& coins_generated
+                            , const uint64_t& reserve_reward
                             , const std::vector<std::pair<transaction, blobdata>>& txs
                             ) override;
+
   void update_block_checkpoint(checkpoint_t const &checkpoint) override;
   void remove_block_checkpoint(uint64_t height) override;
   bool get_block_checkpoint   (uint64_t height, checkpoint_t &checkpoint) const override;
@@ -358,14 +361,16 @@ private:
   void check_and_resize_for_batch(uint64_t batch_num_blocks, uint64_t batch_bytes);
   uint64_t get_estimated_batch_size(uint64_t batch_num_blocks, uint64_t batch_bytes) const;
 
-  void add_block( const block& blk
+  virtual void add_block( const block& blk
                 , size_t block_weight
                 , uint64_t long_term_block_weight
                 , const difficulty_type& cumulative_difficulty
                 , const uint64_t& coins_generated
+                , const uint64_t& reserve_reward
                 , uint64_t num_rct_outs
+                , oracle::asset_type_counts& cum_rct_by_asset_type
                 , const crypto::hash& block_hash
-                ) override;
+              ) override;
 
   void remove_block() override;
 

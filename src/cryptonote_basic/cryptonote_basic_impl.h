@@ -34,6 +34,12 @@
 #include "crypto/crypto.h"
 #include "crypto/hash.h"
 
+// Forward declaration of block and transaction types
+namespace cryptonote {
+    struct block;
+    class transaction;
+}
+
 
 namespace cryptonote {
   class BlockAddedHook

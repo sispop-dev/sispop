@@ -1,21 +1,21 @@
 // Copyright (c) 2014-2018, The Monero Project
-// 
+//
 // All rights reserved.
-// 
+//
 // Redistribution and use in source and binary forms, with or without modification, are
 // permitted provided that the following conditions are met:
-// 
+//
 // 1. Redistributions of source code must retain the above copyright notice, this list of
 //    conditions and the following disclaimer.
-// 
+//
 // 2. Redistributions in binary form must reproduce the above copyright notice, this list
 //    of conditions and the following disclaimer in the documentation and/or other
 //    materials provided with the distribution.
-// 
+//
 // 3. Neither the name of the copyright holder nor the names of its contributors may be
 //    used to endorse or promote products derived from this software without specific
 //    prior written permission.
-// 
+//
 // THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY
 // EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF
 // MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL
@@ -25,7 +25,7 @@
 // INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-// 
+//
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include "chaingen.h"
@@ -36,7 +36,7 @@ using namespace cryptonote;
 
 namespace
 {
-  void split_miner_tx_outs(transaction& miner_tx, uint64_t amount_1)
+  void split_miner_tx_outs(transaction &miner_tx, uint64_t amount_1)
   {
     uint64_t total_amount = get_outs_money_amount(miner_tx);
     uint64_t amount_2 = total_amount - amount_1;
@@ -55,11 +55,11 @@ namespace
     miner_tx.vout.push_back(out2);
   }
 
-  void append_tx_source_entry(std::vector<cryptonote::tx_source_entry>& sources, const transaction& tx, size_t out_idx)
+  void append_tx_source_entry(std::vector<cryptonote::tx_source_entry> &sources, const transaction &tx, size_t out_idx)
   {
     cryptonote::tx_source_entry se;
     se.amount = tx.vout[out_idx].amount;
-    se.push_output(0, boost::get<cryptonote::txout_to_key>(tx.vout[out_idx].target).key, se.amount);
+    se.push_output(0, boost::get<cryptonote::txout_sispop_tagged_key>(tx.vout[out_idx].target).key, se.amount);
     se.real_output = 0;
     se.rct = false;
     se.real_out_tx_key = get_tx_pub_key_from_extra(tx);
@@ -73,22 +73,22 @@ namespace
 //======================================================================================================================
 
 gen_uint_overflow_base::gen_uint_overflow_base()
-  : m_last_valid_block_event_idx(static_cast<size_t>(-1))
+    : m_last_valid_block_event_idx(static_cast<size_t>(-1))
 {
   REGISTER_CALLBACK_METHOD(gen_uint_overflow_1, mark_last_valid_block);
 }
 
-bool gen_uint_overflow_base::check_tx_verification_context(const cryptonote::tx_verification_context& tvc, bool tx_added, size_t event_idx, const cryptonote::transaction& /*tx*/)
+bool gen_uint_overflow_base::check_tx_verification_context(const cryptonote::tx_verification_context &tvc, bool tx_added, size_t event_idx, const cryptonote::transaction & /*tx*/)
 {
   return m_last_valid_block_event_idx < event_idx ? !tx_added && tvc.m_verifivation_failed : tx_added && !tvc.m_verifivation_failed;
 }
 
-bool gen_uint_overflow_base::check_block_verification_context(const cryptonote::block_verification_context& bvc, size_t event_idx, const cryptonote::block& /*block*/)
+bool gen_uint_overflow_base::check_block_verification_context(const cryptonote::block_verification_context &bvc, size_t event_idx, const cryptonote::block & /*block*/)
 {
   return m_last_valid_block_event_idx < event_idx ? bvc.m_verifivation_failed | bvc.m_marked_as_orphaned : !bvc.m_verifivation_failed;
 }
 
-bool gen_uint_overflow_base::mark_last_valid_block(cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry>& events)
+bool gen_uint_overflow_base::mark_last_valid_block(cryptonote::core &c, size_t ev_index, const std::vector<test_event_entry> &events)
 {
   m_last_valid_block_event_idx = ev_index - 1;
   return true;
@@ -96,7 +96,7 @@ bool gen_uint_overflow_base::mark_last_valid_block(cryptonote::core& c, size_t e
 
 //======================================================================================================================
 
-bool gen_uint_overflow_1::generate(std::vector<test_event_entry>& events) const
+bool gen_uint_overflow_1::generate(std::vector<test_event_entry> &events) const
 {
   std::vector<std::pair<uint8_t, uint64_t>> hard_forks = sispop_generate_sequential_hard_fork_table();
   sispop_chain_generator gen(events, hard_forks);
@@ -105,12 +105,12 @@ bool gen_uint_overflow_1::generate(std::vector<test_event_entry>& events) const
   gen.add_n_blocks(40);
   gen.add_mined_money_unlock_blocks();
 
-  cryptonote::account_base bob   = gen.add_account();
+  cryptonote::account_base bob = gen.add_account();
   cryptonote::account_base alice = gen.add_account();
 
   // Problem 1. Miner tx outputs overflow
   {
-    sispop_blockchain_entry entry       = gen.create_next_block();
+    sispop_blockchain_entry entry = gen.create_next_block();
     cryptonote::transaction &miner_tx = entry.block.miner_tx;
     split_miner_tx_outs(miner_tx, MONEY_SUPPLY);
     gen.add_block(entry, false /*can_be_added_to_blockchain*/, "We purposely overflow miner tx by MONEY_SUPPLY in the miner tx");
@@ -123,9 +123,9 @@ bool gen_uint_overflow_1::generate(std::vector<test_event_entry>& events) const
       std::vector<cryptonote::transaction> txs;
       txs.push_back(gen.create_and_add_tx(gen.first_miner_, alice.get_keys().m_account_address, MK_COINS(1), MK_COINS(100) /*fee*/, false /*kept_by_block*/));
 
-      sispop_blockchain_entry entry       = gen.create_next_block(txs);
+      sispop_blockchain_entry entry = gen.create_next_block(txs);
       cryptonote::transaction &miner_tx = entry.block.miner_tx;
-      miner_tx.vout[0].amount           = 0; // Take partial block reward, fee > block_reward so ordinarly it would overflow. This should be disallowed
+      miner_tx.vout[0].amount = 0; // Take partial block reward, fee > block_reward so ordinarly it would overflow. This should be disallowed
       gen.add_block(entry, false /*can_be_added_to_blockchain*/, "We should not be able to add TX because the fee is greater than the base miner reward");
     }
 
@@ -134,9 +134,9 @@ bool gen_uint_overflow_1::generate(std::vector<test_event_entry>& events) const
       std::vector<cryptonote::transaction> txs;
       txs.push_back(gen.create_and_add_tx(gen.first_miner_, alice.get_keys().m_account_address, MK_COINS(1), MK_COINS(100) /*fee*/, true /*kept_by_block*/));
 
-      sispop_blockchain_entry entry       = gen.create_next_block(txs);
+      sispop_blockchain_entry entry = gen.create_next_block(txs);
       cryptonote::transaction &miner_tx = entry.block.miner_tx;
-      miner_tx.vout[0].amount           = 0; // Take partial block reward, fee > block_reward so ordinarly it would overflow. This should be disallowed
+      miner_tx.vout[0].amount = 0; // Take partial block reward, fee > block_reward so ordinarly it would overflow. This should be disallowed
       gen.add_block(entry, false /*can_be_added_to_blockchain*/, "We should not be able to add TX because the fee is greater than the base miner reward even if kept_by_block is true");
     }
   }
@@ -145,7 +145,7 @@ bool gen_uint_overflow_1::generate(std::vector<test_event_entry>& events) const
 
 //======================================================================================================================
 
-bool gen_uint_overflow_2::generate(std::vector<test_event_entry>& events) const
+bool gen_uint_overflow_2::generate(std::vector<test_event_entry> &events) const
 {
   uint64_t ts_start = 1338224400;
 
@@ -172,7 +172,7 @@ bool gen_uint_overflow_2::generate(std::vector<test_event_entry>& events) const
   }
 
   std::vector<cryptonote::tx_destination_entry> destinations;
-  const account_public_address& bob_addr = bob_account.get_keys().m_account_address;
+  const account_public_address &bob_addr = bob_account.get_keys().m_account_address;
   destinations.push_back(tx_destination_entry(MONEY_SUPPLY, bob_addr, false));
   destinations.push_back(tx_destination_entry(MONEY_SUPPLY - 1, bob_addr, false));
   // sources.front().amount = destinations[0].amount + destinations[2].amount + destinations[3].amount + TESTS_DEFAULT_FEE
@@ -190,7 +190,7 @@ bool gen_uint_overflow_2::generate(std::vector<test_event_entry>& events) const
   sources.clear();
   for (size_t i = 0; i < tx_1.vout.size(); ++i)
   {
-    auto& tx_1_out = tx_1.vout[i];
+    auto &tx_1_out = tx_1.vout[i];
     if (tx_1_out.amount < MONEY_SUPPLY - 1)
       continue;
 

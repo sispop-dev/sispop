@@ -1,4 +1,4 @@
-// Copyright (c) 2014-2019, The Monero Project
+// Copyright (c) 2014-2024, The Monero Project
 // 
 // All rights reserved.
 // 
@@ -34,6 +34,9 @@
 #include <boost/serialization/utility.hpp>
 #include "ringct/rctOps.h"
 #include "cryptonote_core/service_node_list.h"
+#include "oracle/pricing_record.h"
+#include "cryptonote_protocol/enums.h"
+#include <boost/multiprecision/cpp_int.hpp>
 
 namespace cryptonote
 {
@@ -118,6 +121,9 @@ namespace cryptonote
     bool rct;                           //true if the output is rct
     rct::key mask;                      //ringct amount mask
     rct::multisig_kLRki multisig_kLRki; //multisig info
+    uint64_t height;
+    oracle::pricing_record pr;
+    std::string asset_type;
 
     void push_output(uint64_t idx, const crypto::public_key &k, uint64_t amount) { outputs.push_back(std::make_pair(idx, rct::ctkey({rct::pk2rct(k), rct::zeroCommit(amount)}))); }
 
@@ -140,26 +146,40 @@ namespace cryptonote
   struct tx_destination_entry
   {
     std::string original;
-    uint64_t amount;                    //money
-    account_public_address addr;        //destination address
+    uint64_t amount;             // destination money in source asset
+    uint64_t dest_amount;        // destination money in dest asset
+    std::string dest_asset_type; // destination asset type
+    account_public_address addr; // destination address
     bool is_subaddress;
     bool is_integrated;
 
-    tx_destination_entry() : amount(0), addr{}, is_subaddress(false), is_integrated(false) { }
-    tx_destination_entry(uint64_t a, const account_public_address &ad, bool is_subaddress) : amount(a), addr(ad), is_subaddress(is_subaddress), is_integrated(false) { }
-    tx_destination_entry(const std::string &o, uint64_t a, const account_public_address &ad, bool is_subaddress) : original(o), amount(a), addr(ad), is_subaddress(is_subaddress), is_integrated(false) { }
+    tx_destination_entry() : amount(0), dest_amount(0), addr(AUTO_VAL_INIT(addr)), is_subaddress(false), is_integrated(false), dest_asset_type("SISPOP") {}
+    tx_destination_entry(uint64_t a, const account_public_address &ad, bool is_subaddress) : amount(a), dest_amount(a), addr(ad), is_subaddress(is_subaddress), is_integrated(false), dest_asset_type("SISPOP") {}
+    tx_destination_entry(const std::string &o, uint64_t a, const account_public_address &ad, bool is_subaddress) : original(o), amount(a), addr(ad), is_subaddress(is_subaddress), is_integrated(false), dest_asset_type("SISPOP") {}
 
-    bool operator==(const tx_destination_entry& other) const
+    std::string address(network_type nettype, const crypto::hash &payment_id) const
     {
-      return amount == other.amount && addr == other.addr;
+      if (!original.empty())
+      {
+        return original;
+      }
+
+      if (is_integrated)
+      {
+        return get_account_integrated_address_as_str(nettype, addr, reinterpret_cast<const crypto::hash8 &>(payment_id));
+      }
+
+      return get_account_address_as_str(nettype, is_subaddress, addr);
     }
 
     BEGIN_SERIALIZE_OBJECT()
-      FIELD(original)
-      VARINT_FIELD(amount)
-      FIELD(addr)
-      FIELD(is_subaddress)
-      FIELD(is_integrated)
+    FIELD(original)
+    VARINT_FIELD(amount)
+    VARINT_FIELD(dest_amount)
+    FIELD(dest_asset_type)
+    FIELD(addr)
+    FIELD(is_subaddress)
+    FIELD(is_integrated)
     END_SERIALIZE()
   };
 
@@ -193,12 +213,7 @@ namespace cryptonote
                                       std::vector<rct::key> &amount_keys,
                                       crypto::public_key &out_eph_public_key);
 
-  bool generate_output_ephemeral_keys(const size_t tx_version, const cryptonote::account_keys &sender_account_keys, const crypto::public_key &txkey_pub,  const crypto::secret_key &tx_key,
-                                      const cryptonote::tx_destination_entry &dst_entr, const boost::optional<cryptonote::account_public_address> &change_addr, const size_t output_index,
-                                      const bool &need_additional_txkeys, const std::vector<crypto::secret_key> &additional_tx_keys,
-                                      std::vector<crypto::public_key> &additional_tx_public_keys,
-                                      std::vector<rct::key> &amount_keys,
-                                      crypto::public_key &out_eph_public_key) ;
+  bool generate_output_ephemeral_keys(const size_t tx_version, const cryptonote::account_keys &sender_account_keys, const crypto::public_key &txkey_pub, const crypto::secret_key &tx_key, const cryptonote::tx_destination_entry &dst_entr, const boost::optional<cryptonote::account_public_address> &change_addr, const size_t output_index, const bool &need_additional_txkeys, const std::vector<crypto::secret_key> &additional_tx_keys, std::vector<crypto::public_key> &additional_tx_public_keys, std::vector<rct::key> &amount_keys, crypto::public_key &out_eph_public_key);
 
   bool generate_genesis_block(
       block& bl
@@ -213,6 +228,52 @@ namespace cryptonote
   crypto::hash get_block_longhash(const Blockchain *pb, const block& b, const uint64_t height, const int miners);
   void get_block_longhash_reorg(const uint64_t split_height);
 
+  void get_reserve_info(
+      const std::vector<std::pair<std::string, std::string>> &circ_amounts,
+      const oracle::pricing_record &pricing_record,
+      boost::multiprecision::uint128_t &sispop_reserve,
+      boost::multiprecision::uint128_t &num_stables,
+      boost::multiprecision::uint128_t &num_reserves,
+      boost::multiprecision::uint128_t &assets,
+      boost::multiprecision::uint128_t &assets_ma,
+      boost::multiprecision::uint128_t &liabilities,
+      boost::multiprecision::uint128_t &equity,
+      boost::multiprecision::uint128_t &equity_ma,
+      double &reserve_ratio,
+      double &reserve_ratio_ma);
+
+  double get_reserve_ratio(const std::vector<std::pair<std::string, std::string>> &circ_amounts, const uint64_t oracle_price);
+  double get_spot_reserve_ratio(const std::vector<std::pair<std::string, std::string>> &circ_amounts, const oracle::pricing_record &pr);
+  double get_ma_reserve_ratio(const std::vector<std::pair<std::string, std::string>> &circ_amounts, const oracle::pricing_record &pr);
+
+  bool reserve_ratio_satisfied(
+      const std::vector<std::pair<std::string, std::string>> &circ_amounts,
+      const oracle::pricing_record &pr,
+      const transaction_type &tx_type,
+      boost::multiprecision::int128_t tally_sispop,
+      boost::multiprecision::int128_t tally_stables,
+      boost::multiprecision::int128_t tally_reserves);
+  bool reserve_ratio_satisfied(
+      const std::vector<std::pair<std::string, std::string>> &circ_amounts,
+      const oracle::pricing_record &pr,
+      const transaction_type &tx_type,
+      boost::multiprecision::int128_t tally_sispop,
+      boost::multiprecision::int128_t tally_stables,
+      boost::multiprecision::int128_t tally_reserves,
+      std::string &error_reason);
+
+  uint64_t get_stable_coin_price(const std::vector<std::pair<std::string, std::string>> &circ_amounts, uint64_t oracle_price);
+  uint64_t get_reserve_coin_price(const std::vector<std::pair<std::string, std::string>> &circ_amounts, uint64_t exchange_rate);
+
+  uint64_t sispoprsv_to_sispop(const uint64_t amount, const oracle::pricing_record &pr);
+  uint64_t sispop_to_sispoprsv(const uint64_t amount, const oracle::pricing_record &pr);
+  uint64_t sispop_to_sispopusd(const uint64_t amount, const oracle::pricing_record &pr);
+  uint64_t sispopusd_to_sispop(const uint64_t amount, const oracle::pricing_record &pr);
+
+  uint64_t sispop_to_asset_fee(const uint64_t amount, const uint64_t exchange_rate);
+  uint64_t asset_to_sispop_fee(const uint64_t amount, const uint64_t exchange_rate);
+  uint64_t get_fee_in_sispop_equivalent(const std::string &fee_asset, uint64_t fee_amount, const oracle::pricing_record &pr);
+  uint64_t get_fee_in_asset_equivalent(const std::string &to_asset_type, uint64_t fee_amount, const oracle::pricing_record &pr);
 }
 
 BOOST_CLASS_VERSION(cryptonote::tx_source_entry, 1)
