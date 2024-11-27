@@ -135,7 +135,8 @@ namespace cryptonote
 
   uint64_t governance_reward_formula(uint64_t base_reward, uint8_t hf_version)
   {
-    return hf_version >= network_version_17     ? FOUNDATION_REWARD_HF17 :
+    return hf_version >= network_version_19     ? FOUNDATION_REWARD_HF19 :
+           hf_version >= network_version_17     ? FOUNDATION_REWARD_HF17 :
            hf_version >= network_version_16     ? FOUNDATION_REWARD_HF16 :
            hf_version >= network_version_15_lns ? FOUNDATION_REWARD_HF15 :
            base_reward / 20;
@@ -156,7 +157,7 @@ namespace cryptonote
       return true;
 
     const cryptonote::config_t &network = cryptonote::get_config(nettype, hard_fork_version);
-    if (height % network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS != 0)
+    if (height % network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS != 0 || height % network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS_V2 != 0)
     {
       return false;
     }
@@ -201,6 +202,7 @@ namespace cryptonote
   uint64_t service_node_reward_formula(uint64_t base_reward, uint8_t hard_fork_version)
   {
     return
+      hard_fork_version >= network_version_19              ? SN_REWARD_HF19 :
       hard_fork_version >= network_version_17              ? SN_REWARD_HF17 :
       hard_fork_version >= network_version_16              ? SN_REWARD_HF16 :
       hard_fork_version >= network_version_15_lns          ? SN_REWARD_HF15 :

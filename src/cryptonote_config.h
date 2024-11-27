@@ -217,6 +217,8 @@ namespace config
   const unsigned char HASH_KEY_TXPROOF_V2[] = "TXPROOF_V2";
 
   uint64_t const GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS = ((60 * 60 * 24 * 7) / DIFFICULTY_TARGET_V2);
+  uint64_t const GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS_V2 = 50;
+
   std::string const GOVERNANCE_WALLET_ADDRESS[] =
   {
     "49HsfhWTvKZgc4qH1hwcEpM99Ng2TqmcxVHJoSkSQvV3N9iVJP1NT6gJTWRvuTWMNqeDgHNUcrpYVdnXW5Ep33W33YfwqRe",
@@ -287,6 +289,7 @@ namespace cryptonote
     network_version_16, // future fork
     network_version_17,
     network_version_18,
+    network_version_19,
 
     network_version_count,
   };

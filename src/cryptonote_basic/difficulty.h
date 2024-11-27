@@ -53,6 +53,8 @@ namespace cryptonote
      */
     bool check_hash(const crypto::hash &hash, difficulty_type difficulty);
 
+    constexpr difficulty_type FIXED_DIFFICULTY = 90'000';
+
     difficulty_type next_difficulty_v2(std::vector<std::uint64_t> timestamps, std::vector<difficulty_type> cumulative_difficulties, size_t target_seconds,
         bool use_old_lwma, bool v12_initial_override);
 }

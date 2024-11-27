@@ -4698,8 +4698,15 @@ void BlockchainLMDB::fixup(fixup_context const context)
             v12_initial_override = true;
             v12_initial_blocks_remaining--;
           }
+          uint8_t const hf_version = get_hard_fork_version(curr_height);
+          if (hf_version >= cryptonote::network_version_19)
+          {
+          difficulty_type diff = FIXED_DIFFICULTY;
+          } else {
+
           difficulty_type diff = next_difficulty_v2(timestamps, difficulties, DIFFICULTY_TARGET_V2,
               version <= cryptonote::network_version_9_service_nodes, v12_initial_override);
+           }
 
           MDB_val_set(key, curr_height);
 

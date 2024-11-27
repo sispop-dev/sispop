@@ -150,7 +150,7 @@ namespace cryptonote
     bool set_setup_background_mining(const std::vector<std::string> &args = std::vector<std::string>());
     bool set_device_name(const std::vector<std::string> &args = std::vector<std::string>());
     bool help(const std::vector<std::string> &args = std::vector<std::string>());
-    bool start_mining(const std::vector<std::string> &args);
+    bool start_mining(const std::vector<std::string> &args, uint8_t hard_fork_version);
     bool stop_mining(const std::vector<std::string> &args);
     bool set_daemon(const std::vector<std::string> &args);
     bool save_bc(const std::vector<std::string> &args);

@@ -948,11 +948,16 @@ bool Blockchain::get_block_by_hash(const crypto::hash &h, block &blk, bool *orph
 // last DIFFICULTY_BLOCKS_COUNT blocks and passes them to next_difficulty,
 // returning the result of that call.  Ignores the genesis block, and can use
 // less blocks than desired if there aren't enough.
-difficulty_type Blockchain::get_difficulty_for_next_block()
+difficulty_type Blockchain::get_difficulty_for_next_block(uint8_t hf_version)
 {
   if (m_fixed_difficulty)
   {
     return m_db->height() ? m_fixed_difficulty : 1;
+  }
+
+  if (hf_version >= cryptonote::network_version_19)
+  {
+     return FIXED_DIFFICULTY;
   }
 
   LOG_PRINT_L3("Blockchain::" << __func__);
@@ -1208,11 +1213,16 @@ bool Blockchain::switch_to_alternative_blockchain(const std::list<block_extended
 //------------------------------------------------------------------
 // This function calculates the difficulty target for the block being added to
 // an alternate chain.
-difficulty_type Blockchain::get_next_difficulty_for_alternative_chain(const std::list<block_extended_info>& alt_chain, uint64_t alt_block_height) const
+difficulty_type Blockchain::get_next_difficulty_for_alternative_chain(const std::list<block_extended_info>& alt_chain, uint64_t alt_block_height, uint8_t hf_version) const
 {
   if (m_fixed_difficulty)
   {
     return m_db->height() ? m_fixed_difficulty : 1;
+  }
+
+  if (hf_version >= cryptonote::network_version_19)
+  {
+     return FIXED_DIFFICULTY;
   }
 
   LOG_PRINT_L3("Blockchain::" << __func__);
@@ -4727,12 +4737,18 @@ bool Blockchain::calc_batched_governance_reward(uint64_t height, uint64_t &rewar
   // already returned, above).
 
   const cryptonote::config_t &network = cryptonote::get_config(nettype(), hard_fork_version);
-  size_t num_blocks                   = network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS;
+  size_t num_blocks;
+   if ((hard_fork_version >= network_version_19) {
+    num_blocks = network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS_V2;
+      } else {
+    num_blocks = network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS;
+   }
 
   // Fixed reward starting at HF15
   if (hard_fork_version >= network_version_15_lns)
   {
     reward = num_blocks * (
+        (hard_fork_version >= network_version_19) ? FOUNDATION_REWARD_HF19 :
         (hard_fork_version >= network_version_17) ? FOUNDATION_REWARD_HF17 :
         (hard_fork_version >= network_version_16) ? FOUNDATION_REWARD_HF16 : FOUNDATION_REWARD_HF15 );
 

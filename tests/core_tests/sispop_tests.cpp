@@ -701,7 +701,7 @@ bool sispop_core_block_rewards_lrc6::generate(std::vector<test_event_entry>& eve
   batched_governance_generator.add_blocks_until_version(cryptonote::network_version_16);
   batched_governance_generator.add_n_blocks(network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS);
 
-  uint64_t hf15_height = 0, hf16_height = 0;
+  uint64_t hf15_height = 0, hf16_height = 0, hf19_height = 0;
   for (const auto &hf : hard_forks)
   {
     if (hf.first == cryptonote::network_version_15_lns)
@@ -709,6 +709,11 @@ bool sispop_core_block_rewards_lrc6::generate(std::vector<test_event_entry>& eve
     else if (hf.first == cryptonote::network_version_16)
     {
       hf16_height = hf.second;
+      break;
+    }
+    else if (hf.first == cryptonote::network_version_19)
+    {
+      hf19_height = hf.second;
       break;
     }
   }
@@ -722,7 +727,7 @@ bool sispop_core_block_rewards_lrc6::generate(std::vector<test_event_entry>& eve
     if (!c.get_blocks((uint64_t)0, (size_t)height, blockchain))
       return false;
 
-    int hf15_gov = 0, hf16_gov = 0;
+    int hf15_gov = 0, hf16_gov = 0 hf19_gov;
     for (size_t block_height = hf15_height; block_height < hf16_height; ++block_height)
     {
       const cryptonote::block &block = blockchain[block_height];
@@ -752,8 +757,24 @@ bool sispop_core_block_rewards_lrc6::generate(std::vector<test_event_entry>& eve
       else
         CHECK_EQ(block.miner_tx.vout.size(), 2);
     }
+    for (size_t block_height = hf19_height; block_height < height; ++block_height)
+    {
+      const cryptonote::block &block = blockchain[block_height];
+      // TODO: this 1 sat miner fee is just a placeholder until we address this properly in HF16.
+      CHECK_EQ(block.miner_tx.vout.at(0).amount, 1);
+      CHECK_EQ(block.miner_tx.vout.at(1).amount, SN_REWARD_HF19);
+      if (cryptonote::block_has_governance_output(cryptonote::FAKECHAIN, block))
+      {
+        hf19_gov++;
+        CHECK_EQ(block.miner_tx.vout.at(2).amount, FOUNDATION_REWARD_HF19 * interval);
+        CHECK_EQ(block.miner_tx.vout.size(), 3);
+      }
+      else
+        CHECK_EQ(block.miner_tx.vout.size(), 2);
+    }
     CHECK_EQ(hf15_gov, 1);
     CHECK_EQ(hf16_gov, 1);
+    CHECK_EQ(hf19_gov, 1);
 
     return true;
   });

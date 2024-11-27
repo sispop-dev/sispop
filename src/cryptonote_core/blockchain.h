@@ -316,7 +316,7 @@ namespace cryptonote
      *
      * @return the target
      */
-    difficulty_type get_difficulty_for_next_block();
+    difficulty_type get_difficulty_for_next_block(uint8_t hf_version);
 
     /**
      * @brief adds a block to the blockchain
@@ -1311,7 +1311,7 @@ namespace cryptonote
      *
      * @return the difficulty requirement
      */
-    difficulty_type get_next_difficulty_for_alternative_chain(const std::list<block_extended_info>& alt_chain, uint64_t height) const;
+    difficulty_type get_next_difficulty_for_alternative_chain(const std::list<block_extended_info>& alt_chain, uint64_t height, uint8_t hf_version) const;
 
     /**
      * @brief sanity checks a miner transaction before validating an entire block
