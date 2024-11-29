@@ -47,7 +47,6 @@ target_link_libraries(trezor_tests
     rpc
     cryptonote_protocol
     daemon_rpc_server
-    Boost::chrono
     Boost::filesystem
     Boost::program_options
     ${ZMQ_LIB}

@@ -43,7 +43,9 @@
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "wallet/ringdb.h"
 
-static crypto::chacha_key generate_chacha_key()
+namespace {
+
+crypto::chacha_key generate_chacha_key()
 {
   crypto::chacha_key chacha_key;
   uint64_t password = crypto::rand<uint64_t>();
@@ -51,7 +53,7 @@ static crypto::chacha_key generate_chacha_key()
   return chacha_key;
 }
 
-static crypto::key_image generate_key_image()
+crypto::key_image generate_key_image()
 {
   crypto::key_image key_image;
   cryptonote::keypair keypair = cryptonote::keypair::generate(hw::get_device("default"));
@@ -59,7 +61,7 @@ static crypto::key_image generate_key_image()
   return key_image;
 }
 
-static std::pair<uint64_t, uint64_t> generate_output()
+std::pair<uint64_t, uint64_t> generate_output()
 {
   return std::make_pair(rand(), rand());
 }
@@ -73,11 +75,13 @@ struct lazy_init
   std::pair<uint64_t, uint64_t> OUTPUT_2 = generate_output();
 };
 
-static lazy_init &get_context()
+lazy_init &get_context()
 {
   static lazy_init result;
   return result;
 }
+
+} // empty namespace
 
 class RingDB: public tools::ringdb
 {

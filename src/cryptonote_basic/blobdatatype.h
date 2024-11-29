@@ -36,5 +36,4 @@
 namespace cryptonote
 {
   typedef std::string blobdata;
-  typedef epee::span<const char> blobdata_ref;
 }

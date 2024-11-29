@@ -30,7 +30,8 @@
 
 #include "gtest/gtest.h"
 
-#include "common/util.h"
+#include "common/sha256sum.h"
+#include "crypto/hash.h"
 #include "string_tools.h"
 
 static bool check(const std::string &data, const char *expected_hash_hex)
@@ -38,7 +39,7 @@ static bool check(const std::string &data, const char *expected_hash_hex)
   crypto::hash hash, expected_hash;
   if (!epee::string_tools::hex_to_pod(expected_hash_hex, expected_hash))
     return false;
-  return tools::sha256sum((const uint8_t*)data.data(), data.size(), hash) && hash == expected_hash;
+  return tools::sha256sum_str(data, hash) && hash == expected_hash;
 }
 
 static std::string file_to_hex_hash(const std::string& filename)

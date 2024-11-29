@@ -36,14 +36,15 @@
 #ifdef WITH_DEVICE_TREZOR
 #include <cstddef>
 #include <string>
-#include <boost/scope_exit.hpp>
-#include <boost/thread/mutex.hpp>
-#include <boost/thread/recursive_mutex.hpp>
+#include <mutex>
 
 #include "device/device_default.hpp"
 #include "device/device_cold.hpp"
 #include "cryptonote_config.h"
 #include "device_trezor_base.hpp"
+
+#include "wallet/transfer_details.h"
+#include "wallet/tx_sets.h"
 #endif
 
 namespace hw {
@@ -62,15 +63,16 @@ namespace trezor {
     protected:
       std::atomic<bool> m_live_refresh_in_progress;
       std::chrono::steady_clock::time_point m_last_live_refresh_time;
-      std::unique_ptr<boost::thread> m_live_refresh_thread;
+      std::optional<std::thread> m_live_refresh_thread;
       std::atomic<bool> m_live_refresh_thread_running;
       bool m_live_refresh_enabled;
       size_t m_num_transations_to_sign;
 
-      void transaction_versions_check(const ::tools::wallet2::unsigned_tx_set & unsigned_tx, hw::tx_aux_data & aux_data);
+      unsigned client_version();
+      void transaction_versions_check(const wallet::unsigned_tx_set & unsigned_tx, hw::tx_aux_data & aux_data);
       void transaction_pre_check(std::shared_ptr<messages::monero::MoneroTransactionInitRequest> init_msg);
       void transaction_check(const protocol::tx::TData & tdata, const hw::tx_aux_data & aux_data);
-      void device_state_reset_unsafe() override;
+      void device_state_initialize_unsafe() override;
       void live_refresh_start_unsafe();
       void live_refresh_finish_unsafe();
       void live_refresh_thread_main();
@@ -79,7 +81,7 @@ namespace trezor {
        * Signs particular transaction idx in the unsigned set, keeps state in the signer
        */
       virtual void tx_sign(wallet_shim * wallet,
-                   const ::tools::wallet2::unsigned_tx_set & unsigned_tx,
+                   const wallet::unsigned_tx_set & unsigned_tx,
                    size_t idx,
                    hw::tx_aux_data & aux_data,
                    std::shared_ptr<protocol::tx::Signer> & signer);
@@ -110,6 +112,7 @@ namespace trezor {
       /* ======================================================================= */
       bool  get_public_address(cryptonote::account_public_address &pubkey) override;
       bool  get_secret_keys(crypto::secret_key &viewkey , crypto::secret_key &spendkey) override;
+      void  display_address(const cryptonote::subaddress_index& index, const std::optional<crypto::hash8> &payment_id) override;
 
       /* ======================================================================= */
       /*                              TREZOR PROTOCOL                            */
@@ -119,15 +122,18 @@ namespace trezor {
        * Get address. Throws.
        */
       std::shared_ptr<messages::monero::MoneroAddress> get_address(
-          const boost::optional<std::vector<uint32_t>> & path = boost::none,
-          const boost::optional<cryptonote::network_type> & network_type = boost::none);
+          const std::optional<cryptonote::subaddress_index> & subaddress = std::nullopt,
+          const std::optional<crypto::hash8> & payment_id = std::nullopt,
+          bool show_address = false,
+          const std::optional<std::vector<uint32_t>> & path = std::nullopt,
+          const std::optional<cryptonote::network_type> & network_type = std::nullopt);
 
       /**
        * Get watch key from device. Throws.
        */
       std::shared_ptr<messages::monero::MoneroWatchKey> get_view_key(
-          const boost::optional<std::vector<uint32_t>> & path = boost::none,
-          const boost::optional<cryptonote::network_type> & network_type = boost::none);
+          const std::optional<std::vector<uint32_t>> & path = std::nullopt,
+          const std::optional<cryptonote::network_type> & network_type = std::nullopt);
 
       /**
        * Get_tx_key support check
@@ -151,7 +157,7 @@ namespace trezor {
        * Key image sync with the Trezor.
        */
       void ki_sync(wallet_shim * wallet,
-                   const std::vector<::tools::wallet2::transfer_details> & transfers,
+                   const std::vector<wallet::transfer_details> & transfers,
                    hw::device_cold::exported_key_image & ski) override;
 
       bool is_live_refresh_supported() const override;
@@ -197,8 +203,8 @@ namespace trezor {
        * Signs unsigned transaction with the Trezor.
        */
       void tx_sign(wallet_shim * wallet,
-                   const ::tools::wallet2::unsigned_tx_set & unsigned_tx,
-                   ::tools::wallet2::signed_tx_set & signed_tx,
+                   const wallet::unsigned_tx_set & unsigned_tx,
+                   wallet::signed_tx_set & signed_tx,
                    hw::tx_aux_data & aux_data) override;
     };
 

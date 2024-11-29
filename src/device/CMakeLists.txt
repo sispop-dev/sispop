@@ -49,7 +49,7 @@ else()
   add_library(hidapi_libusb INTERFACE)
   find_package(HIDAPI)
 
-if (HIDAPI_FOUND)
+  if (HIDAPI_FOUND)
     message(STATUS "Using HIDAPI ${HIDAPI_LIBRARIES} (includes at ${HIDAPI_INCLUDE_DIR})")
     target_compile_definitions(hidapi_libusb INTERFACE HAVE_HIDAPI)
     target_include_directories(hidapi_libusb INTERFACE ${HIDAPI_INCLUDE_DIR})

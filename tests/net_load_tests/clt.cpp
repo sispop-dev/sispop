@@ -233,7 +233,7 @@ namespace
     virtual void TearDown()
     {
       m_tcp_server.send_stop_signal();
-      ASSERT_TRUE(m_tcp_server.timed_wait_server_stop(DEFAULT_OPERATION_TIMEOUT));
+      ASSERT_TRUE(m_tcp_server.server_stop());
     }
 
     static void TearDownTestCase()

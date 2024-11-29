@@ -31,7 +31,6 @@
 """Test cold tx signing
 """
 
-from __future__ import print_function
 from framework.daemon import Daemon
 from framework.wallet import Wallet
 
@@ -45,7 +44,8 @@ class ColdSigningTest():
     def reset(self):
         print('Resetting blockchain')
         daemon = Daemon()
-        daemon.pop_blocks(1000)
+        res = daemon.get_height()
+        daemon.pop_blocks(res.height - 1)
         daemon.flush_txpool()
 
     def create(self, idx):
@@ -93,7 +93,6 @@ class ColdSigningTest():
         print("Creating transaction in hot wallet")
 
         dst = {'address': '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm', 'amount': 1000000000000}
-        payment_id = '1234500000012345abcde00000abcdeff1234500000012345abcde00000abcde'
 
         self.hot_wallet.refresh()
         res = self.hot_wallet.export_outputs()
@@ -101,7 +100,7 @@ class ColdSigningTest():
         res = self.cold_wallet.export_key_images(True)
         self.hot_wallet.import_key_images(res.signed_key_images, offset = res.offset)
 
-        res = self.hot_wallet.transfer([dst], ring_size = 11, payment_id = payment_id, get_tx_key = False)
+        res = self.hot_wallet.transfer([dst], ring_size = 11, get_tx_key = False)
         assert len(res.tx_hash) == 32*2
         txid = res.tx_hash
         assert len(res.tx_key) == 0
@@ -123,7 +122,7 @@ class ColdSigningTest():
         assert desc.amount_out == desc.amount_in - fee
         assert desc.ring_size == 11
         assert desc.unlock_time == 0
-        assert desc.payment_id == payment_id
+        assert desc.payment_id in ['', '0000000000000000']
         assert desc.change_amount == desc.amount_in - 1000000000000 - fee
         assert desc.change_address == '42ey1afDFnn4886T7196doS9GPMzexD9gXpsZJDwVjeRVdFCSoHnv7KPbBeGpzJBzHRCAs9UxqeoyFQMYbqSWYTfJJQAWDm'
         assert desc.fee == fee

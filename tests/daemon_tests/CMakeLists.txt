@@ -36,7 +36,7 @@ target_link_libraries(transfers
     cncrypto
     common
     epee
-    ${GTEST_LIBRARIES})
+    gtest)
 
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test_transfers")
 add_custom_target(test_transfers

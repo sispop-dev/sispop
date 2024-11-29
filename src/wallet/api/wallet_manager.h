@@ -30,7 +30,7 @@
 
 
 #include "wallet/api/wallet2_api.h"
-#include "net/http_client.h"
+#include "rpc/http_client.h"
 #include <string>
 
 namespace Monero {
@@ -46,7 +46,8 @@ public:
                                        const std::string &mnemonic,
                                        NetworkType nettype,
                                        uint64_t restoreHeight,
-                                       uint64_t kdf_rounds = 1) override;
+                                       uint64_t kdf_rounds = 1,
+                                       const std::string &seed_offset = {}) override;
     virtual Wallet * createWalletFromKeys(const std::string &path,
                                              const std::string &password,
                                              const std::string &language,
@@ -80,7 +81,7 @@ public:
     bool queryWalletDevice(Wallet::Device& device_type, const std::string &keys_file_name, const std::string &password, uint64_t kdf_rounds = 1) const override;
     std::vector<std::string> findWallets(const std::string &path) override;
     std::string errorString() const override;
-    void setDaemonAddress(const std::string &address) override;
+    void setDaemonAddress(std::string address) override;
     bool connected(uint32_t *version = NULL) override;
     uint64_t blockchainHeight() override;
     uint64_t blockchainTargetHeight() override;
@@ -88,15 +89,14 @@ public:
     double miningHashRate() override;
     uint64_t blockTarget() override;
     bool isMining() override;
-    bool startMining(const std::string &address, uint32_t threads = 1, bool background_mining = false, bool ignore_battery = true) override;
+    bool startMining(const std::string &address, uint32_t threads = 1) override;
     bool stopMining() override;
     std::string resolveOpenAlias(const std::string &address, bool &dnssec_valid) const override;
 
 private:
     WalletManagerImpl() {}
     friend struct WalletManagerFactory;
-    std::string m_daemonAddress;
-    epee::net_utils::http::http_simple_client m_http_client;
+    cryptonote::rpc::http_client m_http_client;
     std::string m_errorString;
 };
 

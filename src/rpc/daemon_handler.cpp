@@ -28,6 +28,8 @@
 
 #include "daemon_handler.h"
 
+#include <thread>
+
 // likely included by daemon_handler.h's includes,
 // but including here for clarity
 #include "cryptonote_core/cryptonote_core.h"
@@ -53,7 +55,7 @@ namespace rpc
   {
     std::vector<std::pair<std::pair<blobdata, crypto::hash>, std::vector<std::pair<crypto::hash, blobdata> > > > blocks;
 
-    if(!m_core.find_blockchain_supplement(req.start_height, req.block_ids, blocks, res.current_height, res.start_height, req.prune, true, COMMAND_RPC_GET_BLOCKS_FAST_MAX_COUNT))
+    if(!m_core.find_blockchain_supplement(req.start_height, req.block_ids, blocks, res.current_height, res.start_height, req.prune, true, GET_BLOCKS_FAST::MAX_COUNT))
     {
       res.status = Message::STATUS_FAILED;
       res.error_details = "core::find_blockchain_supplement() returned false";
@@ -338,10 +340,10 @@ namespace rpc
         if (!res.error_details.empty()) res.error_details += " and ";
         res.error_details = "fee too low";
       }
-      if (tvc.m_not_rct)
+      if (tvc.m_too_few_outputs)
       {
         if (!res.error_details.empty()) res.error_details += " and ";
-        res.error_details = "tx is not ringct";
+        res.error_details = "too few outputs";
       }
       if (tvc.m_invalid_version)
       {
@@ -410,7 +412,7 @@ namespace rpc
       return;
     }
 
-    unsigned int concurrency_count = boost::thread::hardware_concurrency() * 4;
+    unsigned int concurrency_count = std::thread::hardware_concurrency() * 4;
 
     // if we couldn't detect threads, set it to a ridiculously high number
     if(concurrency_count == 0)
@@ -428,7 +430,7 @@ namespace rpc
       return;
     }
 
-    if(!m_core.get_miner().start(info.address, static_cast<size_t>(req.threads_count), req.do_background_mining, req.ignore_battery))
+    if(!m_core.get_miner().start(info.address, static_cast<size_t>(req.threads_count)))
     {
       res.error_details = "Failed, mining not started";
       LOG_PRINT_L0(res.error_details);
@@ -455,7 +457,7 @@ namespace rpc
 
     res.info.difficulty = chain.get_difficulty_for_next_block();
 
-    res.info.target = chain.get_difficulty_target();
+    res.info.target = tools::to_seconds(TARGET_BLOCK_TIME);
 
     res.info.tx_count = chain.get_total_transactions() - res.info.height; //without coinbase
 
@@ -473,7 +475,7 @@ namespace rpc
 
     res.info.mainnet = m_core.get_nettype() == MAINNET;
     res.info.testnet = m_core.get_nettype() == TESTNET;
-    res.info.stagenet = m_core.get_nettype() == STAGENET;
+    res.info.devnet = m_core.get_nettype() == DEVNET;
     res.info.cumulative_difficulty = m_core.get_blockchain_storage().get_db().get_block_cumulative_difficulty(res.info.height - 1);
     res.info.block_size_limit = res.info.block_weight_limit = m_core.get_blockchain_storage().get_current_cumulative_block_weight_limit();
     res.info.block_size_median = res.info.block_weight_median = m_core.get_blockchain_storage().get_current_cumulative_block_weight_median();
@@ -502,7 +504,6 @@ namespace rpc
   {
     const cryptonote::miner& lMiner = m_core.get_miner();
     res.active = lMiner.is_mining();
-    res.is_background_mining_enabled = lMiner.get_is_background_mining_enabled();
     
     if ( lMiner.is_mining() ) {
       res.speed = lMiner.get_speed();
@@ -825,11 +826,11 @@ namespace rpc
     }
 
     header.hash = hash_in;
-    if (b.miner_tx.vin.size() != 1 || b.miner_tx.vin.front().type() != typeid(txin_gen))
+    if (b.miner_tx.vin.size() != 1 || !std::holds_alternative<txin_gen>(b.miner_tx.vin.front()))
     {
       return false;
     }
-    header.height = boost::get<txin_gen>(b.miner_tx.vin.front()).height;
+    header.height = std::get<txin_gen>(b.miner_tx.vin.front()).height;
 
     header.major_version = b.major_version;
     header.minor_version = b.minor_version;

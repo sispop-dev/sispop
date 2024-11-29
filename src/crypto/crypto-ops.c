@@ -29,7 +29,6 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include <assert.h>
-#include <stdint.h>
 
 #include "warnings.h"
 #include "crypto-ops.h"

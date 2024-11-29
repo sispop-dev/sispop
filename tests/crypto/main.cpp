@@ -41,7 +41,6 @@
 #include "crypto-tests.h"
 #include "../io.h"
 
-using namespace std;
 using namespace crypto;
 typedef crypto::hash chash;
 
@@ -61,23 +60,23 @@ DISABLE_GCC_WARNING(maybe-uninitialized)
 
 int main(int argc, char *argv[]) {
   TRY_ENTRY();
-  fstream input;
-  string cmd;
+  std::fstream input;
+  std::string cmd;
   size_t test = 0;
   bool error = false;
   setup_random();
   if (argc != 2) {
-    cerr << "invalid arguments" << endl;
+      std::cerr << "invalid arguments\n";
     return 1;
   }
-  input.open(argv[1], ios_base::in);
+  input.open(argv[1], std::ios_base::in);
   for (;;) {
     ++test;
-    input.exceptions(ios_base::badbit);
+    input.exceptions(std::ios_base::badbit);
     if (!(input >> cmd)) {
       break;
     }
-    input.exceptions(ios_base::badbit | ios_base::failbit | ios_base::eofbit);
+    input.exceptions(std::ios_base::badbit | std::ios_base::failbit | std::ios_base::eofbit);
     if (cmd == "check_scalar") {
       ec_scalar scalar;
       bool expected, actual;
@@ -94,7 +93,7 @@ int main(int argc, char *argv[]) {
         goto error;
       }
     } else if (cmd == "hash_to_scalar") {
-      vector<char> data;
+      std::vector<char> data;
       ec_scalar expected, actual;
       get(input, data, expected);
       crypto::hash_to_scalar(data.data(), data.size(), actual);
@@ -214,12 +213,12 @@ int main(int argc, char *argv[]) {
     } else if (cmd == "generate_ring_signature") {
       chash prefix_hash;
       key_image image;
-      vector<public_key> vpubs;
-      vector<const public_key *> pubs;
+      std::vector<public_key> vpubs;
+      std::vector<const public_key *> pubs;
       size_t pubs_count;
       secret_key sec;
       size_t sec_index;
-      vector<signature> expected, actual;
+      std::vector<signature> expected, actual;
       size_t i;
       get(input, prefix_hash, image, pubs_count);
       vpubs.resize(pubs_count);
@@ -239,10 +238,10 @@ int main(int argc, char *argv[]) {
     } else if (cmd == "check_ring_signature") {
       chash prefix_hash;
       key_image image;
-      vector<public_key> vpubs;
-      vector<const public_key *> pubs;
+      std::vector<public_key> vpubs;
+      std::vector<const public_key *> pubs;
       size_t pubs_count;
-      vector<signature> sigs;
+      std::vector<signature> sigs;
       bool expected, actual;
       size_t i;
       get(input, prefix_hash, image, pubs_count);
@@ -260,11 +259,11 @@ int main(int argc, char *argv[]) {
         goto error;
       }
     } else {
-      throw ios_base::failure("Unknown function: " + cmd);
+      throw std::ios_base::failure("Unknown function: " + cmd);
     }
     continue;
 error:
-    cerr << "Wrong result on test " << test << endl;
+    std::cerr << "Wrong result on test " << test << "\n";
     error = true;
   }
   return error ? 1 : 0;

@@ -34,9 +34,7 @@ target_link_libraries(performance_tests
     cryptonote_core
     common
     epee
-    Boost::chrono
     Boost::program_options
-    Boost::regex
     extra)
 set_property(TARGET performance_tests
   PROPERTY

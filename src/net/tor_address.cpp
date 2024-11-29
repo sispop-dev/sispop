@@ -34,11 +34,13 @@
 #include <cassert>
 #include <cstring>
 #include <limits>
+#include <string_view>
 
 #include "net/error.h"
 #include "serialization/keyvalue_serialization.h"
 #include "storages/portable_storage.h"
 #include "string_tools.h"
+#include "common/string_util.h"
 
 namespace net
 {
@@ -53,9 +55,9 @@ namespace net
         constexpr const char base32_alphabet[] =
             u8"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz234567";
 
-        expect<void> host_check(boost::string_ref host) noexcept
+        expect<void> host_check(std::string_view host) noexcept
         {
-            if (!host.ends_with(tld))
+            if (!tools::ends_with(host, tld))
                 return {net::error::expected_tld};
 
             host.remove_suffix(sizeof(tld) - 1);
@@ -63,7 +65,7 @@ namespace net
             //! \TODO v3 has checksum, base32 decoding is required to verify it
             if (host.size() != v2_length && host.size() != v3_length)
                 return {net::error::invalid_tor_address};
-            if (host.find_first_not_of(base32_alphabet) != boost::string_ref::npos)
+            if (host.find_first_not_of(base32_alphabet) != std::string_view::npos)
                 return {net::error::invalid_tor_address};
 
             return success();
@@ -81,7 +83,7 @@ namespace net
         };
     }
 
-    tor_address::tor_address(const boost::string_ref host, const std::uint16_t port) noexcept
+    tor_address::tor_address(const std::string_view host, const std::uint16_t port) noexcept
       : port_(port)
     {
         // this is a private constructor, throw if moved to public
@@ -105,10 +107,10 @@ namespace net
         std::memset(host_ + sizeof(unknown_host), 0, sizeof(host_) - sizeof(unknown_host));
     }
 
-    expect<tor_address> tor_address::make(const boost::string_ref address, const std::uint16_t default_port)
+    expect<tor_address> tor_address::make(const std::string_view address, const std::uint16_t default_port)
     {
-        boost::string_ref host = address.substr(0, address.rfind(':'));
-        const boost::string_ref port =
+        std::string_view host = address.substr(0, address.rfind(':'));
+        const std::string_view port =
             address.substr(host.size() + (host.size() == address.size() ? 0 : 1));
 
         MONERO_CHECK(host_check(host));
@@ -173,7 +175,8 @@ namespace net
 
     bool tor_address::less(const tor_address& rhs) const noexcept
     {
-        return std::strcmp(host_str(), rhs.host_str()) < 0 || port() < rhs.port();
+        int res = std::strcmp(host_str(), rhs.host_str());
+        return res < 0 || (res == 0 && port() < rhs.port());
     }
 
     bool tor_address::is_same_host(const tor_address& rhs) const noexcept

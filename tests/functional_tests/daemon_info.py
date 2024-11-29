@@ -36,7 +36,6 @@ Test the following RPCs:
 
 """
 
-from __future__ import print_function
 from framework.daemon import Daemon
 
 class DaemonGetInfoTest():
@@ -69,9 +68,9 @@ class DaemonGetInfoTest():
         assert 'testnet' in res.keys()
         assert res.testnet == False;
 
-        # nettype should not be STAGENET
-        assert 'stagenet' in res.keys()
-        assert res.stagenet == False;
+        # nettype should not be DEVNET
+        assert 'devnet' in res.keys()
+        assert res.devnet == False;
 
         # nettype should be FAKECHAIN
         assert 'nettype' in res.keys()

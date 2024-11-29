@@ -37,10 +37,10 @@ gen_double_spend_base<concrete_test>::gen_double_spend_base()
   : m_invalid_tx_index(invalid_index_value)
   , m_invalid_block_index(invalid_index_value)
 {
-  REGISTER_CALLBACK_METHOD(gen_double_spend_base<concrete_test>, mark_last_valid_block);
-  REGISTER_CALLBACK_METHOD(gen_double_spend_base<concrete_test>, mark_invalid_tx);
-  REGISTER_CALLBACK_METHOD(gen_double_spend_base<concrete_test>, mark_invalid_block);
-  REGISTER_CALLBACK_METHOD(gen_double_spend_base<concrete_test>, check_double_spend);
+  REGISTER_CALLBACK(mark_last_valid_block);
+  REGISTER_CALLBACK(mark_invalid_tx);
+  REGISTER_CALLBACK(mark_invalid_block);
+  REGISTER_CALLBACK(check_double_spend);
 }
 
 template<class concrete_test>
@@ -103,8 +103,8 @@ bool gen_double_spend_base<concrete_test>::check_double_spend(cryptonote::core& 
 
   CHECK_EQ(concrete_test::expected_pool_txs_count, c.get_pool().get_transactions_count());
 
-  cryptonote::account_base bob_account = boost::get<cryptonote::account_base>(events[1]);
-  cryptonote::account_base alice_account = boost::get<cryptonote::account_base>(events[2]);
+  cryptonote::account_base bob_account = std::get<cryptonote::account_base>(events[1]);
+  cryptonote::account_base alice_account = std::get<cryptonote::account_base>(events[2]);
 
   std::vector<cryptonote::block> chain;
   map_hash2tx_t mtx;

@@ -1,6 +1,7 @@
 #include "cryptonote_config.h"
 #include "common/sispop.h"
 #include "int-util.h"
+#include <limits>
 #include <vector>
 #include <boost/lexical_cast.hpp>
 #include <cfenv>
@@ -87,6 +88,14 @@ static uint64_t get_min_node_contribution_pre_v11(uint64_t staking_requirement, 
   return std::min(staking_requirement - total_reserved, staking_requirement / MAX_NUMBER_OF_CONTRIBUTORS);
 }
 
+uint64_t get_max_node_contribution(uint8_t version, uint64_t staking_requirement, uint64_t total_reserved)
+{
+  if (version >= cryptonote::network_version_19)
+    return (staking_requirement - total_reserved) * config::MAXIMUM_ACCEPTABLE_STAKE::num
+      / config::MAXIMUM_ACCEPTABLE_STAKE::den;
+  return std::numeric_limits<uint64_t>::max();
+}
+
 uint64_t get_min_node_contribution(uint8_t version, uint64_t staking_requirement, uint64_t total_reserved, size_t num_contributions)
 {
   if (version < cryptonote::network_version_11_infinite_staking)
@@ -107,10 +116,10 @@ uint64_t get_min_node_contribution_in_portions(uint8_t version, uint64_t staking
   return result;
 }
 
-uint64_t get_portions_to_make_amount(uint64_t staking_requirement, uint64_t amount)
+uint64_t get_portions_to_make_amount(uint64_t staking_requirement, uint64_t amount, uint64_t max_portions)
 {
   uint64_t lo, hi, resulthi, resultlo;
-  lo = mul128(amount, STAKING_PORTIONS, &hi);
+  lo = mul128(amount, max_portions, &hi);
   if (lo > UINT64_MAX - (staking_requirement - 1))
     hi++;
   lo += staking_requirement-1;
@@ -128,7 +137,7 @@ static bool get_portions_from_percent(double cur_percent, uint64_t& portions) {
   }
   else
   {
-    portions = (cur_percent / 100.0) * STAKING_PORTIONS;
+    portions = (cur_percent / 100.0) * (double)STAKING_PORTIONS;
   }
 
   return true;

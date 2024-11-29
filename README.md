@@ -5,7 +5,7 @@
 </p>
 
 
-Copyright (c) 2023 The Sispop Project.   
+Copyright (c) 2023-2024 The Sispop Project.   
 Copyright (c) 2018-2023 The Oxen Project.  
 Portions Copyright (c) 2014-2023 The Monero Project.   
 Portions Copyright (c) 2012-2013 The Cryptonote developers.

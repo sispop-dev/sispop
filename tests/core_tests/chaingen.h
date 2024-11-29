@@ -32,19 +32,19 @@
 
 #include <vector>
 #include <iostream>
-#include <stdint.h>
+#include <cstdint>
+#include <optional>
+#include <regex>
 
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 #include <boost/program_options.hpp>
-#include <boost/optional.hpp>
 #include <boost/serialization/vector.hpp>
-#include <boost/serialization/variant.hpp>
-#include <boost/serialization/optional.hpp>
 
 #include "include_base_utils.h"
 #include "common/boost_serialization_helper.h"
 #include "common/command_line.h"
+#include "common/threadpool.h"
 
 #include "cryptonote_basic/account_boost_serialization.h"
 #include "cryptonote_basic/cryptonote_basic.h"
@@ -52,6 +52,8 @@
 #include "cryptonote_basic/cryptonote_format_utils.h"
 #include "cryptonote_core/cryptonote_core.h"
 #include "cryptonote_basic/cryptonote_boost_serialization.h"
+#include "serialization/boost_std_variant.h"
+#include "serialization/boost_std_optional.h"
 #include "misc_language.h"
 
 #include "blockchain_db/testdb.h"
@@ -61,8 +63,6 @@
 
 #define TESTS_DEFAULT_FEE ((uint64_t)200000000) // 2 * pow(10, 8)
 #define TEST_DEFAULT_DIFFICULTY 1
-
-#define DIFFICULTY_BLOCKS_ESTIMATE_TIMESPAN  DIFFICULTY_TARGET_V2
 
 #if defined(__GNUG__) && !defined(__clang__) && __GNUC__ < 6
 namespace service_nodes {
@@ -112,7 +112,7 @@ struct sispop_blockchain_addable
   template<class Archive> void serialize(Archive & /*ar*/, const unsigned int /*version*/) { }
 };
 
-typedef boost::function<bool (cryptonote::core& c, size_t ev_index)> sispop_callback;
+typedef std::function<bool (cryptonote::core& c, size_t ev_index)> sispop_callback;
 struct sispop_callback_entry
 {
   std::string   name;
@@ -205,7 +205,7 @@ typedef std::vector<std::pair<uint8_t, uint64_t>> v_hardforks_t;
 struct event_replay_settings
 {
   event_replay_settings() = default;
-  boost::optional<v_hardforks_t> hard_forks;
+  std::optional<v_hardforks_t> hard_forks;
 
 private:
   friend class boost::serialization::access;
@@ -218,14 +218,14 @@ private:
 };
 
 
-VARIANT_TAG(binary_archive, callback_entry, 0xcb);
-VARIANT_TAG(binary_archive, cryptonote::account_base, 0xcc);
-VARIANT_TAG(binary_archive, serialized_block, 0xcd);
-VARIANT_TAG(binary_archive, serialized_transaction, 0xce);
-VARIANT_TAG(binary_archive, event_visitor_settings, 0xcf);
-VARIANT_TAG(binary_archive, event_replay_settings, 0xda);
+BINARY_VARIANT_TAG(callback_entry, 0xcb);
+BINARY_VARIANT_TAG(cryptonote::account_base, 0xcc);
+BINARY_VARIANT_TAG(serialized_block, 0xcd);
+BINARY_VARIANT_TAG(serialized_transaction, 0xce);
+BINARY_VARIANT_TAG(event_visitor_settings, 0xcf);
+BINARY_VARIANT_TAG(event_replay_settings, 0xda);
 
-typedef boost::variant<cryptonote::block,
+typedef   std::variant<cryptonote::block,
                        cryptonote::transaction,
                        std::vector<cryptonote::transaction>,
                        cryptonote::account_base,
@@ -249,7 +249,7 @@ typedef std::unordered_map<crypto::hash, const cryptonote::transaction*> map_has
 class test_chain_unit_base
 {
 public:
-  typedef boost::function<bool (cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)> verify_callback;
+  typedef std::function<bool (cryptonote::core& c, size_t ev_index, const std::vector<test_event_entry> &events)> verify_callback;
   typedef std::map<std::string, verify_callback> callbacks_map;
 
   void register_callback(const std::string& cb_name, verify_callback cb);
@@ -324,10 +324,10 @@ public:
   void add_block(const cryptonote::block& blk, size_t tsx_size, std::vector<uint64_t>& block_weights, uint64_t already_generated_coins);
   bool construct_block(cryptonote::block& blk, uint64_t height, const crypto::hash& prev_id,
     const cryptonote::account_base& miner_acc, uint64_t timestamp, uint64_t already_generated_coins,
-    std::vector<uint64_t>& block_weights, const std::list<cryptonote::transaction>& tx_list, const service_nodes::block_winner &winner = {});
+    std::vector<uint64_t>& block_weights, const std::list<cryptonote::transaction>& tx_list, const service_nodes::payout &block_leader = {});
   bool construct_block(cryptonote::block& blk, const cryptonote::account_base& miner_acc, uint64_t timestamp);
   bool construct_block(cryptonote::block& blk, const cryptonote::block& blk_prev, const cryptonote::account_base& miner_acc,
-    const std::list<cryptonote::transaction>& tx_list = std::list<cryptonote::transaction>(), const service_nodes::block_winner &winner = {});
+    const std::list<cryptonote::transaction>& tx_list = std::list<cryptonote::transaction>(), const service_nodes::payout &block_leader = {});
 
   bool construct_block_manually(cryptonote::block& blk, const cryptonote::block& prev_block,
     const cryptonote::account_base& miner_acc, int actual_params = bf_none, uint8_t major_ver = 0,
@@ -339,10 +339,9 @@ public:
 
 
   int m_hf_version;
-
-private:
   std::unordered_map<crypto::hash, block_info> m_blocks_info;
 
+  private:
   friend class boost::serialization::access;
 
   template<class Archive>
@@ -455,7 +454,7 @@ typedef std::unordered_map<output_hasher, output_index, output_hasher_hasher> ma
 typedef std::unordered_map<crypto::public_key, cryptonote::subaddress_index> subaddresses_t;
 typedef std::pair<uint64_t, size_t>  outloc_t;
 
-typedef boost::variant<cryptonote::account_public_address, cryptonote::account_keys, cryptonote::account_base, cryptonote::tx_destination_entry> var_addr_t;
+typedef std::variant<cryptonote::account_public_address, cryptonote::account_keys, cryptonote::account_base, cryptonote::tx_destination_entry> var_addr_t;
 cryptonote::account_public_address get_address(const var_addr_t& inp);
 
 typedef struct {
@@ -528,7 +527,7 @@ cryptonote::transaction construct_tx_with_fee(std::vector<test_event_entry>& eve
 bool construct_tx_rct(const cryptonote::account_keys& sender_account_keys,
     std::vector<cryptonote::tx_source_entry>& sources,
     const std::vector<cryptonote::tx_destination_entry>& destinations,
-    const boost::optional<cryptonote::tx_destination_entry>& change_addr,
+    const std::optional<cryptonote::tx_destination_entry>& change_addr,
     std::vector<uint8_t> extra, cryptonote::transaction& tx, uint64_t unlock_time,
     rct::RangeProofType range_proof_type=rct::RangeProofBorromean, int bp_version = 0);
 
@@ -592,7 +591,7 @@ bool extract_hard_forks(const std::vector<test_event_entry>& events, v_hardforks
 /*                                                                      */
 /************************************************************************/
 template<class t_test_class>
-struct push_core_event_visitor: public boost::static_visitor<bool>
+struct push_core_event_visitor
 {
 private:
   cryptonote::core& m_c;
@@ -718,12 +717,10 @@ public:
       bvc.m_verifivation_failed = true;
 
     cryptonote::block blk;
-    std::stringstream ss;
-    ss << sr_block.data;
-    binary_archive<false> ba(ss);
-    ::serialization::serialize(ba, blk);
-    if (!ss.good())
-    {
+    serialization::binary_string_unarchiver ba{sr_block.data};
+    try {
+      serialization::serialize(ba, blk);
+    } catch (...) {
       blk = cryptonote::block();
     }
     bool r = m_validator.check_block_verification_context(bvc, m_ev_index, blk);
@@ -743,12 +740,10 @@ public:
     bool tx_added = pool_size + 1 == m_c.get_pool().get_transactions_count();
 
     cryptonote::transaction tx;
-    std::stringstream ss;
-    ss << sr_tx.data;
-    binary_archive<false> ba(ss);
-    ::serialization::serialize(ba, tx);
-    if (!ss.good())
-    {
+    serialization::binary_string_unarchiver ba{sr_tx.data};
+    try {
+      serialization::serialize(ba, tx);
+    } catch (...) {
       tx = cryptonote::transaction();
     }
 
@@ -758,7 +753,7 @@ public:
   }
 
   //
-  // NOTE: Sispop
+  // NOTE: sispop
   //
   bool operator()(const sispop_blockchain_addable<cryptonote::checkpoint_t> &entry) const
   {
@@ -806,8 +801,7 @@ public:
   bool operator()(const sispop_blockchain_addable<cryptonote::block> &entry) const
   {
     log_event("sispop_blockchain_addable<cryptonote::block>");
-    cryptonote::block const &block = entry.data;
-
+    cryptonote::block const &block             = entry.data;
     cryptonote::block_verification_context bvc = {};
     cryptonote::blobdata bd                    = t_serializable_object_to_blob(block);
     std::vector<cryptonote::block> pblocks;
@@ -889,9 +883,9 @@ inline bool replay_events_through_core_plain(cryptonote::core& cr, const std::ve
 
   //init core here
   if (reinit) {
-    CHECK_AND_ASSERT_MES(typeid(cryptonote::block) == events[0].type(), false,
+    CHECK_AND_ASSERT_MES(std::holds_alternative<cryptonote::block>(events[0]), false,
                          "First event must be genesis block creation");
-    cr.set_genesis_block(boost::get<cryptonote::block>(events[0]));
+    cr.set_genesis_block(std::get<cryptonote::block>(events[0]));
   }
 
   bool r = true;
@@ -899,7 +893,7 @@ inline bool replay_events_through_core_plain(cryptonote::core& cr, const std::ve
   for(size_t i = 1; i < events.size() && r; ++i)
   {
     visitor.event_index(i);
-    r = boost::apply_visitor(visitor, events[i]);
+    r = std::visit(visitor, events[i]);
   }
 
   return r;
@@ -920,6 +914,7 @@ inline bool do_replay_events_get_core(std::vector<test_event_entry>& events, cry
 {
   boost::program_options::options_description desc("Allowed options");
   cryptonote::core::init_options(desc);
+  cryptonote::long_poll_trigger = [](cryptonote::tx_memory_pool&) {};
   boost::program_options::variables_map vm;
   bool r = command_line::handle_error_helper(desc, [&]()
   {
@@ -964,6 +959,7 @@ inline bool do_replay_events_get_core(std::vector<test_event_entry>& events, cry
   }
   c.get_blockchain_storage().get_db().set_batch_transactions(true);
   bool ret = replay_events_through_core_plain<t_test_class>(c, events, validator, true);
+  tools::threadpool::getInstance().recycle();
   return ret;
 }
 //--------------------------------------------------------------------------
@@ -977,7 +973,7 @@ inline bool do_replay_file(const std::string& filename)
     return false;
   }
 
-  cryptonote::core core(nullptr);
+  cryptonote::core core;
   t_test_class validator;
   bool result = do_replay_events_get_core<t_test_class>(events, &core, validator);
   core.deinit();
@@ -1017,11 +1013,8 @@ inline bool do_replay_file(const std::string& filename)
   VEC_EVENTS.push_back(CALLBACK_ENTRY); \
 }
 
-#define REGISTER_CALLBACK(CB_NAME, CLBACK) \
-  register_callback(CB_NAME, [this](auto&&... args) { return this->CLBACK(std::forward<decltype(args)>(args)...); });
-
-#define REGISTER_CALLBACK_METHOD(CLASS, METHOD) \
-  register_callback(#METHOD, [this](auto&&... args) { return this->METHOD(std::forward<decltype(args)>(args)...); });
+#define REGISTER_CALLBACK(METHOD) \
+  register_callback(#METHOD, [this](auto&&... x) { return METHOD(std::forward<decltype(x)>(x)...); });
 
 #define MAKE_GENESIS_BLOCK(VEC_EVENTS, BLK_NAME, MINER_ACC, TS)                       \
   test_generator generator;                                               \
@@ -1134,11 +1127,18 @@ inline bool do_replay_file(const std::string& filename)
     std::list<cryptonote::transaction> SET_NAME; \
     MAKE_TX_LIST(VEC_EVENTS, SET_NAME, FROM, TO, AMOUNT, HEAD);
 
-#define MAKE_MINER_TX_MANUALLY(TX, BLK)         \
-  transaction TX;                     \
-  if (!construct_miner_tx(get_block_height(BLK)+1, 0, generator.get_already_generated_coins(BLK), \
-    0, 0, miner_account.get_keys().m_account_address, TX, {}, 7)) \
-    return false; \
+#define MAKE_MINER_TX_MANUALLY(TX, BLK)                                                                                \
+  transaction TX;                                                                                                      \
+  if (!construct_miner_tx(get_block_height(BLK) + 1,                                                                   \
+                          0,                                                                                           \
+                          generator.get_already_generated_coins(BLK),                                                  \
+                          0,                                                                                           \
+                          0,                                                                                           \
+                          TX,                                                                                          \
+                          cryptonote::sispop_miner_tx_context::miner_block(cryptonote::FAKECHAIN, miner_account.get_keys().m_account_address), \
+                          {},                                                                                          \
+                          7))                                                                                          \
+    return false;
 
 #define MAKE_TX_LIST_START_RCT(VEC_EVENTS, SET_NAME, FROM, TO, AMOUNT, NMIX, HEAD) \
     std::list<cryptonote::transaction> SET_NAME; \
@@ -1172,7 +1172,7 @@ inline bool do_replay_file(const std::string& filename)
 
 #define REPLAY_CORE(generator_class, generator_class_instance)                                                         \
   {                                                                                                                    \
-    cryptonote::core core(nullptr);                                                                                    \
+    cryptonote::core core;                                                                                             \
     if (generated && do_replay_events_get_core<generator_class>(events, &core, generator_class_instance))              \
     {                                                                                                                  \
       MGINFO_GREEN("#TEST# Succeeded " << #generator_class);                                                           \
@@ -1210,7 +1210,7 @@ inline bool do_replay_file(const std::string& filename)
 #define GENERATE_AND_PLAY(generator_class)                                                                             \
   if (list_tests)                                                                                                      \
     std::cout << #generator_class << std::endl;                                                                        \
-  else if (filter.empty() || boost::regex_match(std::string(#generator_class), match, boost::regex(filter)))           \
+  else if (std::cmatch m; filter.empty() || std::regex_match(#generator_class, m, std::regex(filter)))                 \
   {                                                                                                                    \
     std::vector<test_event_entry> events;                                                                              \
     ++tests_count;                                                                                                     \
@@ -1224,7 +1224,7 @@ inline bool do_replay_file(const std::string& filename)
   }
 
 #define GENERATE_AND_PLAY_INSTANCE(generator_class, generator_class_instance, CORE)                                    \
-  if (filter.empty() || boost::regex_match(std::string(#generator_class), match, boost::regex(filter)))                \
+  if (std::cmatch m; filter.empty() || std::regex_match(#generator_class, m, std::regex(filter)))                      \
   {                                                                                                                    \
     std::vector<test_event_entry> events;                                                                              \
     ++tests_count;                                                                                                     \
@@ -1258,7 +1258,7 @@ inline bool do_replay_file(const std::string& filename)
 #define MK_COINS(amount) (UINT64_C(amount) * COIN)
 
 //
-// NOTE: Sispop
+// NOTE: sispop
 //
 class sispop_tx_builder {
 
@@ -1345,6 +1345,7 @@ public:
   }
 };
 
+void                                      fill_nonce_with_sispop_generator          (struct sispop_chain_generator const *generator, cryptonote::block& blk, const cryptonote::difficulty_type& diffic, uint64_t height);
 void                                      sispop_register_callback                  (std::vector<test_event_entry> &events, std::string const &callback_name, sispop_callback callback);
 std::vector<std::pair<uint8_t, uint64_t>> sispop_generate_sequential_hard_fork_table(uint8_t max_hf_version = cryptonote::network_version_count - 1);
 
@@ -1368,6 +1369,7 @@ struct sispop_chain_generator_db : public cryptonote::BaseTestDB
   cryptonote::block                     get_block_from_height(const uint64_t &height) const override;
   bool                                  get_tx(const crypto::hash& h, cryptonote::transaction &tx) const override;
   std::vector<cryptonote::checkpoint_t> get_checkpoints_range(uint64_t start, uint64_t end, size_t num_desired_checkpoints) const override;
+  std::vector<cryptonote::block>        get_blocks_range(const uint64_t& h1, const uint64_t& h2) const override;
   uint64_t height() const override { return blocks.size(); }
 };
 
@@ -1375,6 +1377,27 @@ struct sispop_service_node_contribution
 {
     cryptonote::account_public_address contributor;
     uint64_t                           portions;
+};
+
+enum struct sispop_create_block_type
+{
+  automatic,
+  pulse,
+  miner,
+};
+
+struct sispop_create_block_params
+{
+  sispop_create_block_type               type;
+  uint8_t                              hf_version;
+  sispop_blockchain_entry                prev;
+  cryptonote::account_base             miner_acc;
+  uint64_t                             timestamp;
+  std::vector<uint64_t>                block_weights;
+  std::vector<cryptonote::transaction> tx_list;
+  service_nodes::payout                block_leader;
+  uint64_t                             total_fee;
+  uint8_t                              pulse_round;
 };
 
 struct sispop_chain_generator
@@ -1412,11 +1435,13 @@ struct sispop_chain_generator
   void                                                 add_n_blocks(int n);
   void                                                 add_blocks_until_next_checkpointable_height();
   void                                                 add_service_node_checkpoint(uint64_t block_height, size_t num_votes);
-  void                                                 add_mined_money_unlock_blocks(); // NOTE: Unlock all Sispop generated from mining prior to this call i.e. CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW
+  void                                                 add_mined_money_unlock_blocks(); // NOTE: Unlock all sispop generated from mining prior to this call i.e. CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW
 
   // NOTE: Add an event that is just a user specified message to signify progress in the test
   void                                                 add_event_msg(std::string const &msg) { events_.push_back(msg); }
   void                                                 add_tx(cryptonote::transaction const &tx, bool can_be_added_to_blockchain = true, std::string const &fail_msg = {}, bool kept_by_block = false);
+
+  sispop_create_block_params                             next_block_params() const;
 
   // NOTE: Add constructed TX to events_ and assume that it is valid to add to the blockchain. If the TX is meant to be unaddable to the blockchain use the individual create + add functions to
   // be able to mark the add TX event as something that should trigger a failure.
@@ -1447,8 +1472,12 @@ struct sispop_chain_generator
   cryptonote::transaction                              create_sispop_name_system_tx_update_w_extra(cryptonote::account_base const &src, cryptonote::tx_extra_sispop_name_system const &lns_extra) const;
 
   sispop_blockchain_entry                                create_genesis_block(const cryptonote::account_base &miner, uint64_t timestamp);
-  sispop_blockchain_entry                                create_next_block(const std::vector<cryptonote::transaction>& txs = {}, cryptonote::checkpoint_t const *checkpoint = nullptr, uint64_t total_fee = 0);
-  bool                                                 create_block(sispop_blockchain_entry &entry, uint8_t hf_version, sispop_blockchain_entry const &prev, const cryptonote::account_base &miner_acc, uint64_t timestamp, std::vector<uint64_t> &block_weights, const std::vector<cryptonote::transaction> &tx_list, const service_nodes::block_winner &block_winner, uint64_t total_fee = 0) const;
+  sispop_blockchain_entry                                create_next_block(const std::vector<cryptonote::transaction>& txs = {}, cryptonote::checkpoint_t const *checkpoint = nullptr);
+  bool                                                 create_block(sispop_blockchain_entry &entry, sispop_create_block_params &params, const std::vector<cryptonote::transaction> &tx_list) const;
+
+  bool                                                 block_begin(sispop_blockchain_entry &entry, sispop_create_block_params &params, const std::vector<cryptonote::transaction> &tx_list) const;
+  void                                                 block_fill_pulse_data(sispop_blockchain_entry &entry, sispop_create_block_params const &params, uint8_t round) const;
+  void                                                 block_end(sispop_blockchain_entry &entry, sispop_create_block_params const &params) const;
 
   uint8_t                                              get_hf_version_at(uint64_t height) const;
   std::vector<uint64_t>                                last_n_block_weights(uint64_t height, uint64_t num) const;

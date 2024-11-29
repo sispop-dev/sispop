@@ -1,5 +1,5 @@
+// Copyright (c) 2018-2023, The Oxen Project
 // Copyright (c) 2014-2019, The Monero Project
-// Copyright (c)      2018-2023, The Oxen Project
 // 
 // All rights reserved.
 //
@@ -31,219 +31,270 @@
 
 #include <memory>
 #include <stdexcept>
-#include <boost/algorithm/string/split.hpp>
+#include <sispopmq/sispopmq.h>
+#include <utility>
+
 #include "misc_log_ex.h"
-#include "daemon/daemon.h"
+#if defined(PER_BLOCK_CHECKPOINT)
+#include "blocks/blocks.h"
+#endif
 #include "rpc/daemon_handler.h"
-#include "rpc/zmq_server.h"
+#include "rpc/rpc_args.h"
+#include "rpc/http_server.h"
+#include "rpc/lmq_server.h"
 #include "cryptonote_protocol/quorumnet.h"
 
 #include "common/password.h"
-#include "common/util.h"
-#include "daemon/core.h"
-#include "daemon/p2p.h"
-#include "daemon/protocol.h"
-#include "daemon/rpc.h"
-#include "daemon/command_server.h"
+#include "common/signal_handler.h"
 #include "daemon/command_server.h"
 #include "daemon/command_line_args.h"
-#include "net/net_ssl.h"
+#include "net/parse.h"
 #include "version.h"
 
-using namespace epee;
+#include "command_server.h"
+#include "daemon.h"
 
 #include <functional>
+
+#ifdef ENABLE_SYSTEMD
+extern "C" {
+#  include <systemd/sd-daemon.h>
+}
+#endif
+
+using namespace std::literals;
 
 #undef SISPOP_DEFAULT_LOG_CATEGORY
 #define SISPOP_DEFAULT_LOG_CATEGORY "daemon"
 
 namespace daemonize {
 
-struct t_internals {
-private:
-  t_protocol protocol;
-public:
-  t_core core;
-  t_p2p p2p;
-  std::vector<std::unique_ptr<t_rpc>> rpcs;
+static uint16_t parse_public_rpc_port(const boost::program_options::variables_map& vm)
+{
+  const auto& public_node_arg = cryptonote::rpc::http_server::arg_public_node;
+  const bool public_node = command_line::get_arg(vm, public_node_arg);
+  if (!public_node)
+    return 0;
 
-  t_internals(
-      boost::program_options::variables_map const & vm
-    )
-    : core{vm}
-    , protocol{vm, core, command_line::get_arg(vm, cryptonote::arg_offline)}
-    , p2p{vm, protocol}
+  std::string rpc_port_str;
+  const auto &restricted_rpc_port = cryptonote::rpc::http_server::arg_rpc_restricted_bind_port;
+  if (!command_line::is_arg_defaulted(vm, restricted_rpc_port))
+    rpc_port_str = command_line::get_arg(vm, restricted_rpc_port);
+  else if (command_line::get_arg(vm, cryptonote::rpc::http_server::arg_restricted_rpc))
+    rpc_port_str = command_line::get_arg(vm, cryptonote::rpc::http_server::arg_rpc_bind_port);
+  else
+    throw std::runtime_error("restricted RPC mode is required for --" + std::string{public_node_arg.name});
+
+  uint16_t rpc_port;
+  if (!epee::string_tools::get_xtype_from_string(rpc_port, rpc_port_str))
+    throw std::runtime_error("invalid RPC port " + rpc_port_str);
+
+  const auto rpc_bind_address = command_line::get_arg(vm, cryptonote::rpc_args::descriptors().rpc_bind_ip);
+  const auto address = net::get_network_address(rpc_bind_address, rpc_port);
+  if (!address)
+    throw std::runtime_error("failed to parse RPC bind address");
+  if (address->get_zone() != epee::net_utils::zone::public_)
+    throw std::runtime_error(std::string(zone_to_string(address->get_zone()))
+      + " network zone is not supported, please check RPC server bind address");
+
+  if (address->is_loopback() || address->is_local())
+    MLOG_RED(el::Level::Warning, "--" << public_node_arg.name 
+      << " is enabled, but RPC server " << address->str() 
+      << " may be unreachable from outside, please check RPC server bind address");
+
+  return rpc_port;
+}
+
+
+daemon::daemon(boost::program_options::variables_map vm_) :
+    vm{std::move(vm_)},
+    core{std::make_unique<cryptonote::core>()},
+    protocol{std::make_unique<protocol_handler>(*core, command_line::get_arg(vm, cryptonote::arg_offline))},
+    p2p{std::make_unique<node_server>(*protocol)},
+    rpc{std::make_unique<cryptonote::rpc::core_rpc_server>(*core, *p2p)}
+{
+  MGINFO_BLUE("Initializing daemon objects...");
+
+  MGINFO("- cryptonote protocol");
+  if (!protocol->init(vm))
+    throw std::runtime_error("Failed to initialize cryptonote protocol.");
+
+  MGINFO("- p2p");
+  if (!p2p->init(vm))
+    throw std::runtime_error("Failed to initialize p2p server.");
+
+  // Handle circular dependencies
+  protocol->set_p2p_endpoint(p2p.get());
+  core->set_cryptonote_protocol(protocol.get());
+
   {
-    // Handle circular dependencies
-    protocol.set_p2p_endpoint(p2p.get());
-    core.set_protocol(protocol.get());
-    quorumnet::init_core_callbacks();
-
-    const auto restricted = command_line::get_arg(vm, cryptonote::core_rpc_server::arg_restricted_rpc);
-    const auto main_rpc_port = command_line::get_arg(vm, cryptonote::core_rpc_server::arg_rpc_bind_port);
-    rpcs.emplace_back(new t_rpc{vm, core, p2p, restricted, main_rpc_port, "core"});
-
-    auto restricted_rpc_port_arg = cryptonote::core_rpc_server::arg_rpc_restricted_bind_port;
-    if(!command_line::is_arg_defaulted(vm, restricted_rpc_port_arg))
-    {
-      auto restricted_rpc_port = command_line::get_arg(vm, restricted_rpc_port_arg);
-      rpcs.emplace_back(new t_rpc{vm, core, p2p, true, restricted_rpc_port, "restricted"});
-    }
+    const auto restricted = command_line::get_arg(vm, cryptonote::rpc::http_server::arg_restricted_rpc);
+    const auto main_rpc_port = command_line::get_arg(vm, cryptonote::rpc::http_server::arg_rpc_bind_port);
+    MGINFO("- core HTTP RPC server");
+    http_rpcs.emplace_back(std::piecewise_construct, std::tie("core"), std::tie(*rpc, vm, restricted, main_rpc_port));
   }
-};
 
-void t_daemon::init_options(boost::program_options::options_description & option_spec)
-{
-  t_core::init_options(option_spec);
-  t_p2p::init_options(option_spec);
-  t_rpc::init_options(option_spec);
-}
-
-t_daemon::t_daemon(
-    boost::program_options::variables_map const & vm,
-    uint16_t public_rpc_port
-  )
-  : mp_internals{new t_internals{vm}},
-  public_rpc_port(public_rpc_port)
-{
-  zmq_rpc_bind_port = command_line::get_arg(vm, daemon_args::arg_zmq_rpc_bind_port);
-  zmq_rpc_bind_address = command_line::get_arg(vm, daemon_args::arg_zmq_rpc_bind_ip);
-}
-
-t_daemon::~t_daemon() = default;
-
-// MSVC is brain-dead and can't default this...
-t_daemon::t_daemon(t_daemon && other)
-{
-  if (this != &other)
+  if (!command_line::is_arg_defaulted(vm, cryptonote::rpc::http_server::arg_rpc_restricted_bind_port))
   {
-    mp_internals = std::move(other.mp_internals);
-    other.mp_internals.reset(nullptr);
-    public_rpc_port = other.public_rpc_port;
+    bool restricted = true;
+    auto restricted_rpc_port = command_line::get_arg(vm, cryptonote::rpc::http_server::arg_rpc_restricted_bind_port);
+    MGINFO("- restricted HTTP RPC server");
+    http_rpcs.emplace_back(std::piecewise_construct, std::tie("restricted"), std::tie(*rpc, vm, restricted, restricted_rpc_port));
   }
+
+  MGINFO_BLUE("Done daemon object initialization");
 }
 
-// or this
-t_daemon & t_daemon::operator=(t_daemon && other)
+daemon::~daemon()
 {
-  if (this != &other)
-  {
-    mp_internals = std::move(other.mp_internals);
-    other.mp_internals.reset(nullptr);
-    public_rpc_port = other.public_rpc_port;
+  MGINFO_BLUE("Deinitializing daemon objects...");
+
+  while (!http_rpcs.empty()) {
+    MGINFO("- " << http_rpcs.back().first << " HTTP RPC server");
+    http_rpcs.pop_back();
   }
-  return *this;
+
+  MGINFO("- p2p");
+  try {
+    p2p->deinit();
+  } catch (const std::exception& e) {
+    MERROR("Failed to deinitialize p2p: " << e.what());
+  }
+
+  MGINFO("- core");
+  try {
+    core->deinit();
+    core->set_cryptonote_protocol(nullptr);
+  } catch (const std::exception& e) {
+    MERROR("Failed to deinitialize core: " << e.what());
+  }
+
+  MGINFO("- cryptonote protocol");
+  try {
+    protocol->deinit();
+    protocol->set_p2p_endpoint(nullptr);
+  } catch (const std::exception& e) {
+    MERROR("Failed to stop cryptonote protocol: " << e.what());
+  }
+  MGINFO_BLUE("Deinitialization complete");
 }
 
-bool t_daemon::run(bool interactive)
+void daemon::init_options(boost::program_options::options_description& option_spec, boost::program_options::options_description& hidden)
 {
-  if (nullptr == mp_internals)
-  {
+  static bool called = false;
+  if (called)
+    throw std::logic_error("daemon::init_options must only be called once");
+  else
+    called = true;
+  cryptonote::core::init_options(option_spec);
+  node_server::init_options(option_spec);
+  cryptonote::rpc::core_rpc_server::init_options(option_spec, hidden);
+  cryptonote::rpc::http_server::init_options(option_spec);
+  cryptonote::rpc::init_lmq_options(option_spec);
+  quorumnet::init_core_callbacks();
+}
+
+bool daemon::run(bool interactive)
+{
+  if (!core)
     throw std::runtime_error{"Can't run stopped daemon"};
-  }
 
-  std::atomic<bool> stop(false), shutdown(false);
-  boost::thread stop_thread = boost::thread([&stop, &shutdown, this] {
-    while (!stop)
+  std::atomic<bool> stop_sig(false), shutdown(false);
+  std::thread stop_thread{[&stop_sig, &shutdown, this] {
+    while (!stop_sig)
       epee::misc_utils::sleep_no_w(100);
     if (shutdown)
-      this->stop_p2p();
-  });
-  epee::misc_utils::auto_scope_leave_caller scope_exit_handler = epee::misc_utils::create_scope_leave_handler([&](){
-    stop = true;
+      stop();
+  }};
+
+  SISPOP_DEFER
+  {
+    stop_sig = true;
     stop_thread.join();
-  });
-  tools::signal_handler::install([&stop, &shutdown](int){ stop = shutdown = true; });
+  };
+
+  tools::signal_handler::install([&stop_sig, &shutdown](int) { stop_sig = true; shutdown = true; });
 
   try
   {
-    if (!mp_internals->core.run())
-      return false;
+    MGINFO_BLUE("Starting up sispopd services...");
+    cryptonote::GetCheckpointsCallback get_checkpoints;
+#if defined(PER_BLOCK_CHECKPOINT)
+    get_checkpoints = blocks::GetCheckpointsData;
+#endif
+    MGINFO("Starting core");
+    if (!core->init(vm, nullptr, get_checkpoints))
+      throw std::runtime_error("Failed to start core");
 
-    for(auto& rpc: mp_internals->rpcs)
-      rpc->run();
+    MGINFO("Starting SispopMQ");
+    lmq_rpc = std::make_unique<cryptonote::rpc::lmq_rpc>(*core, *rpc, vm);
+    core->start_sispopmq();
 
-    std::unique_ptr<daemonize::t_command_server> rpc_commands;
-    if (interactive && mp_internals->rpcs.size())
+    for(auto& [desc, rpc]: http_rpcs)
     {
-      // The first three variables are not used when the fourth is false
-      rpc_commands.reset(new daemonize::t_command_server(0, 0, boost::none, epee::net_utils::ssl_support_t::e_ssl_support_disabled, false, mp_internals->rpcs.front()->get_server()));
-      rpc_commands->start_handling(std::bind(&daemonize::t_daemon::stop_p2p, this));
+      MGINFO("Starting " << desc << " HTTP RPC server");
+      rpc.start();
     }
 
-    cryptonote::rpc::DaemonHandler rpc_daemon_handler(mp_internals->core.get(), mp_internals->p2p.get());
-    cryptonote::rpc::ZmqServer zmq_server(rpc_daemon_handler);
+    MGINFO("Starting RPC daemon handler");
+    cryptonote::rpc::DaemonHandler rpc_daemon_handler(*core, *p2p);
 
-    if (!zmq_server.addTCPSocket(zmq_rpc_bind_address, zmq_rpc_bind_port))
-    {
-      LOG_ERROR(std::string("Failed to add TCP Socket (") + zmq_rpc_bind_address
-          + ":" + zmq_rpc_bind_port + ") to ZMQ RPC Server");
-
-      if (rpc_commands)
-        rpc_commands->stop_handling();
-
-      for(auto& rpc : mp_internals->rpcs)
-        rpc->stop();
-
-      return false;
-    }
-
-    MINFO("Starting ZMQ server...");
-    zmq_server.run();
-
-    MINFO(std::string("ZMQ server started at ") + zmq_rpc_bind_address
-          + ":" + zmq_rpc_bind_port + ".");
-
-    if (public_rpc_port > 0)
+    if (uint16_t public_rpc_port = parse_public_rpc_port(vm))
     {
       MGINFO("Public RPC port " << public_rpc_port << " will be advertised to other peers over P2P");
-      mp_internals->p2p.get().set_rpc_port(public_rpc_port);
+      p2p->set_rpc_port(public_rpc_port);
     }
-    
-    mp_internals->p2p.run(); // blocks until p2p goes down
+
+    std::unique_ptr<daemonize::command_server> rpc_commands;
+    if (interactive)
+    {
+      MGINFO("Starting command-line processor");
+      rpc_commands = std::make_unique<daemonize::command_server>(*rpc);
+      rpc_commands->start_handling([this] { stop(); });
+    }
+
+    MGINFO_GREEN("Starting up main network");
+
+#ifdef ENABLE_SYSTEMD
+    sd_notify(0, ("READY=1\nSTATUS=" + core->get_status_string()).c_str());
+#endif
+
+    p2p->run(); // blocks until p2p goes down
+    MGINFO_YELLOW("Main network stopped");
 
     if (rpc_commands)
+    {
+      MGINFO("Stopping RPC command processor");
       rpc_commands->stop_handling();
+    }
 
-    zmq_server.stop();
+    for (auto& [desc, rpc] : http_rpcs)
+    {
+      MGINFO("Stopping " << desc << " HTTP RPC server...");
+      rpc.shutdown();
+    }
 
-    for(auto& rpc : mp_internals->rpcs)
-      rpc->stop();
     MGINFO("Node stopped.");
     return true;
   }
-  catch (std::exception const & ex)
+  catch (std::exception const& ex)
   {
-    MFATAL("Uncaught exception! " << ex.what());
+    MFATAL(ex.what());
     return false;
   }
   catch (...)
   {
-    MFATAL("Uncaught exception!");
+    MFATAL("Unknown exception occured!");
     return false;
   }
 }
 
-void t_daemon::stop()
+void daemon::stop()
 {
-  if (nullptr == mp_internals)
-  {
-    throw std::runtime_error{"Can't stop stopped daemon"};
-  }
-  mp_internals->p2p.stop();
-  for(auto& rpc : mp_internals->rpcs)
-    rpc->stop();
+  if (!core)
+    throw std::logic_error{"Can't send stop signal to a stopped daemon"};
 
-  mp_internals.reset(nullptr); // Ensure resources are cleaned up before we return
-}
-
-void t_daemon::stop_p2p()
-{
-  if (nullptr == mp_internals)
-  {
-    throw std::runtime_error{"Can't send stop signal to a stopped daemon"};
-  }
-  mp_internals->p2p.get().send_stop_signal();
+  p2p->send_stop_signal(); // Make p2p stop so that `run()` above continues with tear down
 }
 
 } // namespace daemonize

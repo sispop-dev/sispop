@@ -1,11 +1,4 @@
-/**
-@file
-@details
-
-@image html images/other/runtime-commands.png
-
-*/
-
+// Copyright (c) 2018-2020, The Oxen Project
 // Copyright (c) 2014-2019, The Monero Project
 // 
 // All rights reserved.
@@ -36,28 +29,24 @@
 
 #pragma once
 
-#include <boost/optional/optional.hpp>
+#include <optional>
 
 #include "daemon/rpc_command_executor.h"
 #include "common/common_fwd.h"
-#include "net/net_fwd.h"
 #include "rpc/core_rpc_server.h"
 
 namespace daemonize {
 
-class t_command_parser_executor final
+class command_parser_executor final
 {
 private:
-  t_rpc_command_executor m_executor;
+  rpc_command_executor m_executor;
 public:
-  t_command_parser_executor(
-      uint32_t ip
-    , uint16_t port
-    , const boost::optional<tools::login>& login
-    , const epee::net_utils::ssl_options_t& ssl_options
-    , bool is_rpc
-    , cryptonote::core_rpc_server* rpc_server = NULL
-    );
+  /// Invokes via remote RPC
+  command_parser_executor(std::string daemon_url, const std::optional<tools::login>& login);
+
+  /// Invokes via local daemon
+  command_parser_executor(cryptonote::rpc::core_rpc_server& rpc_server);
 
   bool print_checkpoints(const std::vector<std::string>& args);
 
@@ -149,8 +138,6 @@ public:
 
   bool print_blockchain_dynamic_stats(const std::vector<std::string>& args);
 
-  bool update(const std::vector<std::string>& args);
-
   bool relay_tx(const std::vector<std::string>& args);
 
   bool sync_info(const std::vector<std::string>& args);
@@ -166,6 +153,12 @@ public:
   bool print_net_stats(const std::vector<std::string>& args);
 
   bool print_sn_state_changes(const std::vector<std::string> &args);
+
+  bool set_bootstrap_daemon(const std::vector<std::string>& args);
+
+  bool flush_cache(const std::vector<std::string>& args);
+
+  void test_trigger_uptime_proof() { m_executor.test_trigger_uptime_proof(); }
 };
 
 } // namespace daemonize

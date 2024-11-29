@@ -26,10 +26,8 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <assert.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -62,6 +60,7 @@ static CTHR_MUTEX_TYPE rx_dataset_mutex = CTHR_MUTEX_INIT;
 static rx_state rx_s[2] = {{CTHR_MUTEX_INIT,{0},0,0},{CTHR_MUTEX_INIT,{0},0,0}};
 
 static randomx_dataset *rx_dataset;
+static int rx_dataset_nomem;
 static uint64_t rx_dataset_height;
 static THREADV randomx_vm *rx_vm = NULL;
 
@@ -246,20 +245,25 @@ void rx_slow_hash(const uint64_t mainheight, const uint64_t seedheight, const ch
     }
     if (miners) {
       CTHR_MUTEX_LOCK(rx_dataset_mutex);
-      if (rx_dataset == NULL) {
-        rx_dataset = randomx_alloc_dataset(RANDOMX_FLAG_LARGE_PAGES);
+      if (!rx_dataset_nomem) {
         if (rx_dataset == NULL) {
-          mdebug(RX_LOGCAT, "Couldn't use largePages for RandomX dataset");
-          rx_dataset = randomx_alloc_dataset(RANDOMX_FLAG_DEFAULT);
+          rx_dataset = randomx_alloc_dataset(RANDOMX_FLAG_LARGE_PAGES);
+          if (rx_dataset == NULL) {
+            mdebug(RX_LOGCAT, "Couldn't use largePages for RandomX dataset");
+            rx_dataset = randomx_alloc_dataset(RANDOMX_FLAG_DEFAULT);
+          }
+          if (rx_dataset != NULL)
+            rx_initdata(rx_sp->rs_cache, miners, seedheight);
         }
-        if (rx_dataset != NULL)
-          rx_initdata(rx_sp->rs_cache, miners, seedheight);
       }
       if (rx_dataset != NULL)
         flags |= RANDOMX_FLAG_FULL_MEM;
       else {
         miners = 0;
-        mwarning(RX_LOGCAT, "Couldn't allocate RandomX dataset for miner");
+        if (!rx_dataset_nomem) {
+          rx_dataset_nomem = 1;
+          mwarning(RX_LOGCAT, "Couldn't allocate RandomX dataset for miner");
+        }
       }
       CTHR_MUTEX_UNLOCK(rx_dataset_mutex);
     }
@@ -278,6 +282,10 @@ void rx_slow_hash(const uint64_t mainheight, const uint64_t seedheight, const ch
     CTHR_MUTEX_LOCK(rx_dataset_mutex);
     if (rx_dataset != NULL && rx_dataset_height != seedheight)
       rx_initdata(cache, miners, seedheight);
+    else if (rx_dataset == NULL) {
+      /* this is a no-op if the cache hasn't changed */
+      randomx_vm_set_cache(rx_vm, rx_sp->rs_cache);
+    }
     CTHR_MUTEX_UNLOCK(rx_dataset_mutex);
   } else {
     /* this is a no-op if the cache hasn't changed */
@@ -309,5 +317,6 @@ void rx_stop_mining(void) {
     rx_dataset = NULL;
     randomx_release_dataset(rd);
   }
+  rx_dataset_nomem = 0;
   CTHR_MUTEX_UNLOCK(rx_dataset_mutex);
 }

@@ -36,7 +36,6 @@
 #include "crypto/hash.h"
 #include "cryptonote_basic/difficulty.h"
 
-using namespace std;
 using cryptonote::check_hash;
 
 int main(int argc, char *argv[]) {
@@ -56,7 +55,7 @@ int main(int argc, char *argv[]) {
         }
       }
     }
-    if (diff < numeric_limits<uint64_t>::max() / 256) {
+    if (diff < std::numeric_limits<uint64_t>::max() / 256) {
       uint64_t val = 0;
       for (int i = 31; i >= 0; i--) {
         val = val * 256 + 255;

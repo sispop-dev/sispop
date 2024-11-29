@@ -31,7 +31,6 @@
 #include "chaingen.h"
 #include "integer_overflow.h"
 
-using namespace epee;
 using namespace cryptonote;
 
 namespace
@@ -59,7 +58,7 @@ namespace
   {
     cryptonote::tx_source_entry se;
     se.amount = tx.vout[out_idx].amount;
-    se.push_output(0, boost::get<cryptonote::txout_to_key>(tx.vout[out_idx].target).key, se.amount);
+    se.push_output(0, std::get<cryptonote::txout_to_key>(tx.vout[out_idx].target).key, se.amount);
     se.real_output = 0;
     se.rct = false;
     se.real_out_tx_key = get_tx_pub_key_from_extra(tx);
@@ -75,7 +74,7 @@ namespace
 gen_uint_overflow_base::gen_uint_overflow_base()
   : m_last_valid_block_event_idx(static_cast<size_t>(-1))
 {
-  REGISTER_CALLBACK_METHOD(gen_uint_overflow_1, mark_last_valid_block);
+  REGISTER_CALLBACK(mark_last_valid_block);
 }
 
 bool gen_uint_overflow_base::check_tx_verification_context(const cryptonote::tx_verification_context& tvc, bool tx_added, size_t event_idx, const cryptonote::transaction& /*tx*/)
@@ -179,7 +178,7 @@ bool gen_uint_overflow_2::generate(std::vector<test_event_entry>& events) const
   destinations.push_back(tx_destination_entry(sources.front().amount - MONEY_SUPPLY - MONEY_SUPPLY + 1 - TESTS_DEFAULT_FEE, bob_addr, false));
 
   cryptonote::transaction tx_1;
-  if (!construct_tx(miner_account.get_keys(), sources, destinations, boost::none, std::vector<uint8_t>(), tx_1, 0))
+  if (!construct_tx(miner_account.get_keys(), sources, destinations, std::nullopt, std::vector<uint8_t>(), tx_1, 0))
     return false;
   events.push_back(tx_1);
 
@@ -205,7 +204,7 @@ bool gen_uint_overflow_2::generate(std::vector<test_event_entry>& events) const
   destinations.push_back(de);
 
   cryptonote::transaction tx_2;
-  if (!construct_tx(bob_account.get_keys(), sources, destinations, boost::none, std::vector<uint8_t>(), tx_2, 0))
+  if (!construct_tx(bob_account.get_keys(), sources, destinations, std::nullopt, std::vector<uint8_t>(), tx_2, 0))
     return false;
   events.push_back(tx_2);
 

@@ -32,11 +32,14 @@
 
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <boost/uuid/uuid.hpp>
 #include <stdexcept>
 #include <chrono>
+#include <array>
+#include <ratio>
 
-#define CRYPTONOTE_DNS_TIMEOUT_MS                       20000
+using namespace std::literals;
 
 #define CRYPTONOTE_MAX_BLOCK_NUMBER                     500000000
 #define CRYPTONOTE_MAX_TX_SIZE                          1000000
@@ -89,16 +92,15 @@ static_assert(STAKING_PORTIONS % 12 == 0, "Use a multiple of twelve, so that it 
 #define DYNAMIC_FEE_REFERENCE_TRANSACTION_WEIGHT        ((uint64_t)3000)
 #define DYNAMIC_FEE_REFERENCE_TRANSACTION_WEIGHT_V12    ((uint64_t)240000) // Only v12 (v13 switches back)
 
-#define DIFFICULTY_TARGET_V2                            120  // seconds
-#define DIFFICULTY_WINDOW_V2                            60
-#define DIFFICULTY_BLOCKS_COUNT_V2                      (DIFFICULTY_WINDOW_V2 + 1) // added +1 to make N=N
-#define TARGET_BLOCK_TIME                               5 * 60
+constexpr auto TARGET_BLOCK_TIME           = 2min;
+constexpr auto DIFFICULTY_WINDOW           = 60;
+constexpr uint64_t DIFFICULTY_BLOCKS_COUNT = (DIFFICULTY_WINDOW + 1); // added +1 to make N=N
 
-#define BLOCKS_EXPECTED_IN_HOURS(val)                   (((60 * 60) / DIFFICULTY_TARGET_V2) * (val))
-#define BLOCKS_EXPECTED_IN_DAYS(val)                    (BLOCKS_EXPECTED_IN_HOURS(24) * (val))
-#define BLOCKS_EXPECTED_IN_YEARS(val)                   (BLOCKS_EXPECTED_IN_DAYS(365) * (val))
+constexpr uint64_t BLOCKS_EXPECTED_IN_HOURS(int hours) { return (1h / TARGET_BLOCK_TIME); }
+constexpr uint64_t BLOCKS_EXPECTED_IN_DAYS(int days)   { return BLOCKS_EXPECTED_IN_HOURS(24) * days; }
+constexpr uint64_t BLOCKS_EXPECTED_IN_YEARS(int years) { return BLOCKS_EXPECTED_IN_DAYS(365) * years; }
 
-#define CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_SECONDS_V2   DIFFICULTY_TARGET_V2 * CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS
+#define CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_SECONDS_V2   TARGET_BLOCK_TIME * CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS
 #define CRYPTONOTE_LOCKED_TX_ALLOWED_DELTA_BLOCKS       1
 
 
@@ -110,11 +112,15 @@ static_assert(STAKING_PORTIONS % 12 == 0, "Use a multiple of twelve, so that it 
 #define CRYPTONOTE_MEMPOOL_TX_FROM_ALT_BLOCK_LIVETIME     (86400*7) //seconds, one week
 
 #define MEMPOOL_PRUNE_NON_STANDARD_TX_LIFETIME          (2 * 60 * 60) // seconds, 2 hours
+// see src/cryptonote_protocol/levin_notify.cpp
+#define CRYPTONOTE_NOISE_MIN_EPOCH                      5      // minutes
+#define CRYPTONOTE_NOISE_EPOCH_RANGE                    30     // seconds
+#define CRYPTONOTE_NOISE_MIN_DELAY                      10     // seconds
+#define CRYPTONOTE_NOISE_DELAY_RANGE                    5      // seconds
+#define CRYPTONOTE_NOISE_BYTES                          3*1024 // 3 KiB
+#define CRYPTONOTE_NOISE_CHANNELS                       2      // Max outgoing connections per zone used for noise/covert sending
 
-#define COMMAND_RPC_GET_BLOCKS_FAST_MAX_COUNT           1000
-#define COMMAND_RPC_GET_CHECKPOINTS_MAX_COUNT           256
-#define COMMAND_RPC_GET_QUORUM_STATE_MAX_COUNT          256
-#define MAX_RPC_CONTENT_LENGTH                          1048576 // 1 MB
+#define CRYPTONOTE_MAX_FRAGMENTS                        20 // ~20 * NOISE_BYTES max payload size for covert/noise send
 
 #define P2P_LOCAL_WHITE_PEERLIST_LIMIT                  1000
 #define P2P_LOCAL_GRAY_PEERLIST_LIMIT                   5000
@@ -163,6 +169,11 @@ static_assert(STAKING_PORTIONS % 12 == 0, "Use a multiple of twelve, so that it 
 #define HF_VERSION_ED25519_KEY                  cryptonote::network_version_13_enforce_checkpoints
 #define HF_VERSION_FEE_BURNING                  cryptonote::network_version_14_blink
 #define HF_VERSION_BLINK                        cryptonote::network_version_14_blink
+#define HF_VERSION_MIN_2_OUTPUTS                cryptonote::network_version_19
+#define HF_VERSION_REJECT_SIGS_IN_COINBASE      cryptonote::network_version_19
+#define HF_VERSION_ENFORCE_MIN_AGE              cryptonote::network_version_19
+#define HF_VERSION_EFFECTIVE_SHORT_TERM_MEDIAN_IN_PENALTY cryptonote::network_version_19
+#define HF_VERSION_PULSE 			cryptonote::network_version_19
 
 #define PER_KB_FEE_QUANTIZATION_DECIMALS        8
 
@@ -185,88 +196,105 @@ static_assert(STAKING_PORTIONS % 12 == 0, "Use a multiple of twelve, so that it 
 // New constants are intended to go here
 namespace config
 {
-  uint64_t const DEFAULT_FEE_ATOMIC_XMR_PER_KB = 500; // Just a placeholder!  Change me!
-  uint8_t const FEE_CALCULATION_MAX_RETRIES = 10;
-  uint64_t const DEFAULT_DUST_THRESHOLD = ((uint64_t)2000000000); // 2 * pow(10, 9)
-  uint64_t const BASE_REWARD_CLAMP_THRESHOLD = ((uint64_t)100000000); // pow(10, 8)
-  std::string const P2P_REMOTE_DEBUG_TRUSTED_PUB_KEY = "0000000000000000000000000000000000000000000000000000000000000000";
+  inline constexpr auto DNS_TIMEOUT = 20s;
+  inline constexpr uint64_t DEFAULT_FEE_ATOMIC_XMR_PER_KB = 500; // Just a placeholder!  Change me!
+  inline constexpr uint8_t FEE_CALCULATION_MAX_RETRIES = 10;
+  inline constexpr uint64_t DEFAULT_DUST_THRESHOLD = 2000000000; // 2 * pow(10, 9)
+  inline constexpr uint64_t BASE_REWARD_CLAMP_THRESHOLD = 100000000; // pow(10, 8)
 
-  uint64_t const CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 18;
-  uint64_t const CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 19;
-  uint64_t const CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX = 20;
-  uint16_t const P2P_DEFAULT_PORT = 20000;
-  uint16_t const RPC_DEFAULT_PORT = 30000;
-  uint16_t const ZMQ_RPC_DEFAULT_PORT = 40000;
-  uint16_t const QNET_DEFAULT_PORT = 50000;
-  boost::uuids::uuid const NETWORK_ID = { {
+  // Maximum allowed stake contribution, as a fraction of the available contribution room.  This
+  // should generally be slightly larger than 1.  This is used to disallow large overcontributions
+  // which can happen when there are competing stakes submitted at the same time for the same
+  // service node.
+  using MAXIMUM_ACCEPTABLE_STAKE = std::ratio<101, 100>;
+
+  // Used to estimate the blockchain height from a timestamp, with some grace time.  This can drift
+  // slightly over time (because average block time is not typically *exactly*
+  // DIFFICULTY_TARGET_V2).
+  inline constexpr uint64_t HEIGHT_ESTIMATE_HEIGHT = 582088;
+  inline constexpr time_t HEIGHT_ESTIMATE_TIMESTAMP = 1595359932;
+
+  inline constexpr uint64_t CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 18;
+  inline constexpr uint64_t CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 19;
+  inline constexpr uint64_t CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX = 20;
+  inline constexpr uint16_t P2P_DEFAULT_PORT = 20000;
+  inline constexpr uint16_t RPC_DEFAULT_PORT = 30000;
+  inline constexpr uint16_t ZMQ_RPC_DEFAULT_PORT = 40000;
+  inline constexpr uint16_t QNET_DEFAULT_PORT = 50000;
+  inline constexpr boost::uuids::uuid const NETWORK_ID = { {
         0x01 ,0x30, 0x60, 0x70 ,0x15, 0x30, 0x45, 0x60, 0x75, 0x80, 0x34, 0x67, 0x25, 0x39, 0x80
     } }; // Bender's nightmare
-  std::string const GENESIS_TX = "013c01ff0001ffffffffffff03029b2e4c0281c0b02e7c53291a94d1d0cbff8883f8024f5142ee494ffbbd08807121017767aafcde9be00dcfd098715ebcf7f410daebc582fda69d24a28e9d0bc890d1";
-  uint32_t const GENESIS_NONCE = 70;
+  inline constexpr std::string_view GENESIS_TX = "013c01ff0001ffffffffffff03029b2e4c0281c0b02e7c53291a94d1d0cbff8883f8024f5142ee494ffbbd08807121017767aafcde9be00dcfd098715ebcf7f410daebc582fda69d24a28e9d0bc890d1"sv;
+  inline constexpr uint32_t GENESIS_NONCE = 70;
+
+  inline constexpr uint64_t GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS = BLOCKS_EXPECTED_IN_DAYS(7);
+
+  inline constexpr std::array GOVERNANCE_WALLET_ADDRESS =
+  {
+    "49HsfhWTvKZgc4qH1hwcEpM99Ng2TqmcxVHJoSkSQvV3N9iVJP1NT6gJTWRvuTWMNqeDgHNUcrpYVdnXW5Ep33W33YfwqRe"sv,
+    "49HsfhWTvKZgc4qH1hwcEpM99Ng2TqmcxVHJoSkSQvV3N9iVJP1NT6gJTWRvuTWMNqeDgHNUcrpYVdnXW5Ep33W33YfwqRe"sv,
+  };
 
   // Hash domain separators
-  const char HASH_KEY_BULLETPROOF_EXPONENT[] = "bulletproof";
-  const char HASH_KEY_RINGDB[] = "ringdsb";
-  const char HASH_KEY_SUBADDRESS[] = "SubAddr";
-  const unsigned char HASH_KEY_ENCRYPTED_PAYMENT_ID = 0x8d;
-  const unsigned char HASH_KEY_WALLET = 0x8c;
-  const unsigned char HASH_KEY_WALLET_CACHE = 0x8d;
-  const unsigned char HASH_KEY_RPC_PAYMENT_NONCE = 0x58;
-  const unsigned char HASH_KEY_MEMORY = 'k';
-  const unsigned char HASH_KEY_MULTISIG[] = {'M', 'u', 'l', 't' , 'i', 's', 'i', 'g', 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
+  inline constexpr std::string_view HASH_KEY_BULLETPROOF_EXPONENT = "bulletproof"sv;
+  inline constexpr std::string_view HASH_KEY_RINGDB = "ringdsb\0"sv;
+  inline constexpr std::string_view HASH_KEY_SUBADDRESS = "SubAddr\0"sv;
+  inline constexpr unsigned char HASH_KEY_ENCRYPTED_PAYMENT_ID = 0x8d;
+  inline constexpr unsigned char HASH_KEY_WALLET = 0x8c;
+  inline constexpr unsigned char HASH_KEY_WALLET_CACHE = 0x8d;
+  inline constexpr unsigned char HASH_KEY_RPC_PAYMENT_NONCE = 0x58;
+  inline constexpr unsigned char HASH_KEY_MEMORY = 'k';
+  inline constexpr std::string_view HASH_KEY_MULTISIG = "Multisig\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00"sv;
   const unsigned char HASH_KEY_TXPROOF_V2[] = "TXPROOF_V2";
-
-  uint64_t const GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS = ((60 * 60 * 24 * 7) / DIFFICULTY_TARGET_V2);
-  std::string const GOVERNANCE_WALLET_ADDRESS[] =
-  {
-    "49HsfhWTvKZgc4qH1hwcEpM99Ng2TqmcxVHJoSkSQvV3N9iVJP1NT6gJTWRvuTWMNqeDgHNUcrpYVdnXW5Ep33W33YfwqRe",
-    "49HsfhWTvKZgc4qH1hwcEpM99Ng2TqmcxVHJoSkSQvV3N9iVJP1NT6gJTWRvuTWMNqeDgHNUcrpYVdnXW5Ep33W33YfwqRe",
-  };
 
   namespace testnet
   {
-    uint64_t const CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 156;
-    uint64_t const CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 157;
-    uint64_t const CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX = 158;
-    uint16_t const P2P_DEFAULT_PORT = 38156;
-    uint16_t const RPC_DEFAULT_PORT = 38157;
-    uint16_t const ZMQ_RPC_DEFAULT_PORT = 38158;
-    uint16_t const QNET_DEFAULT_PORT = 38159;
-    boost::uuids::uuid const NETWORK_ID = { {
-        0x22, 0x3a, 0x78, 0x65, 0x88, 0x6f, 0xca, 0xb8, 0x01, 0xa1, 0xdc, 0x07, 0x71, 0x55, 0x15, 0x22,
+    inline constexpr uint64_t HEIGHT_ESTIMATE_HEIGHT = 339767;
+    inline constexpr time_t HEIGHT_ESTIMATE_TIMESTAMP = 1595360006;
+    inline constexpr uint64_t CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 156;
+    inline constexpr uint64_t CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 157;
+    inline constexpr uint64_t CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX = 158;
+    inline constexpr uint16_t P2P_DEFAULT_PORT = 38156;
+    inline constexpr uint16_t RPC_DEFAULT_PORT = 38157;
+    inline constexpr uint16_t ZMQ_RPC_DEFAULT_PORT = 38158;
+    inline constexpr uint16_t QNET_DEFAULT_PORT = 38159;
+    inline constexpr boost::uuids::uuid const NETWORK_ID = { {
+        0x5f, 0x3a, 0x78, 0x65, 0xe1, 0x6f, 0xca, 0xb8, 0x02, 0xa1, 0xdc, 0x17, 0x61, 0x64, 0x15, 0xbe,
       } }; // Bender's daydream
-    std::string const GENESIS_TX = "013c01ff0001ffffffffffff03029b2e4c0281c0b02e7c53291a94d1d0cbff8883f8024f5142ee494ffbbd08807121017767aafcde9be00dcfd098715ebcf7f410daebc582fda69d24a28e9d0bc890d1";
-    uint32_t const GENESIS_NONCE = 10001;
+    inline constexpr std::string_view GENESIS_TX = "03011e001e01ff00018080c9db97f4fb270259b546996f69aa71abe4238995f41d780ab1abebcac9f00e808f147bdb9e3228420112573af8c309b69a1a646f41b5212ba7d9c4590bf86e04f36c486467cfef9d3d72000000000000000000000000000000000000000000000000000000000000000000"sv;
+    inline constexpr uint32_t GENESIS_NONCE = 10001;
 
-    uint64_t const GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS = 1000;
-    std::string const GOVERNANCE_WALLET_ADDRESS[] =
+    inline constexpr uint64_t GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS = 1000;
+    inline constexpr std::array GOVERNANCE_WALLET_ADDRESS =
     {
-      "T6TU9yWHiYwKnJLWKoBQyWKXQSkRv7WnPacqFzrw5kPvgJJM7oQn4GNCPDimwU87RxVy69cRgpMoFUeZpTqyjGR91nW2PYdkq", // hardfork v7-9
-      "T6TU9yWHiYwKnJLWKoBQyWKXQSkRv7WnPacqFzrw5kPvgJJM7oQn4GNCPDimwU87RxVy69cRgpMoFUeZpTqyjGR91nW2PYdkq", // hardfork v10
+      "T6SUprTYE5rQpep9iQFxyPcKVd91DFR1fQ1Qsyqp5eYLiFc8XuYd3reRE71qDL8c3DXioUbDEpDFdaUpetnL37NS1R3rzoKxi"sv, // hardfork v7-9
+      "T6TzkJb5EiASaCkcH7idBEi1HSrpSQJE1Zq3aL65ojBMPZvqHNYPTL56i3dncGVNEYCG5QG5zrBmRiVwcg6b1cRM1SRNqbp44"sv, // hardfork v10
     };
 
   }
 
-  namespace stagenet
+  namespace devnet
   {
-    uint64_t const CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 24;
-    uint64_t const CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 25;
-    uint64_t const CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX = 36;
-    uint16_t const P2P_DEFAULT_PORT = 38056;
-    uint16_t const RPC_DEFAULT_PORT = 38057;
-    uint16_t const ZMQ_RPC_DEFAULT_PORT = 38058;
-    uint16_t const QNET_DEFAULT_PORT = 38059;
-    boost::uuids::uuid const NETWORK_ID = { {
-        0xbb ,0x37, 0x55, 0x22 , 0x0A, 0x66 , 0x19, 0x65, 0x09, 0xB2, 0x97, 0x8A, 0xCC, 0x01, 0xDF, 0x9C
-      } }; // Beep Boop
-    std::string const GENESIS_TX = "013c01ff0001ffffffffffff0302df5d56da0c7d643ddd1ce61901c7bdc5fb1738bfe39fbe69c28a3a7032729c0f2101168d0c4ca86fb55a4cf6a36d31431be1c53a3bd7411bb24e8832410289fa6f3b";
-    uint32_t const GENESIS_NONCE = 10002;
+    inline constexpr uint64_t HEIGHT_ESTIMATE_HEIGHT = 0;
+    inline constexpr time_t HEIGHT_ESTIMATE_TIMESTAMP = 1597170000;
+    inline constexpr uint64_t CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 3930; // ~ dV1 .. dV3
+    inline constexpr uint64_t CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX = 4442; // ~ dVA .. dVC
+    inline constexpr uint64_t CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX = 5850; // ~dVa .. dVc
+    inline constexpr uint16_t P2P_DEFAULT_PORT = 38856;
+    inline constexpr uint16_t RPC_DEFAULT_PORT = 38857;
+    inline constexpr uint16_t ZMQ_RPC_DEFAULT_PORT = 38858;
+    inline constexpr uint16_t QNET_DEFAULT_PORT = 38859;
+    inline constexpr boost::uuids::uuid const NETWORK_ID = { {
+        0xa9, 0xf7, 0x5c, 0x7d, 0x55, 0x17, 0xcb, 0x6b, 0x5a, 0xf4, 0x63, 0x79, 0x7a, 0x57, 0xab, 0xd3
+      } };
+    inline constexpr std::string_view GENESIS_TX = "04011e1e01ff00018080c9db97f4fb2702fa27e905f604faa4eb084ee675faca77b0cfea9adec1526da33cae5e286f31624201dae05bf3fa1662b7fd373c92426763d921cf3745e10ee43edb510f690c656f247200000000000000000000000000000000000000000000000000000000000000000000"sv;
+    inline constexpr uint32_t GENESIS_NONCE = 12345;
 
-    uint64_t const GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS = ((60 * 60 * 24 * 7) / DIFFICULTY_TARGET_V2);
-    std::string const GOVERNANCE_WALLET_ADDRESS[] =
+    inline constexpr uint64_t GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS = BLOCKS_EXPECTED_IN_DAYS(7);
+    inline constexpr std::array GOVERNANCE_WALLET_ADDRESS =
     {
-      "5A8U5rKBGTQNN3JoNDFPyTgARrmvqyMgR15ZGSFWhRgJ9JA62V6gUox8NbVCq9Y2jCVcuWPETLAzoNSWvCyYBxGtRPG4TVq", // hardfork v7-9
-      "5A8U5rKBGTQNN3JoNDFPyTgARrmvqyMgR15ZGSFWhRgJ9JA62V6gUox8NbVCq9Y2jCVcuWPETLAzoNSWvCyYBxGtRPG4TVq", // hardfork v10
+      "dV3EhSE1xXgSzswBgVioqFNTfcqGopvTrcYjs4YDLHUfU64DuHxFoEmbwoyipTidGiTXx5EuYdgzZhDLMTo9uEv82M4A7Uimp"sv, // hardfork v7-9
+      "dV3EhSE1xXgSzswBgVioqFNTfcqGopvTrcYjs4YDLHUfU64DuHxFoEmbwoyipTidGiTXx5EuYdgzZhDLMTo9uEv82M4A7Uimp"sv, // hardfork v10
     };
   }
 }
@@ -287,6 +315,7 @@ namespace cryptonote
     network_version_16, // future fork
     network_version_17,
     network_version_18,
+    network_version_19,
 
     network_version_count,
   };
@@ -295,12 +324,15 @@ namespace cryptonote
   {
     MAINNET = 0,
     TESTNET,
-    STAGENET,
+    DEVNET,
     FAKECHAIN,
     UNDEFINED = 255
   };
-  struct config_t
+  struct network_config
   {
+    network_type NETWORK_TYPE;
+    uint64_t HEIGHT_ESTIMATE_HEIGHT;
+    time_t HEIGHT_ESTIMATE_TIMESTAMP;
     uint64_t CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX;
     uint64_t CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX;
     uint64_t CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX;
@@ -309,94 +341,97 @@ namespace cryptonote
     uint16_t ZMQ_RPC_DEFAULT_PORT;
     uint16_t QNET_DEFAULT_PORT;
     boost::uuids::uuid NETWORK_ID;
-    std::string GENESIS_TX;
+    std::string_view GENESIS_TX;
     uint32_t GENESIS_NONCE;
     uint64_t GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS;
-    std::string const *GOVERNANCE_WALLET_ADDRESS;
-  };
-  inline const config_t& get_config(network_type nettype, int hard_fork_version = 7)
-  {
-    static config_t mainnet = {
-      ::config::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
-      ::config::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
-      ::config::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX,
-      ::config::P2P_DEFAULT_PORT,
-      ::config::RPC_DEFAULT_PORT,
-      ::config::ZMQ_RPC_DEFAULT_PORT,
-      ::config::QNET_DEFAULT_PORT,
-      ::config::NETWORK_ID,
-      ::config::GENESIS_TX,
-      ::config::GENESIS_NONCE,
-      ::config::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
-      &::config::GOVERNANCE_WALLET_ADDRESS[0],
-    };
+    std::array<std::string_view, 2> GOVERNANCE_WALLET_ADDRESS;
 
-    static config_t testnet = {
-      ::config::testnet::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
-      ::config::testnet::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
-      ::config::testnet::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX,
-      ::config::testnet::P2P_DEFAULT_PORT,
-      ::config::testnet::RPC_DEFAULT_PORT,
-      ::config::testnet::ZMQ_RPC_DEFAULT_PORT,
-      ::config::testnet::QNET_DEFAULT_PORT,
-      ::config::testnet::NETWORK_ID,
-      ::config::testnet::GENESIS_TX,
-      ::config::testnet::GENESIS_NONCE,
-      ::config::testnet::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
-      &::config::testnet::GOVERNANCE_WALLET_ADDRESS[0],
-    };
-
-    static config_t stagenet = {
-      ::config::stagenet::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
-      ::config::stagenet::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
-      ::config::stagenet::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX,
-      ::config::stagenet::P2P_DEFAULT_PORT,
-      ::config::stagenet::RPC_DEFAULT_PORT,
-      ::config::stagenet::ZMQ_RPC_DEFAULT_PORT,
-      ::config::stagenet::QNET_DEFAULT_PORT,
-      ::config::stagenet::NETWORK_ID,
-      ::config::stagenet::GENESIS_TX,
-      ::config::stagenet::GENESIS_NONCE,
-      ::config::stagenet::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
-      &::config::stagenet::GOVERNANCE_WALLET_ADDRESS[0],
-    };
-
-    switch (nettype)
-    {
-      case MAINNET: case FAKECHAIN:
-      {
-        if (nettype == FAKECHAIN)
-          mainnet.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS = 100;
-
-        if (hard_fork_version <= network_version_10_bulletproofs)
-          mainnet.GOVERNANCE_WALLET_ADDRESS = &::config::GOVERNANCE_WALLET_ADDRESS[0];
-        else
-          mainnet.GOVERNANCE_WALLET_ADDRESS = &::config::GOVERNANCE_WALLET_ADDRESS[1];
-
-        return mainnet;
-      }
-
-      case TESTNET:
-      {
-        if (hard_fork_version <= network_version_9_service_nodes)
-          testnet.GOVERNANCE_WALLET_ADDRESS = &::config::testnet::GOVERNANCE_WALLET_ADDRESS[0];
-        else
-          testnet.GOVERNANCE_WALLET_ADDRESS = &::config::testnet::GOVERNANCE_WALLET_ADDRESS[1];
-
-        return testnet;
-      }
-
-      case STAGENET:
-      {
-        if (hard_fork_version <= network_version_9_service_nodes)
-          stagenet.GOVERNANCE_WALLET_ADDRESS = &::config::stagenet::GOVERNANCE_WALLET_ADDRESS[0];
-        else
-          stagenet.GOVERNANCE_WALLET_ADDRESS = &::config::stagenet::GOVERNANCE_WALLET_ADDRESS[1];
-
-        return stagenet;
-      }
-
-      default: throw std::runtime_error("Invalid network type");
+    inline constexpr std::string_view governance_wallet_address(int hard_fork_version) const {
+      const auto wallet_switch =
+        (NETWORK_TYPE == MAINNET || NETWORK_TYPE == FAKECHAIN)
+        ? network_version_11_infinite_staking
+        : network_version_10_bulletproofs;
+      return GOVERNANCE_WALLET_ADDRESS[hard_fork_version >= wallet_switch ? 1 : 0];
     }
   };
+  inline constexpr network_config mainnet_config = {
+    MAINNET,
+    ::config::HEIGHT_ESTIMATE_HEIGHT,
+    ::config::HEIGHT_ESTIMATE_TIMESTAMP,
+    ::config::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
+    ::config::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
+    ::config::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX,
+    ::config::P2P_DEFAULT_PORT,
+    ::config::RPC_DEFAULT_PORT,
+    ::config::ZMQ_RPC_DEFAULT_PORT,
+    ::config::QNET_DEFAULT_PORT,
+    ::config::NETWORK_ID,
+    ::config::GENESIS_TX,
+    ::config::GENESIS_NONCE,
+    ::config::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
+    ::config::GOVERNANCE_WALLET_ADDRESS,
+  };
+  inline constexpr network_config testnet_config = {
+    TESTNET,
+    ::config::testnet::HEIGHT_ESTIMATE_HEIGHT,
+    ::config::testnet::HEIGHT_ESTIMATE_TIMESTAMP,
+    ::config::testnet::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
+    ::config::testnet::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
+    ::config::testnet::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX,
+    ::config::testnet::P2P_DEFAULT_PORT,
+    ::config::testnet::RPC_DEFAULT_PORT,
+    ::config::testnet::ZMQ_RPC_DEFAULT_PORT,
+    ::config::testnet::QNET_DEFAULT_PORT,
+    ::config::testnet::NETWORK_ID,
+    ::config::testnet::GENESIS_TX,
+    ::config::testnet::GENESIS_NONCE,
+    ::config::testnet::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
+    ::config::testnet::GOVERNANCE_WALLET_ADDRESS,
+  };
+  inline constexpr network_config devnet_config = {
+    DEVNET,
+    ::config::devnet::HEIGHT_ESTIMATE_HEIGHT,
+    ::config::devnet::HEIGHT_ESTIMATE_TIMESTAMP,
+    ::config::devnet::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
+    ::config::devnet::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
+    ::config::devnet::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX,
+    ::config::devnet::P2P_DEFAULT_PORT,
+    ::config::devnet::RPC_DEFAULT_PORT,
+    ::config::devnet::ZMQ_RPC_DEFAULT_PORT,
+    ::config::devnet::QNET_DEFAULT_PORT,
+    ::config::devnet::NETWORK_ID,
+    ::config::devnet::GENESIS_TX,
+    ::config::devnet::GENESIS_NONCE,
+    ::config::devnet::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
+    ::config::devnet::GOVERNANCE_WALLET_ADDRESS,
+  };
+  inline constexpr network_config fakenet_config = {
+    FAKECHAIN,
+    ::config::HEIGHT_ESTIMATE_HEIGHT,
+    ::config::HEIGHT_ESTIMATE_TIMESTAMP,
+    ::config::CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX,
+    ::config::CRYPTONOTE_PUBLIC_INTEGRATED_ADDRESS_BASE58_PREFIX,
+    ::config::CRYPTONOTE_PUBLIC_SUBADDRESS_BASE58_PREFIX,
+    ::config::P2P_DEFAULT_PORT,
+    ::config::RPC_DEFAULT_PORT,
+    ::config::ZMQ_RPC_DEFAULT_PORT,
+    ::config::QNET_DEFAULT_PORT,
+    ::config::NETWORK_ID,
+    ::config::GENESIS_TX,
+    ::config::GENESIS_NONCE,
+    100, //::config::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
+    ::config::GOVERNANCE_WALLET_ADDRESS,
+  };
+
+  inline constexpr const network_config& get_config(network_type nettype)
+  {
+    switch (nettype)
+    {
+      case MAINNET: return mainnet_config;
+      case TESTNET: return testnet_config;
+      case DEVNET: return devnet_config;
+      case FAKECHAIN: return fakenet_config;
+      default: throw std::runtime_error{"Invalid network type"};
+    }
+  }
 }

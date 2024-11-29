@@ -84,7 +84,7 @@ TEST(AddressFromTXT, Failure)
 
 TEST(AddressFromURL, Success)
 {
-  const std::string addr = "44AFFq5kSiGBoZ4NMDwYtN18obc8AemS33DBLWs3H7otXft3XjrpDtQGv7SqSsaBYBb98uNbr2VBBEt7f2wfn3RVGQBEP3A";
+  const std::string addr = "888tNkZrPN6JsEgekjMnABU4TBzc2Dt29EPAvkRxbANsAnjyPbb3iQ1YBRk1UXcdRsiKc9dhwMVgN5S9cQUiyoogDavup3H";
   
   bool dnssec_result = false;
 

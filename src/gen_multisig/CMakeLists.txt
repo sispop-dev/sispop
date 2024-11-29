@@ -34,10 +34,9 @@ sispop_add_executable(gen_multisig "sispop-gen-trusted-multisig"
 target_link_libraries(gen_multisig
   PRIVATE
     wallet
+    rpc_commands
     cryptonote_core
     epee
-    epee_readline
-    Boost::chrono
     Boost::program_options
     Boost::filesystem
     version

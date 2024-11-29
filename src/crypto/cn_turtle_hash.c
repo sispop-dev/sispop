@@ -74,8 +74,8 @@ extern int aesb_pseudo_round(const uint8_t *in, uint8_t *out, const uint8_t *exp
   { \
     U64(b)[2] = state.hs.w[8] ^ state.hs.w[10]; \
     U64(b)[3] = state.hs.w[9] ^ state.hs.w[11]; \
-    division_result = state.hs.w[12]; \
-    sqrt_result = state.hs.w[13]; \
+    division_result = SWAP64LE(state.hs.w[12]); \
+    sqrt_result = SWAP64LE(state.hs.w[13]); \
   } while (0)
 
 #define VARIANT2_PORTABLE_INIT() \

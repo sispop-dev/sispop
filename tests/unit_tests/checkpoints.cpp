@@ -90,8 +90,8 @@ struct TestDB: public BaseTestDB
     if (!get_top_checkpoint(top_checkpoint)) return result;
     checkpoint_t bottom_checkpoint = checkpoints.front();
 
-    start = sispop::clamp_u64(start, bottom_checkpoint.height, top_checkpoint.height);
-    end   = sispop::clamp_u64(end, bottom_checkpoint.height, top_checkpoint.height);
+    start = std::clamp(start, bottom_checkpoint.height, top_checkpoint.height);
+    end   = std::clamp(end, bottom_checkpoint.height, top_checkpoint.height);
     if (start > end)
     {
       if (start < bottom_checkpoint.height) return result;
@@ -125,7 +125,7 @@ struct TestDB: public BaseTestDB
     return result;
   }
 
-  virtual void remove_block_checkpoint(uint64_t block_height)
+  void remove_block_checkpoint(uint64_t block_height) override
   {
     auto it = std::find_if(checkpoints.begin(), checkpoints.end(), [block_height](checkpoint_t const &entry) {
       return entry.height == block_height;

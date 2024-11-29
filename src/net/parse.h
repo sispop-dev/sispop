@@ -28,7 +28,7 @@
 
 #pragma once
 
-#include <boost/utility/string_ref.hpp>
+#include <string_view>
 #include <cstdint>
 
 #include "common/expect.h"
@@ -36,17 +36,7 @@
 
 namespace net
 {
-    /*!
-     * \brief Takes a valid address string (IP, Tor, I2P, or DNS name) and splits it into host and port
-     *
-     * The host of an IPv6 addresses in the format "[x:x:..:x]:port" will have the braces stripped.
-     * For example, when the address is "[ffff::2023]", host will be set to "ffff::2023".
-     *
-     * \param address The address string one wants to split
-     * \param[out] host The host part of the address string. Is always set.
-     * \param[out] port The port part of the address string. Is only set when address string contains a port.
-    */
-    void get_network_address_host_and_port(const std::string& address, std::string& host, std::string& port);
+    std::pair<std::string_view, std::string_view> get_network_address_host_and_port(const std::string_view address);
 
     /*!
       Identifies onion, i2p and IPv4 addresses and returns them as a generic
@@ -61,7 +51,7 @@ namespace net
       \return A tor or IPv4 address, else error.
     */
     expect<epee::net_utils::network_address>
-        get_network_address(boost::string_ref address, std::uint16_t default_port);
+        get_network_address(std::string_view address, std::uint16_t default_port);
 
     /*!
       Identifies an IPv4 subnet in CIDR notatioa and returns it as a generic
@@ -74,6 +64,6 @@ namespace net
       \return A tor or IPv4 address, else error.
     */
     expect<epee::net_utils::ipv4_network_subnet>
-        get_ipv4_subnet_address(boost::string_ref address, bool allow_implicit_32 = false);
+        get_ipv4_subnet_address(std::string_view address, bool allow_implicit_32 = false);
 }
 

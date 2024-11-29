@@ -40,7 +40,7 @@ namespace cryptonote
   //---------------------------------------------------------------
   keypair  get_deterministic_keypair_from_height(uint64_t height);
   bool     get_deterministic_output_key         (const account_public_address& address, const keypair& tx_key, size_t output_index, crypto::public_key& output_key);
-  bool     validate_governance_reward_key       (uint64_t height, const std::string& governance_wallet_address_str, size_t output_index, const crypto::public_key& output_key, const cryptonote::network_type nettype);
+  bool     validate_governance_reward_key       (uint64_t height, std::string_view governance_wallet_address_str, size_t output_index, const crypto::public_key& output_key, const cryptonote::network_type nettype);
 
   uint64_t governance_reward_formula            (uint64_t base_reward, uint8_t hf_version);
   bool     block_has_governance_output          (network_type nettype, cryptonote::block const &block);
@@ -50,12 +50,40 @@ namespace cryptonote
   uint64_t get_portion_of_reward                (uint64_t portions, uint64_t total_service_node_reward);
   uint64_t service_node_reward_formula          (uint64_t base_reward, uint8_t hard_fork_version);
 
-  struct sispop_miner_tx_context // NOTE(sispop): All the custom fields required by Sispop to use construct_miner_tx
+
+  struct sispop_miner_tx_context
   {
-    sispop_miner_tx_context(network_type type = MAINNET, service_nodes::block_winner const &block_winner = service_nodes::null_block_winner) : nettype(type), block_winner(std::move(block_winner)) { }
-    network_type                nettype;
-    service_nodes::block_winner block_winner;
-    uint64_t                    batched_governance = 0; // NOTE: 0 until hardfork v10, then use blockchain::calc_batched_governance_reward
+    static sispop_miner_tx_context miner_block(network_type nettype,
+                                             cryptonote::account_public_address const &block_producer,
+                                             service_nodes::payout const &block_leader = service_nodes::null_payout)
+    {
+        sispop_miner_tx_context result = {};
+        result.nettype               = nettype;
+        result.miner_block_producer  = block_producer;
+        result.block_leader          = block_leader;
+        return result;
+    }
+
+    static sispop_miner_tx_context pulse_block(network_type nettype,
+                                             service_nodes::payout const &block_producer,
+                                             service_nodes::payout const &block_leader = service_nodes::null_payout)
+    {
+      sispop_miner_tx_context result = {};
+      result.pulse                 = true;
+      result.nettype               = nettype;
+      result.pulse_block_producer  = block_producer;
+      result.block_leader          = block_leader;
+      return result;
+    }
+
+    network_type           nettype = MAINNET;
+
+    bool                   pulse;                // If true, pulse_.* varables are set, otherwise miner_block_producer is set, determining who should get the coinbase reward.
+    service_nodes::payout  pulse_block_producer; // Can be different from the leader in Pulse if the original leader fails to complete the round, the block producer changes.
+
+    account_public_address miner_block_producer;
+    service_nodes::payout  block_leader;         // Winner from the Service Node queuing in the Service Node List.
+    uint64_t               batched_governance;   // NOTE: 0 until hardfork v10, then use blockchain::calc_batched_governance_reward
   };
 
   bool construct_miner_tx(
@@ -64,11 +92,10 @@ namespace cryptonote
       uint64_t already_generated_coins,
       size_t current_block_weight,
       uint64_t fee,
-      const account_public_address &miner_address,
       transaction& tx,
+      const sispop_miner_tx_context &miner_context,
       const blobdata& extra_nonce = blobdata(),
-      uint8_t hard_fork_version = 1,
-      const sispop_miner_tx_context &miner_context = {});
+      uint8_t hard_fork_version = 1);
 
   struct block_reward_parts
   {
@@ -86,16 +113,16 @@ namespace cryptonote
     /// exceeding the median block size; starting in HF 13 the miner pays the full penalty.
     uint64_t original_base_reward;
 
-    uint64_t miner_reward() { return base_miner + base_miner_fee; }
+    uint64_t miner_reward() const { return base_miner + base_miner_fee; }
   };
 
   struct sispop_block_reward_context
   {
     using portions = uint64_t;
-    uint64_t                                 height;
-    uint64_t                                 fee;
-    uint64_t                                 batched_governance;   // Optional: 0 hardfork v10, then must be calculated using blockchain::calc_batched_governance_reward
-    std::vector<service_nodes::payout_entry> service_node_payouts = service_nodes::null_winner;
+    uint64_t              height;
+    uint64_t              fee;
+    uint64_t              batched_governance;   // Optional: 0 hardfork v10, then must be calculated using blockchain::calc_batched_governance_reward
+    std::vector<service_nodes::payout_entry> block_leader_payouts = {service_nodes::null_payout_entry};
   };
 
   // NOTE(sispop): I would combine this into get_base_block_reward, but
@@ -133,7 +160,7 @@ namespace cryptonote
       FIELD(multisig_kLRki)
 
       if (real_output >= outputs.size())
-        return false;
+        throw std::invalid_argument{"invalid real_output size"};
     END_SERIALIZE()
   };
 
@@ -152,6 +179,21 @@ namespace cryptonote
     bool operator==(const tx_destination_entry& other) const
     {
       return amount == other.amount && addr == other.addr;
+    }
+
+    std::string address(network_type nettype, const crypto::hash &payment_id) const
+    {
+      if (!original.empty())
+      {
+        return original;
+      }
+
+      if (is_integrated)
+      {
+        return get_account_integrated_address_as_str(nettype, addr, reinterpret_cast<const crypto::hash8 &>(payment_id));
+      }
+
+      return get_account_address_as_str(nettype, is_subaddress, addr);
     }
 
     BEGIN_SERIALIZE_OBJECT()
@@ -181,36 +223,40 @@ namespace cryptonote
   };
 
   //---------------------------------------------------------------
-  crypto::public_key get_destination_view_key_pub(const std::vector<tx_destination_entry> &destinations, const boost::optional<cryptonote::tx_destination_entry>& change_addr);
-  bool construct_tx(const account_keys& sender_account_keys, std::vector<tx_source_entry> &sources, const std::vector<tx_destination_entry>& destinations, const boost::optional<cryptonote::tx_destination_entry>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time, const sispop_construct_tx_params &tx_params = {});
-  bool construct_tx_with_tx_key   (const account_keys& sender_account_keys, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, std::vector<tx_source_entry>& sources, std::vector<tx_destination_entry>& destinations, const boost::optional<cryptonote::tx_destination_entry>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time, const crypto::secret_key &tx_key, const std::vector<crypto::secret_key> &additional_tx_keys, const rct::RCTConfig &rct_config = { rct::RangeProofBorromean, 0}, rct::multisig_out *msout = NULL, bool shuffle_outs = true, sispop_construct_tx_params const &tx_params = {});
-  bool construct_tx_and_get_tx_key(const account_keys& sender_account_keys, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, std::vector<tx_source_entry>& sources, std::vector<tx_destination_entry>& destinations, const boost::optional<cryptonote::tx_destination_entry>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time,       crypto::secret_key &tx_key,       std::vector<crypto::secret_key> &additional_tx_keys, const rct::RCTConfig &rct_config = { rct::RangeProofBorromean, 0}, rct::multisig_out *msout = NULL, sispop_construct_tx_params const &tx_params = {});
+  crypto::public_key get_destination_view_key_pub(const std::vector<tx_destination_entry> &destinations, const std::optional<cryptonote::tx_destination_entry>& change_addr);
+  bool construct_tx(const account_keys& sender_account_keys, std::vector<tx_source_entry> &sources, const std::vector<tx_destination_entry>& destinations, const std::optional<cryptonote::tx_destination_entry>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time, const sispop_construct_tx_params &tx_params = {});
+  bool construct_tx_with_tx_key   (const account_keys& sender_account_keys, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, std::vector<tx_source_entry>& sources, std::vector<tx_destination_entry>& destinations, const std::optional<cryptonote::tx_destination_entry>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time, const crypto::secret_key &tx_key, const std::vector<crypto::secret_key> &additional_tx_keys, const rct::RCTConfig &rct_config = { rct::RangeProofBorromean, 0}, rct::multisig_out *msout = NULL, bool shuffle_outs = true, sispop_construct_tx_params const &tx_params = {});
+  bool construct_tx_and_get_tx_key(const account_keys& sender_account_keys, const std::unordered_map<crypto::public_key, subaddress_index>& subaddresses, std::vector<tx_source_entry>& sources, std::vector<tx_destination_entry>& destinations, const std::optional<cryptonote::tx_destination_entry>& change_addr, const std::vector<uint8_t> &extra, transaction& tx, uint64_t unlock_time,       crypto::secret_key &tx_key,       std::vector<crypto::secret_key> &additional_tx_keys, const rct::RCTConfig &rct_config = { rct::RangeProofBorromean, 0}, rct::multisig_out *msout = NULL, sispop_construct_tx_params const &tx_params = {});
   bool generate_output_ephemeral_keys(const size_t tx_version, bool &found_change,
                                       const cryptonote::account_keys &sender_account_keys, const crypto::public_key &txkey_pub,  const crypto::secret_key &tx_key,
-                                      const cryptonote::tx_destination_entry &dst_entr, const boost::optional<cryptonote::tx_destination_entry> &change_addr, const size_t output_index,
+                                      const cryptonote::tx_destination_entry &dst_entr, const std::optional<cryptonote::tx_destination_entry> &change_addr, const size_t output_index,
                                       const bool &need_additional_txkeys, const std::vector<crypto::secret_key> &additional_tx_keys,
                                       std::vector<crypto::public_key> &additional_tx_public_keys,
                                       std::vector<rct::key> &amount_keys,
                                       crypto::public_key &out_eph_public_key);
 
   bool generate_output_ephemeral_keys(const size_t tx_version, const cryptonote::account_keys &sender_account_keys, const crypto::public_key &txkey_pub,  const crypto::secret_key &tx_key,
-                                      const cryptonote::tx_destination_entry &dst_entr, const boost::optional<cryptonote::account_public_address> &change_addr, const size_t output_index,
+                                      const cryptonote::tx_destination_entry &dst_entr, const std::optional<cryptonote::account_public_address> &change_addr, const size_t output_index,
                                       const bool &need_additional_txkeys, const std::vector<crypto::secret_key> &additional_tx_keys,
                                       std::vector<crypto::public_key> &additional_tx_public_keys,
                                       std::vector<rct::key> &amount_keys,
                                       crypto::public_key &out_eph_public_key) ;
 
-  bool generate_genesis_block(
-      block& bl
-    , std::string const & genesis_tx
-    , uint32_t nonce
-    );
+  bool generate_genesis_block(block& bl, network_type nettype);
+
+  struct randomx_longhash_context
+  {
+    uint64_t     seed_height;
+    crypto::hash seed_block_hash;
+    uint64_t     current_blockchain_height;
+    randomx_longhash_context() = default;
+    randomx_longhash_context(const Blockchain *pbc, const block& b /*block to longhash*/, const uint64_t height);
+  };
 
   class Blockchain;
-  bool get_block_longhash(const Blockchain *pb, const block& b, crypto::hash& res, const uint64_t height, const int miners);
-  void get_altblock_longhash(const block& b, crypto::hash& res, const uint64_t main_height, const uint64_t height,
-    const uint64_t seed_height, const crypto::hash& seed_hash);
-  crypto::hash get_block_longhash(const Blockchain *pb, const block& b, const uint64_t height, const int miners);
+  crypto::hash get_block_longhash(cryptonote::network_type nettype, randomx_longhash_context const &randomx_context, const block& b, uint64_t height, int miners);
+  crypto::hash get_altblock_longhash(cryptonote::network_type nettype, randomx_longhash_context const &randomx_context, const block& b, uint64_t height);
+  crypto::hash get_block_longhash_w_blockchain(cryptonote::network_type nettype, const Blockchain *pb, const block& b, uint64_t height, int miners);
   void get_block_longhash_reorg(const uint64_t split_height);
 
 }

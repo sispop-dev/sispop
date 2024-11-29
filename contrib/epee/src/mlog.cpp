@@ -35,7 +35,7 @@
 #endif
 #endif
 
-#include <time.h>
+#include <ctime>
 #include <atomic>
 #include <boost/filesystem.hpp>
 #include <boost/algorithm/string.hpp>
@@ -100,7 +100,7 @@ static const char *get_default_categories(int level)
   switch (level)
   {
     case 0:
-      categories = "*:WARNING,net:FATAL,net.http:FATAL,net.ssl:FATAL,net.p2p:FATAL,net.cn:FATAL,global:INFO,verify:FATAL,serialization:FATAL,logging:INFO,msgwriter:INFO";
+      categories = "*:WARNING,net:FATAL,net.http:FATAL,net.p2p:FATAL,net.cn:FATAL,global:INFO,verify:FATAL,serialization:FATAL,logging:INFO,msgwriter:INFO";
       break;
     case 1:
       categories = "*:INFO,global:INFO,stacktrace:INFO,logging:INFO,msgwriter:INFO,perf.*:DEBUG";

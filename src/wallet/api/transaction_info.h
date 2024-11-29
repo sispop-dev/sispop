@@ -34,8 +34,6 @@
 
 namespace Monero {
 
-class TransactionHistoryImpl;
-
 enum class reward_type {
     unspecified,
     service_node,

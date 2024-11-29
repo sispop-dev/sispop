@@ -27,6 +27,7 @@
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 #pragma once
+#include <string>
 
 #define QT_TRANSLATE_NOOP(context,str) i18n_translate(str,context)
 

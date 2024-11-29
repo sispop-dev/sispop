@@ -1,27 +1,30 @@
 #include <bitset>
+#include "common/hex.h"
 #include "sispop_name_system.h"
 
-#include "checkpoints/checkpoints.h"
 #include "common/sispop.h"
-#include "common/util.h"
-#include "common/base32z.h"
+#include "common/string_util.h"
 #include "crypto/hash.h"
 #include "cryptonote_basic/cryptonote_basic.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "cryptonote_basic/cryptonote_format_utils.h"
-#include "cryptonote_core/cryptonote_tx_utils.h"
 #include "cryptonote_basic/tx_extra.h"
 #include "cryptonote_core/blockchain.h"
 #include "sispop_economy.h"
-#include "string_coding.h"
 
 #include <sispopmq/hex.h>
+#include <sispopmq/base32z.h>
+#include <sispopmq/base64.h>
 
 #include <sqlite3.h>
 
 extern "C"
 {
-#include <sodium.h>
+#include <sodium/crypto_generichash.h>
+#include <sodium/crypto_generichash_blake2b.h>
+#include <sodium/crypto_pwhash.h>
+#include <sodium/crypto_secretbox.h>
+#include <sodium/crypto_sign.h>
 }
 
 #undef SISPOP_DEFAULT_LOG_CATEGORY
@@ -29,6 +32,7 @@ extern "C"
 
 namespace lns
 {
+
 enum struct lns_sql_type
 {
   save_owner,
@@ -101,9 +105,7 @@ std::string lns::mapping_value::to_readable_value(cryptonote::network_type netty
   std::string result;
   if (is_sispopnet_type(type))
   {
-    char buf[128] = {};
-    base32z::encode(to_span(), buf);
-    result = buf;
+    result = sispopmq::to_base32z(to_view());
   }
   else if (type == lns::mapping_type::wallet)
   {
@@ -118,7 +120,7 @@ std::string lns::mapping_value::to_readable_value(cryptonote::network_type netty
   }
   else
   {
-    result = epee::to_hex::string(to_span());
+    result = sispopmq::to_hex(to_view());
   }
 
   return result;
@@ -136,7 +138,7 @@ std::string lns_extra_string(cryptonote::network_type nettype, cryptonote::tx_ex
     stream << ", backup_owner=" << (data.backup_owner ? data.backup_owner.to_string(nettype) : "(none)");
   }
   else
-    stream << "signature=" << epee::string_tools::pod_to_hex(data.signature.data);
+    stream << "signature=" << tools::type_to_hex(data.signature.data);
 
   stream << ", type=" << data.type << ", name_hash=" << data.name_hash << "}";
   return stream.str();
@@ -177,7 +179,7 @@ bool bind(sql_compiled_statement& s, int index, const T& val) { return SQLITE_OK
 bool bind(sql_compiled_statement& s, int index, std::nullptr_t) { return SQLITE_OK == sqlite3_bind_null(s.statement, index); }
 
 // text, from a referenced string (which must be kept alive)
-bool bind(sql_compiled_statement& s, int index, sispopmq::string_view text)
+bool bind(sql_compiled_statement& s, int index, std::string_view text)
 {
   return SQLITE_OK == sqlite3_bind_text(s.statement, index, text.data(), text.size(), nullptr /*dtor*/);
 }
@@ -218,7 +220,7 @@ bool bind_blob(sql_compiled_statement& s, int index, const void* data, size_t le
 }
 
 // from a string_view
-bool bind_blob(sql_compiled_statement& s, int index, sispopmq::string_view blob)
+bool bind_blob(sql_compiled_statement& s, int index, std::string_view blob)
 {
   return SQLITE_OK == sqlite3_bind_blob(s.statement, index, blob.data(), blob.size(), nullptr /*dtor*/);
 }
@@ -250,7 +252,7 @@ bool bind_blob(sql_compiled_statement& s, I index, T&&... args)
 // bind_all(s, 123, "text", blob_view{data, size});
 //
 struct blob_view {
-  sispopmq::string_view data;
+  std::string_view data;
   /// Constructor that simply forwards anything to the `data` member constructor
   template <typename... T> explicit blob_view(T&&... args) : data{std::forward<T>(args)...} {}
 };
@@ -302,8 +304,8 @@ template <typename T, std::enable_if_t<std::is_floating_point<T>::value, int> = 
 T get(sql_compiled_statement& s, int index) { return static_cast<T>(sqlite3_column_double(s.statement, index)); }
 
 // text, via a string_view pointing at the text data
-template <typename T, std::enable_if_t<std::is_same<T, sispopmq::string_view>::value, int> = 0>
-sispopmq::string_view get(sql_compiled_statement& s, int index)
+template <typename T, std::enable_if_t<std::is_same<T, std::string_view>::value, int> = 0>
+std::string_view get(sql_compiled_statement& s, int index)
 {
   return {reinterpret_cast<const char*>(sqlite3_column_text(s.statement, index)),
           static_cast<size_t>(sqlite3_column_bytes(s.statement, index))};
@@ -332,7 +334,7 @@ template <typename T, typename I>
 void get(sql_compiled_statement& s, I index, T& val) { val = get<T>(s, index); }
 
 // blob, via a string_view
-sispopmq::string_view get_blob(sql_compiled_statement& s, int index)
+std::string_view get_blob(sql_compiled_statement& s, int index)
 {
   return {reinterpret_cast<const char*>(sqlite3_column_blob(s.statement, index)),
           static_cast<size_t>(sqlite3_column_bytes(s.statement, index))};
@@ -340,7 +342,7 @@ sispopmq::string_view get_blob(sql_compiled_statement& s, int index)
 
 // blob, via a string_view
 template <typename I, std::enable_if_t<is_int_enum<I>::value, int> = 0>
-sispopmq::string_view get_blob(sql_compiled_statement& s, I index)
+std::string_view get_blob(sql_compiled_statement& s, I index)
 {
   return get_blob(s, static_cast<int>(index));
 }
@@ -376,7 +378,7 @@ mapping_record sql_get_mapping_from_statement(sql_compiled_statement& statement)
 
   // Copy encrypted_value
   {
-    auto value = get<sispopmq::string_view>(statement, mapping_record_column::encrypted_value);
+    auto value = get<std::string_view>(statement, mapping_record_column::encrypted_value);
     if (value.size() > result.encrypted_value.buffer.size())
     {
       MERROR("Unexpected encrypted value blob with size=" << value.size() << ", in LNS db larger than the available size=" << result.encrypted_value.buffer.size());
@@ -388,7 +390,7 @@ mapping_record sql_get_mapping_from_statement(sql_compiled_statement& statement)
 
   // Copy name hash
   {
-    auto value = get<sispopmq::string_view>(statement, mapping_record_column::name_hash);
+    auto value = get<std::string_view>(statement, mapping_record_column::name_hash);
     result.name_hash.append(value.data(), value.size());
   }
 
@@ -521,7 +523,7 @@ bool mapping_record::active(cryptonote::network_type nettype, uint64_t blockchai
   return last_active_height >= (blockchain_height - 1);
 }
 
-bool sql_compiled_statement::compile(sispopmq::string_view query, bool optimise_for_multiple_usage)
+bool sql_compiled_statement::compile(std::string_view query, bool optimise_for_multiple_usage)
 {
   sqlite3_stmt* st;
 #if SQLITE_VERSION_NUMBER >= 3020000
@@ -655,7 +657,7 @@ static uint8_t *memcpy_generic_owner_helper(uint8_t *dest, lns::generic_owner co
   return result;
 }
 
-crypto::hash tx_extra_signature_hash(epee::span<const uint8_t> value, lns::generic_owner const *owner, lns::generic_owner const *backup_owner, crypto::hash const &prev_txid)
+crypto::hash tx_extra_signature_hash(std::string_view value, lns::generic_owner const *owner, lns::generic_owner const *backup_owner, crypto::hash const &prev_txid)
 {
   static_assert(sizeof(crypto::hash) == crypto_generichash_BYTES, "Using libsodium generichash for signature hash, require we fit into crypto::hash");
   crypto::hash result = {};
@@ -726,8 +728,9 @@ bool parse_owner_to_generic_owner(cryptonote::network_type nettype, std::string 
   {
     result = lns::make_monero_owner(parsed_addr.address, parsed_addr.is_subaddress);
   }
-  else if (epee::string_tools::hex_to_pod(owner, ed_owner))
+  else if (owner.size() == 2*sizeof(ed_owner.data) && sispopmq::is_hex(owner))
   {
+    sispopmq::from_hex(owner.begin(), owner.end(), ed_owner.data);
     result = lns::make_ed25519_owner(ed_owner);
   }
   else
@@ -768,11 +771,7 @@ static bool check_condition(bool condition, std::string* reason, T&&... args) {
   if (condition && reason)
   {
     std::ostringstream os;
-#ifdef __cpp_fold_expressions // C++17
     (os << ... << std::forward<T>(args));
-#else
-    (void) std::initializer_list<int>{(os << std::forward<T>(args), 0)...};
-#endif
     *reason = os.str();
   }
   return condition;
@@ -800,6 +799,8 @@ bool validate_lns_name(mapping_type type, std::string name, std::string *reason)
   if (check_condition((name.empty() || name.size() > max_name_len), reason, "LNS type=", type, ", specifies mapping from name->value where the name's length=", name.size(), " is 0 or exceeds the maximum length=", max_name_len, ", given name=", name))
     return false;
 
+  std::string_view name_view{name}; // Will chop this down as we validate each part
+
   // NOTE: Validate domain specific requirements
   if (is_sispopnet)
   {
@@ -810,31 +811,34 @@ bool validate_lns_name(mapping_type type, std::string name, std::string *reason)
     if (check_condition(name == "localhost.sispop", reason, "LNS type=", type, ", specifies mapping from name->value using protocol reserved name=", name))
       return false;
 
-    // Must start with alphanumeric
-    if (check_condition(!char_is_alphanum(name.front()), reason, "LNS type=", type, ", specifies mapping from name->value where the name does not start with an alphanumeric character, name=", name))
-      return false;
-
-    char const SHORTEST_DOMAIN[] = "a.sispop";
-    if (check_condition((name.size() < static_cast<int>(sispop::char_count(SHORTEST_DOMAIN))), reason, "LNS type=", type, ", specifies mapping from name->value where the name is shorter than the shortest possible name=", SHORTEST_DOMAIN, ", given name=", name))
+    auto constexpr SHORTEST_DOMAIN = "a.sispop"sv;
+    if (check_condition(name.size() < SHORTEST_DOMAIN.size(), reason, "LNS type=", type, ", specifies mapping from name->value where the name is shorter than the shortest possible name=", SHORTEST_DOMAIN, ", given name=", name))
       return false;
 
     // Must end with .sispop
-    char const SUFFIX[]     = ".sispop";
-    char const *name_suffix = name.data() + (name.size() - sispop::char_count(SUFFIX));
-    if (check_condition((memcmp(name_suffix, SUFFIX, sispop::char_count(SUFFIX)) != 0), reason, "LNS type=", type, ", specifies mapping from name->value where the name does not end with the domain .sispop, name=", name))
+    auto constexpr SUFFIX = ".sispop"sv;
+    if (check_condition(!tools::ends_with(name_view, SUFFIX), reason, "LNS type=", type, ", specifies mapping from name->value where the name does not end with the domain .sispop, name=", name))
       return false;
 
-    // Characted preceeding suffix must be alphanumeric
-    char const *char_preceeding_suffix = name_suffix - 1;
-    if (check_condition(!char_is_alphanum(char_preceeding_suffix[0]), reason, "LNS type=", type ,", specifies mapping from name->value where the character preceeding the <char>.sispop is not alphanumeric, char=", char_preceeding_suffix[0], ", name=", name))
+    name_view.remove_suffix(SUFFIX.size());
+
+    // Must start with alphanumeric
+    if (check_condition(!char_is_alphanum(name_view.front()), reason, "LNS type=", type, ", specifies mapping from name->value where the name does not start with an alphanumeric character, name=", name))
       return false;
 
-    for (char const *it = (name.data() + 1); it < char_preceeding_suffix; it++) // Inbetween start and preceeding suffix, (alphanumeric or hyphen) characters permitted
-    {
-      char c = it[0];
-      if (check_condition(!(char_is_alphanum(c) || c == '-'), reason, "LNS type=", type, ", specifies mapping from name->value where the domain name contains more than the permitted alphanumeric or hyphen characters, name=", name))
+    name_view.remove_prefix(1);
+
+    if (!name_view.empty()) {
+      // Characted preceding suffix must be alphanumeric
+      if (check_condition(!char_is_alphanum(name_view.back()), reason, "LNS type=", type ,", specifies mapping from name->value where the character preceding the .sispop is not alphanumeric, char=", name_view.back(), ", name=", name))
         return false;
+      name_view.remove_suffix(1);
     }
+
+    // Inbetween start and preceding suffix, (alphanumeric or hyphen) characters permitted
+    if (check_condition(!std::all_of(name_view.begin(), name_view.end(), [](char c) { return char_is_alphanum(c) || c == '-'; }),
+          reason, "LNS type=", type, ", specifies mapping from name->value where the domain name contains more than the permitted alphanumeric or hyphen characters, name=", name))
+      return false;
   }
   else
   {
@@ -843,20 +847,21 @@ bool validate_lns_name(mapping_type type, std::string name, std::string *reason)
     // ^[a-z0-9_]([a-z0-9-_]*[a-z0-9_])?$
 
     // Must start with (alphanumeric or underscore)
-    if (check_condition(!(char_is_alphanum(name.front()) || name.front() == '_'), reason, "LNS type=", type, ", specifies mapping from name->value where the name does not start with an alphanumeric or underscore character, name=", name))
+    if (check_condition(!(char_is_alphanum(name_view.front()) || name_view.front() == '_'), reason, "LNS type=", type, ", specifies mapping from name->value where the name does not start with an alphanumeric or underscore character, name=", name))
       return false;
+    name_view.remove_prefix(1);
 
-    // Must NOT end with a hyphen '-'
-    if (check_condition(!(char_is_alphanum(name.back()) || name.back() == '_'), reason, "LNS type=", type, ", specifies mapping from name->value where the last character is a hyphen '-' which is disallowed, name=", name))
-      return false;
-
-    char const *end   = name.data() + (name.size() - 1);
-    for (char const *it = name.data() + 1; it < end; it++) // Inbetween start and preceeding suffix, (alphanumeric, hyphen or underscore) characters permitted
-    {
-      char c = it[0];
-      if (check_condition(!(char_is_alphanum(c) || c == '-' || c == '_'), reason, "LNS type=", type, ", specifies mapping from name->value where the name contains more than the permitted alphanumeric, underscore or hyphen characters, name=", name))
+    if (!name_view.empty()) {
+      // Must NOT end with a hyphen '-'
+      if (check_condition(!(char_is_alphanum(name_view.back()) || name_view.back() == '_'), reason, "LNS type=", type, ", specifies mapping from name->value where the last character is a hyphen '-' which is disallowed, name=", name))
         return false;
+      name_view.remove_suffix(1);
     }
+
+    // Inbetween start and preceding suffix, (alphanumeric, hyphen or underscore) characters permitted
+    if (check_condition(!std::all_of(name_view.begin(), name_view.end(), [](char c) { return char_is_alphanum(c) || c == '-' || c == '_'; }),
+          reason, "LNS type=", type, ", specifies mapping from name->value where the name contains more than the permitted alphanumeric, underscore or hyphen characters, name=", name))
+      return false;
   }
 
 
@@ -872,7 +877,7 @@ static bool check_lengths(mapping_type type, std::string const &value, size_t ma
     {
       std::stringstream err_stream;
       err_stream << "LNS type=" << type << ", specifies mapping from name_hash->encrypted_value where the value's length=" << value.size() << ", does not equal the required length=" << max << ", given value=";
-      if (binary_val) err_stream << epee::to_hex::string(epee::span<const uint8_t>(reinterpret_cast<uint8_t const *>(value.data()), value.size()));
+      if (binary_val) err_stream << sispopmq::to_hex(value);
       else            err_stream << value;
       *reason = err_stream.str();
     }
@@ -938,12 +943,15 @@ bool validate_mapping_value(cryptonote::network_type nettype, mapping_type type,
   }
   else if (is_sispopnet_type(type))
   {
-    if (check_condition(value.size() != 52, reason, "The sispopnet value=", value, ", should be a 52 char base32z string, length=", value.size()))
+    // We need a 52 char base32z string that decodes to a 32-byte value, which really means we need
+    // 51 base32z chars (=255 bits) followed by a 1-bit value ('y'=0, or 'o'=0b10000); anything else
+    // in the last spot isn't a valid sispopnet address.
+    if (check_condition(value.size() != 52 || !sispopmq::is_base32z(value) || value.back() != 'y' || value.back() != 'o',
+                reason, "The sispopnet value=", value, " (length=", value.size(), "), is not a valid base32z-encoded pubkey"))
       return false;
 
     crypto::ed25519_public_key pkey;
-    if (check_condition(!base32z::decode(value, pkey), reason, "The value=", value, ", was not a decodable base32z value."))
-      return false;
+    sispopmq::to_hex(value.begin(), value.end(), pkey.data);
 
     if (blob)
     {
@@ -1000,8 +1008,7 @@ bool validate_encrypted_mapping_value(mapping_type type, std::string const &valu
 
 static std::string hash_to_base64(crypto::hash const &hash)
 {
-  std::string result = epee::string_encoding::base64_encode(reinterpret_cast<unsigned char const *>(hash.data), sizeof(hash));
-  return result;
+  return sispopmq::to_base64(tools::view_guts(hash));
 }
 
 static bool verify_lns_signature(crypto::hash const &hash, lns::generic_signature const &signature, lns::generic_owner const &owner)
@@ -1038,10 +1045,9 @@ static bool validate_against_previous_mapping(lns::name_system_db &lns_db, uint6
       if (check_condition(is_sispopnet_type(lns_extra.type) && !mapping.active(lns_db.network_type(), blockchain_height), reason, tx, ", ", lns_extra_string(lns_db.network_type(), lns_extra), " TX requested to update mapping that has already expired"))
         return false;
 
-      auto span_a = epee::strspan<uint8_t>(lns_extra.encrypted_value);
-      auto span_b = mapping.encrypted_value.to_span();
-      char const SPECIFYING_SAME_VALUE_ERR[] = " field to update is specifying the same mapping ";
-      if (check_condition(lns_extra.field_is_set(lns::extra_field::encrypted_value) && (span_a.size() == span_b.size() && memcmp(span_a.data(), span_b.data(), span_a.size()) == 0), reason, tx, ", ", lns_extra_string(lns_db.network_type(), lns_extra), SPECIFYING_SAME_VALUE_ERR, "value"))
+
+      constexpr auto SPECIFYING_SAME_VALUE_ERR = " field to update is specifying the same mapping "sv;
+      if (check_condition(lns_extra.field_is_set(lns::extra_field::encrypted_value) && lns_extra.encrypted_value == mapping.encrypted_value.to_view(), reason, tx, ", ", lns_extra_string(lns_db.network_type(), lns_extra), SPECIFYING_SAME_VALUE_ERR, "value"))
         return false;
 
       if (check_condition(lns_extra.field_is_set(lns::extra_field::owner) && lns_extra.owner == mapping.owner, reason, tx, ", ", lns_extra_string(lns_db.network_type(), lns_extra), SPECIFYING_SAME_VALUE_ERR, "owner"))
@@ -1052,8 +1058,7 @@ static bool validate_against_previous_mapping(lns::name_system_db &lns_db, uint6
 
       // Validate signature
       {
-        auto value = epee::strspan<uint8_t>(lns_extra.encrypted_value);
-        crypto::hash hash = tx_extra_signature_hash(value,
+        crypto::hash hash = tx_extra_signature_hash(lns_extra.encrypted_value,
                                                     lns_extra.field_is_set(lns::extra_field::owner) ? &lns_extra.owner : nullptr,
                                                     lns_extra.field_is_set(lns::extra_field::backup_owner) ? &lns_extra.backup_owner : nullptr,
                                                     expected_prev_txid);
@@ -1127,7 +1132,7 @@ bool name_system_db::validate_lns_tx(uint8_t hf_version, uint64_t blockchain_hei
     if (check_condition(tx.type != cryptonote::txtype::sispop_name_system, reason, tx, ", uses wrong tx type, expected=", cryptonote::txtype::sispop_name_system))
       return false;
 
-    if (check_condition(!cryptonote::get_sispop_name_system_from_tx_extra(tx.extra, *lns_extra), reason, tx, ", didn't have sispop name service in the tx_extra"))
+    if (check_condition(!cryptonote::get_field_from_tx_extra(tx.extra, *lns_extra), reason, tx, ", didn't have sispop name service in the tx_extra"))
       return false;
   }
 
@@ -1136,7 +1141,7 @@ bool name_system_db::validate_lns_tx(uint8_t hf_version, uint64_t blockchain_hei
   // Check TX LNS Serialized Fields are NULL if they are not specified
   // -----------------------------------------------------------------------------------------------
   {
-    char const VALUE_SPECIFIED_BUT_NOT_REQUESTED[] = ", given field but field is not requested to be serialised=";
+    constexpr auto VALUE_SPECIFIED_BUT_NOT_REQUESTED = ", given field but field is not requested to be serialised="sv;
     if (check_condition(!lns_extra->field_is_set(lns::extra_field::encrypted_value) && lns_extra->encrypted_value.size(), reason, tx, ", ", lns_extra_string(nettype, *lns_extra), VALUE_SPECIFIED_BUT_NOT_REQUESTED, "encrypted_value"))
       return false;
 
@@ -1577,8 +1582,7 @@ AND NOT EXISTS   (SELECT * FROM "mappings" WHERE "owner"."id" = "mappings"."back
 
 name_system_db::~name_system_db()
 {
-  if (!db)
-    return;
+  if (!db) return;
 
   {
     scoped_db_transaction db_transaction(*this);
@@ -1715,14 +1719,14 @@ static bool add_lns_entry(lns::name_system_db &lns_db, uint64_t height, cryptono
         auto column_type = columns[i];
         switch (column_type)
         {
-          case mapping_record_column::type:            bind(statement, i+1, static_cast<uint16_t>(entry.type)); break;
-          case mapping_record_column::name_hash:       bind(statement, i+1, sispopmq::string_view{name_hash}); break;
-          case mapping_record_column::encrypted_value: bind(statement, i+1, blob_view{entry.encrypted_value}); break;
-          case mapping_record_column::txid:            bind(statement, i+1, blob_view{tx_hash.data, sizeof(tx_hash)}); break;
-          case mapping_record_column::prev_txid:       bind(statement, i+1, blob_view{entry.prev_txid.data, sizeof(entry.prev_txid)}); break;
-          case mapping_record_column::owner_id:        bind(statement, i+1, owner_id); break;
-          case mapping_record_column::backup_owner_id: bind(statement, i+1, backup_owner_id); break;
-          case mapping_record_column::update_height:   bind(statement, i+1, height); break;
+          case mapping_record_column::type:            lns::bind(statement, i+1, static_cast<uint16_t>(entry.type)); break;
+          case mapping_record_column::name_hash:       lns::bind(statement, i+1, name_hash); break;
+          case mapping_record_column::encrypted_value: lns::bind(statement, i+1, blob_view{entry.encrypted_value}); break;
+          case mapping_record_column::txid:            lns::bind(statement, i+1, blob_view{tx_hash.data, sizeof(tx_hash)}); break;
+          case mapping_record_column::prev_txid:       lns::bind(statement, i+1, blob_view{entry.prev_txid.data, sizeof(entry.prev_txid)}); break;
+          case mapping_record_column::owner_id:        lns::bind(statement, i+1, owner_id); break;
+          case mapping_record_column::backup_owner_id: lns::bind(statement, i+1, backup_owner_id); break;
+          case mapping_record_column::update_height:   lns::bind(statement, i+1, height); break;
           default: assert(false); return false;
         }
       }
@@ -1788,7 +1792,7 @@ static bool get_txid_lns_entry(cryptonote::Blockchain const &blockchain, crypto:
   if (!blockchain.get_transactions({txid}, txs, missed_txs) || txs.empty())
     return false;
 
-  return cryptonote::get_sispop_name_system_from_tx_extra(txs[0].extra, extra);
+  return cryptonote::get_field_from_tx_extra(txs[0].extra, extra);
 }
 
 struct lns_update_history

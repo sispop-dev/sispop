@@ -70,9 +70,8 @@ inline void get(std::istream &input, bool &res) {
   }
 }
 
-template<typename T>
-typename std::enable_if<std::is_integral<T>::value, void>::type
-get(std::istream &input, T &res) {
+template<typename T, std::enable_if_t<std::is_integral_v<T>, int> = 0>
+void get(std::istream &input, T &res) {
   input >> res;
 }
 
@@ -84,9 +83,8 @@ inline void getvar(std::istream &input, std::size_t length, void *res) {
   }
 }
 
-template<typename T>
-typename std::enable_if<std::is_standard_layout<T>::value && !std::is_scalar<T>::value, void>::type
-get(std::istream &input, T &res) {
+template<typename T, std::enable_if_t<std::is_standard_layout_v<T> && !std::is_scalar_v<T>, int> = 0>
+void get(std::istream &input, T &res) {
   getvar(input, sizeof(T), &res);
 }
 
@@ -106,28 +104,7 @@ inline void get(std::istream &input, std::vector<char> &res) {
   }
 }
 
-#if !defined(_MSC_VER) || _MSC_VER >= 1800
-
-template<typename T, typename... TT>
-typename std::enable_if<(sizeof...(TT) > 0), void>::type
-get(std::istream &input, T &res, TT &... resres) {
-  get(input, res);
-  get(input, resres...);
+template<typename... T, std::enable_if_t<(sizeof...(T) >= 2), int> = 0>
+void get(std::istream &input, T&&... res) {
+  (get(input, res), ...);
 }
-
-#else
-#include <boost/preprocessor/cat.hpp>
-#include <boost/preprocessor/repetition/enum_binary_params.hpp>
-#include <boost/preprocessor/repetition/enum_params.hpp>
-#include <boost/preprocessor/repetition/repeat.hpp>
-#include <boost/preprocessor/repetition/repeat_from_to.hpp>
-
-#define NESTED_GET(z, n, data) get(input, BOOST_PP_CAT(res, n));
-#define GET(z, n, data) \
-template<BOOST_PP_ENUM_PARAMS(n, typename T)> \
-void get(std::istream &input, BOOST_PP_ENUM_BINARY_PARAMS(n, T, &res)) { \
-  BOOST_PP_REPEAT(n, NESTED_GET, ~) \
-}
-BOOST_PP_REPEAT_FROM_TO(2, 5, GET, ~)
-
-#endif

@@ -52,7 +52,6 @@ namespace epee { namespace net_utils
 		return (address.ip() & ~(0xffffffffull << m_mask)) == subnet();
 	}
 
-
 	bool network_address::equal(const network_address& other) const
 	{
 		// clang typeid workaround
@@ -87,6 +86,11 @@ namespace epee { namespace net_utils
 		return self_->is_same_host(*other_self);
 	}
 
+
+  // should be here, but network_address is perverted with a circular dependency into src/net, so
+  // this is in src/net/epee_network_address_hack.cpp instead.
+  //KV_SERIALIZE_MAP_CODE_BEGIN(network_address)
+
   std::string print_connection_context(const connection_context_base& ctx)
   {
     std::stringstream ss;
@@ -99,33 +103,6 @@ namespace epee { namespace net_utils
     std::stringstream ss;
     ss << ctx.m_remote_address.str() << (ctx.m_is_income ? " INC":" OUT");
     return ss.str();
-  }
-
-  const char* zone_to_string(zone value) noexcept
-  {
-    switch (value)
-    {
-    case zone::public_:
-      return "public";
-    case zone::i2p:
-      return "i2p";
-    case zone::tor:
-      return "tor";
-    default:
-      break;
-    }
-    return "invalid";
-  }
-
-  zone zone_from_string(const boost::string_ref value) noexcept
-  {
-    if (value == "public")
-      return zone::public_;
-    if (value == "i2p")
-      return zone::i2p;
-    if (value == "tor")
-      return zone::tor;
-    return zone::invalid;
   }
 }}
 

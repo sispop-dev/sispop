@@ -34,36 +34,39 @@ add_library(wallet
   node_rpc_proxy.cpp
   message_store.cpp
   message_transporter.cpp
+  transfer_view.cpp
 )
 
 target_link_libraries(wallet
   PUBLIC
     multisig
+    rpc_commands
+    rpc_server_base
     cryptonote_core
     mnemonics
     device_trezor
     net
     lmdb
-      ${Boost_CHRONO_LIBRARY}
-      ${Boost_PROGRAM_OPTIONS_LIBRARY}
-      ${Boost_FILESYSTEM_LIBRARY}
-      ${Boost_THREAD_LIBRARY}
+    rpc_http_client
+    Boost::serialization
+    Boost::filesystem
+    Boost::thread
   PRIVATE
+    OpenSSL::SSL
+    OpenSSL::Crypto
     extra)
 
 sispop_add_executable(wallet_rpc_server "sispop-wallet-rpc"
   wallet_rpc_server.cpp
+  wallet_rpc_server_commands_defs.cpp
   )
 
 target_link_libraries(wallet_rpc_server
   PRIVATE
+    rpc_server_base
     wallet
-    rpc_base
     daemonizer
-    http_wallet
-    epee_readline
     Boost::program_options
-    Boost::regex
     extra)
 
 

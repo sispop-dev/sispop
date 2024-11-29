@@ -6,6 +6,7 @@ Public domain.
 
 #include <memory.h>
 #include <stdio.h>
+#include <string.h>
 #ifndef _MSC_VER
 #include <sys/param.h>
 #endif

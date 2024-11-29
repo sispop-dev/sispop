@@ -30,52 +30,46 @@
 
 #include "misc_language.h"
 #include "portable_storage_base.h"
-
-#ifdef EPEE_PORTABLE_STORAGE_RECURSION_LIMIT
-#define EPEE_PORTABLE_STORAGE_RECURSION_LIMIT_INTERNAL EPEE_PORTABLE_STORAGE_RECURSION_LIMIT
-#else 
-#define EPEE_PORTABLE_STORAGE_RECURSION_LIMIT_INTERNAL 100
-#endif
+#include <boost/endian/conversion.hpp>
 
 namespace epee
 {
   namespace serialization
   {
+    constexpr size_t RECURSION_LIMIT = 50;
+
     struct throwable_buffer_reader
     {
       throwable_buffer_reader(const void* ptr, size_t sz);
       void read(void* target, size_t count);
       void read_sec_name(std::string& sce_name);
-      template<class t_pod_type>
-      void read(t_pod_type& pod_val);
-      template<class t_type>
-      t_type read();
       template<class type_name>
       storage_entry read_ae();
       storage_entry load_storage_array_entry(uint8_t type);
-      size_t read_varint();
+      uint64_t read_varint();
       template<class t_type>
       storage_entry read_se();
       storage_entry load_storage_entry();
+      template <typename T>
+      void read(T& pod_val);
+      template <typename T>
+      T read();
       void read(section& sec);
       void read(std::string& str);
-      void read(array_entry &ae);
     private:
-      struct recursuion_limitation_guard
+      struct [[nodiscard]] recursion_limiter
       {
         size_t& m_counter_ref;
-        recursuion_limitation_guard(size_t& counter):m_counter_ref(counter)
+        recursion_limiter(size_t& counter):m_counter_ref(counter)
         {
           ++m_counter_ref;
-          CHECK_AND_ASSERT_THROW_MES(m_counter_ref < EPEE_PORTABLE_STORAGE_RECURSION_LIMIT_INTERNAL, "Wrong blob data in portable storage: recursion limitation (" << EPEE_PORTABLE_STORAGE_RECURSION_LIMIT_INTERNAL << ") exceeded");
+          CHECK_AND_ASSERT_THROW_MES(m_counter_ref < RECURSION_LIMIT, "Wrong blob data in portable storage: recursion limit (" << RECURSION_LIMIT << ") exceeded");
         }
-        ~recursuion_limitation_guard() noexcept(false)
+        ~recursion_limiter()
         {
-          CHECK_AND_ASSERT_THROW_MES(m_counter_ref != 0, "Internal error: m_counter_ref == 0 while ~recursuion_limitation_guard()");
           --m_counter_ref;
         }
       };
-#define RECURSION_LIMITATION()  recursuion_limitation_guard rl(m_recursion_count)
 
       const uint8_t* m_ptr;
       size_t m_count;
@@ -92,173 +86,137 @@ namespace epee
       m_count = sz;
       m_recursion_count = 0;
     }
+
     inline 
     void throwable_buffer_reader::read(void* target, size_t count)
     {
-      RECURSION_LIMITATION();
       CHECK_AND_ASSERT_THROW_MES(m_count >= count, " attempt to read " << count << " bytes from buffer with " << m_count << " bytes remained");
       memcpy(target, m_ptr, count);
       m_ptr += count;
       m_count -= count;
     }
+
     inline 
     void throwable_buffer_reader::read_sec_name(std::string& sce_name)
     {
-      RECURSION_LIMITATION();
       uint8_t name_len = 0;
       read(name_len);
       sce_name.resize(name_len);
-      read((void*)sce_name.data(), name_len);
+      read(sce_name.data(), name_len);
     }
 
-    template<class t_pod_type>
-    void throwable_buffer_reader::read(t_pod_type& pod_val)
+    template <class T>
+    void throwable_buffer_reader::read(T& v)
     {
-      RECURSION_LIMITATION();
-      static_assert(std::is_pod<t_pod_type>::value, "POD type expected");
-      read(&pod_val, sizeof(pod_val));
+      static_assert(std::is_integral_v<T>);
+      read(&v, sizeof(T));
+      if constexpr (sizeof(T) > 1)
+        boost::endian::little_to_native(v);
     }
-    
-    template<class t_type>
-    t_type throwable_buffer_reader::read()
+
+    template <class T>
+    T throwable_buffer_reader::read()
     {
-      RECURSION_LIMITATION();
-      t_type v;
+      T v;
       read(v);
       return v;
     }
 
-
-    template<class type_name>
+    template <typename T>
     storage_entry throwable_buffer_reader::read_ae()
     {
-      RECURSION_LIMITATION();
-      //for pod types
-      array_entry_t<type_name> sa;
       size_t size = read_varint();
       CHECK_AND_ASSERT_THROW_MES(size <= m_count, "Size sanity check failed");
-      sa.reserve(size);
-      //TODO: add some optimization here later
+      storage_entry se{std::in_place_type<array_entry>, std::in_place_type<array_t<T>>};
+      auto& arr = std::get<array_t<T>>(std::get<array_entry>(se));
+      if constexpr (!std::is_same_v<T, bool>) // bool uses a std::deque instead of vector because
+        arr.reserve(size);                    // std::vector<bool> is broken by design
+
       while(size--)
-        sa.m_array.push_back(read<type_name>());        
-      return storage_entry(array_entry(sa));
+        read(arr.emplace_back());
+
+      return se;
     }
 
     inline 
     storage_entry throwable_buffer_reader::load_storage_array_entry(uint8_t type)
     {
-      RECURSION_LIMITATION();
+      recursion_limiter lim{m_recursion_count};
       type &= ~SERIALIZE_FLAG_ARRAY;
       switch(type)
       {
-      case SERIALIZE_TYPE_INT64:  return read_ae<int64_t>();
-      case SERIALIZE_TYPE_INT32:  return read_ae<int32_t>();
-      case SERIALIZE_TYPE_INT16:  return read_ae<int16_t>();
-      case SERIALIZE_TYPE_INT8:   return read_ae<int8_t>();
-      case SERIALIZE_TYPE_UINT64: return read_ae<uint64_t>();
-      case SERIALIZE_TYPE_UINT32: return read_ae<uint32_t>();
-      case SERIALIZE_TYPE_UINT16: return read_ae<uint16_t>();
-      case SERIALIZE_TYPE_UINT8:  return read_ae<uint8_t>();
-      case SERIALIZE_TYPE_DUOBLE: return read_ae<double>();
-      case SERIALIZE_TYPE_BOOL:   return read_ae<bool>();
-      case SERIALIZE_TYPE_STRING: return read_ae<std::string>();
-      case SERIALIZE_TYPE_OBJECT: return read_ae<section>();
-      case SERIALIZE_TYPE_ARRAY:  return read_ae<array_entry>();
-      default: 
-        CHECK_AND_ASSERT_THROW_MES(false, "unknown entry_type code = " << type);
+        case SERIALIZE_TYPE_TAG<int64_t>:     return read_ae<int64_t>();
+        case SERIALIZE_TYPE_TAG<int32_t>:     return read_ae<int32_t>();
+        case SERIALIZE_TYPE_TAG<int16_t>:     return read_ae<int16_t>();
+        case SERIALIZE_TYPE_TAG<int8_t>:      return read_ae<int8_t>();
+        case SERIALIZE_TYPE_TAG<uint64_t>:    return read_ae<uint64_t>();
+        case SERIALIZE_TYPE_TAG<uint32_t>:    return read_ae<uint32_t>();
+        case SERIALIZE_TYPE_TAG<uint16_t>:    return read_ae<uint16_t>();
+        case SERIALIZE_TYPE_TAG<uint8_t>:     return read_ae<uint8_t>();
+        //case SERIALIZE_TYPE_TAG<double>:      return read_ae<double>();
+        case SERIALIZE_TYPE_TAG<bool>:        return read_ae<bool>();
+        case SERIALIZE_TYPE_TAG<std::string>: return read_ae<std::string>();
+        case SERIALIZE_TYPE_TAG<section>:     return read_ae<section>();
+        //case SERIALIZE_TYPE_ARRAY:  return read_ae<array_entry>(); // nested arrays not supported
+        default: CHECK_AND_ASSERT_THROW_MES(false, "unknown entry_type code = " << (int)type);
       }
     }
 
     inline 
-    size_t throwable_buffer_reader::read_varint()
+    uint64_t throwable_buffer_reader::read_varint()
     {
-      RECURSION_LIMITATION();
       CHECK_AND_ASSERT_THROW_MES(m_count >= 1, "empty buff, expected place for varint");
-      size_t v = 0;
-      uint8_t size_mask = (*(uint8_t*)m_ptr) &PORTABLE_RAW_SIZE_MARK_MASK;
+      uint64_t v = 0;
+      uint8_t size_mask = *m_ptr & PORTABLE_RAW_SIZE_MARK_MASK;
       switch (size_mask)
       {
-      case PORTABLE_RAW_SIZE_MARK_BYTE: v = read<uint8_t>();break;
-      case PORTABLE_RAW_SIZE_MARK_WORD: v = read<uint16_t>();break;
-      case PORTABLE_RAW_SIZE_MARK_DWORD: v = read<uint32_t>();break;
-      case PORTABLE_RAW_SIZE_MARK_INT64: v = read<uint64_t>();break;
-      default:
-        CHECK_AND_ASSERT_THROW_MES(false, "unknown varint size_mask = " << size_mask);
+        case PORTABLE_RAW_SIZE_MARK_6BIT:  v = read<uint8_t>();  break;
+        case PORTABLE_RAW_SIZE_MARK_14BIT: v = read<uint16_t>(); break;
+        case PORTABLE_RAW_SIZE_MARK_30BIT: v = read<uint32_t>(); break;
+        case PORTABLE_RAW_SIZE_MARK_62BIT: v = read<uint64_t>(); break;
       }
       v >>= 2;
       return v;
     }
 
-    template<class t_type>
+    template <typename T>
     storage_entry throwable_buffer_reader::read_se()
     {
-      RECURSION_LIMITATION();
-      t_type v;
-      read(v);
-      return storage_entry(v);
-    }
-
-    template<>
-    inline storage_entry throwable_buffer_reader::read_se<std::string>()
-    {
-      RECURSION_LIMITATION();
-      return storage_entry(read<std::string>());
-    }
-
-
-    template<>
-    inline storage_entry throwable_buffer_reader::read_se<section>()
-    {
-      RECURSION_LIMITATION();
-      section s;//use extra variable due to vs bug, line "storage_entry se(section()); " can't be compiled in visual studio
-      storage_entry se(s);
-      section& section_entry = boost::get<section>(se);
-      read(section_entry);
-      return se;
-    }
-
-    template<>
-    inline storage_entry throwable_buffer_reader::read_se<array_entry>()
-    {
-      RECURSION_LIMITATION();
-      uint8_t ent_type = 0;
-      read(ent_type);
-      CHECK_AND_ASSERT_THROW_MES(ent_type&SERIALIZE_FLAG_ARRAY, "wrong type sequenses");
-      return load_storage_array_entry(ent_type);
+      storage_entry e{std::in_place_type<T>};
+      read(std::get<T>(e));
+      return e;
     }
 
     inline 
     storage_entry throwable_buffer_reader::load_storage_entry()
     {
-      RECURSION_LIMITATION();
+      recursion_limiter lim{m_recursion_count};
       uint8_t ent_type = 0;
       read(ent_type);
-      if(ent_type&SERIALIZE_FLAG_ARRAY)
+      if (ent_type & SERIALIZE_FLAG_ARRAY)
         return load_storage_array_entry(ent_type);
 
       switch(ent_type)
       {
-      case SERIALIZE_TYPE_INT64:  return read_se<int64_t>();
-      case SERIALIZE_TYPE_INT32:  return read_se<int32_t>();
-      case SERIALIZE_TYPE_INT16:  return read_se<int16_t>();
-      case SERIALIZE_TYPE_INT8:   return read_se<int8_t>();
-      case SERIALIZE_TYPE_UINT64: return read_se<uint64_t>();
-      case SERIALIZE_TYPE_UINT32: return read_se<uint32_t>();
-      case SERIALIZE_TYPE_UINT16: return read_se<uint16_t>();
-      case SERIALIZE_TYPE_UINT8:  return read_se<uint8_t>();
-      case SERIALIZE_TYPE_DUOBLE: return read_se<double>();
-      case SERIALIZE_TYPE_BOOL:   return read_se<bool>();
-      case SERIALIZE_TYPE_STRING: return read_se<std::string>();
-      case SERIALIZE_TYPE_OBJECT: return read_se<section>();
-      case SERIALIZE_TYPE_ARRAY:  return read_se<array_entry>();
-      default: 
-        CHECK_AND_ASSERT_THROW_MES(false, "unknown entry_type code = " << ent_type);
+        case SERIALIZE_TYPE_TAG<int64_t>:     return read_se<int64_t>();
+        case SERIALIZE_TYPE_TAG<int32_t>:     return read_se<int32_t>();
+        case SERIALIZE_TYPE_TAG<int16_t>:     return read_se<int16_t>();
+        case SERIALIZE_TYPE_TAG<int8_t>:      return read_se<int8_t>();
+        case SERIALIZE_TYPE_TAG<uint64_t>:    return read_se<uint64_t>();
+        case SERIALIZE_TYPE_TAG<uint32_t>:    return read_se<uint32_t>();
+        case SERIALIZE_TYPE_TAG<uint16_t>:    return read_se<uint16_t>();
+        case SERIALIZE_TYPE_TAG<uint8_t>:     return read_se<uint8_t>();
+        //case SERIALIZE_TYPE_TAG<double>:      return read_se<double>();
+        case SERIALIZE_TYPE_TAG<bool>:        return read_se<bool>();
+        case SERIALIZE_TYPE_TAG<std::string>: return read_se<std::string>();
+        case SERIALIZE_TYPE_TAG<section>:     return read_se<section>();
+        //case SERIALIZE_TYPE_ARRAY:  return read_se<array_entry>(); // nested arrays not supported
+        default: CHECK_AND_ASSERT_THROW_MES(false, "unknown entry_type code = " << (int)ent_type);
       }
     }
     inline 
     void throwable_buffer_reader::read(section& sec)
     {
-      RECURSION_LIMITATION();
       sec.m_entries.clear();
       size_t count = read_varint();
       while(count--)
@@ -272,20 +230,13 @@ namespace epee
     inline 
     void throwable_buffer_reader::read(std::string& str)
     {
-      RECURSION_LIMITATION();
       size_t len = read_varint();
       CHECK_AND_ASSERT_THROW_MES(len < MAX_STRING_LEN_POSSIBLE, "to big string len value in storage: " << len);
       CHECK_AND_ASSERT_THROW_MES(m_count >= len, "string len count value " << len << " goes out of remain storage len " << m_count);
       //do this manually to avoid double memory write in huge strings (first time at resize, second at read)
-      str.assign((const char*)m_ptr, len);
-      m_ptr+=len;
+      str.assign(reinterpret_cast<const char*>(m_ptr), len);
+      m_ptr += len;
       m_count -= len;
-    }
-    inline
-    void throwable_buffer_reader::read(array_entry &ae)
-    {
-      RECURSION_LIMITATION();
-      CHECK_AND_ASSERT_THROW_MES(false, "Reading array entry is not supported");
     }
   }
 }

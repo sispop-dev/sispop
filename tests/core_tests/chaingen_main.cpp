@@ -83,8 +83,7 @@ int main(int argc, char* argv[])
     return 0;
   }
 
-  const std::string filter = tools::glob_to_regex(command_line::get_arg(vm, arg_filter));
-  boost::smatch match;
+  const std::string filter = command_line::get_arg(vm, arg_filter);
 
   size_t tests_count = 0;
   std::vector<std::string> failed_tests;
@@ -106,7 +105,7 @@ int main(int argc, char* argv[])
   {
     list_tests = command_line::get_arg(vm, arg_list_tests);
 
-    // NOTE: Sispop Tests
+    // NOTE: sispop Tests
     GENERATE_AND_PLAY(sispop_checkpointing_alt_chain_handle_alt_blocks_at_tip);
     GENERATE_AND_PLAY(sispop_checkpointing_alt_chain_more_service_node_checkpoints_less_pow_overtakes);
     GENERATE_AND_PLAY(sispop_checkpointing_alt_chain_receive_checkpoint_votes_should_reorg_back);
@@ -149,6 +148,14 @@ int main(int argc, char* argv[])
     GENERATE_AND_PLAY(sispop_service_nodes_insufficient_contribution);
     GENERATE_AND_PLAY(sispop_service_nodes_test_rollback);
     GENERATE_AND_PLAY(sispop_service_nodes_test_swarms_basic);
+    GENERATE_AND_PLAY(sispop_pulse_invalid_validator_bitset);
+    GENERATE_AND_PLAY(sispop_pulse_invalid_signature);
+    GENERATE_AND_PLAY(sispop_pulse_oob_voter_index);
+    GENERATE_AND_PLAY(sispop_pulse_non_participating_validator);
+    GENERATE_AND_PLAY(sispop_pulse_generate_all_rounds);
+    GENERATE_AND_PLAY(sispop_pulse_out_of_order_voters);
+    GENERATE_AND_PLAY(sispop_pulse_reject_miner_block);
+    GENERATE_AND_PLAY(sispop_pulse_generate_blocks_and_invalid_blocks);
 
     // NOTE: Monero Tests
     GENERATE_AND_PLAY(gen_simple_chain_001);
@@ -288,6 +295,11 @@ int main(int argc, char* argv[])
       GENERATE_AND_PLAY(gen_rct_tx_pre_rct_increase_vin_and_fee);
       GENERATE_AND_PLAY(gen_rct_tx_pre_rct_altered_extra);
       GENERATE_AND_PLAY(gen_rct_tx_rct_altered_extra);
+
+      // NOTE: For sispop we should re-write this which is trivial to do with
+      // generating some funds and attempting to spend them immediately instead
+      // of the minutia of the monero framework.
+      GENERATE_AND_PLAY(gen_rct_tx_uses_output_too_early);
 
       GENERATE_AND_PLAY(gen_multisig_tx_valid_22_1_2);
       GENERATE_AND_PLAY(gen_multisig_tx_valid_22_1_2_many_inputs);

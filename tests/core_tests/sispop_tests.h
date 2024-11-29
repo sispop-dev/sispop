@@ -77,4 +77,12 @@ struct sispop_service_nodes_gen_nodes                                           
 struct sispop_service_nodes_insufficient_contribution                                  : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
 struct sispop_service_nodes_test_rollback                                              : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
 struct sispop_service_nodes_test_swarms_basic                                          : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
+struct sispop_pulse_invalid_validator_bitset                                           : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
+struct sispop_pulse_invalid_signature                                                  : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
+struct sispop_pulse_oob_voter_index                                                    : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
+struct sispop_pulse_non_participating_validator                                        : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
+struct sispop_pulse_generate_all_rounds                                                : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
+struct sispop_pulse_out_of_order_voters                                                : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
+struct sispop_pulse_reject_miner_block                                                 : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
+struct sispop_pulse_generate_blocks_and_invalid_blocks                                 : public test_chain_unit_base { bool generate(std::vector<test_event_entry>& events); };
 

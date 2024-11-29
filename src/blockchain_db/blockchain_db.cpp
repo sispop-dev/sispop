@@ -27,8 +27,6 @@
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-#include <boost/range/adaptor/reversed.hpp>
-
 #include "cryptonote_core/service_node_rules.h"
 #include "checkpoints/checkpoints.h"
 #include "string_tools.h"
@@ -38,17 +36,6 @@
 #include "ringct/rctOps.h"
 
 #include "lmdb/db_lmdb.h"
-#ifdef BERKELEY_DB
-#include "berkeleydb/db_bdb.h"
-#endif
-
-static const char *db_types[] = {
-  "lmdb",
-#ifdef BERKELEY_DB
-  "berkeley",
-#endif
-  NULL
-};
 
 #undef SISPOP_DEFAULT_LOG_CATEGORY
 #define SISPOP_DEFAULT_LOG_CATEGORY "blockchain.db"
@@ -58,36 +45,6 @@ using epee::string_tools::pod_to_hex;
 namespace cryptonote
 {
 
-bool blockchain_valid_db_type(const std::string& db_type)
-{
-  int i;
-  for (i=0; db_types[i]; i++)
-  {
-    if (db_types[i] == db_type)
-      return true;
-  }
-  return false;
-}
-
-std::string blockchain_db_types(const std::string& sep)
-{
-  int i;
-  std::string ret = "";
-  for (i=0; db_types[i]; i++)
-  {
-    if (i)
-      ret += sep;
-    ret += db_types[i];
-  }
-  return ret;
-}
-
-std::string arg_db_type_description = "Specify database type, available: " + cryptonote::blockchain_db_types(", ");
-const command_line::arg_descriptor<std::string> arg_db_type = {
-  "db-type"
-, arg_db_type_description.c_str()
-, DEFAULT_DB_TYPE
-};
 const command_line::arg_descriptor<std::string> arg_db_sync_mode = {
   "db-sync-mode"
 , "Specify sync option, using format [safe|fast|fastest]:[sync|async]:[<nblocks_per_sync>[blocks]|<nbytes_per_sync>[bytes]]." 
@@ -99,20 +56,13 @@ const command_line::arg_descriptor<bool> arg_db_salvage  = {
 , false
 };
 
-BlockchainDB *new_db(const std::string& db_type)
+BlockchainDB *new_db()
 {
-  if (db_type == "lmdb")
-    return new BlockchainLMDB();
-#if defined(BERKELEY_DB)
-  if (db_type == "berkeley")
-    return new BlockchainBDB();
-#endif
-  return NULL;
+  return new BlockchainLMDB();
 }
 
 void BlockchainDB::init_options(boost::program_options::options_description& desc)
 {
-  command_line::add_arg(desc, arg_db_type);
   command_line::add_arg(desc, arg_db_sync_mode);
   command_line::add_arg(desc, arg_db_salvage);
 }
@@ -157,11 +107,11 @@ void BlockchainDB::add_transaction(const crypto::hash& blk_hash, const std::pair
 
   for (const txin_v& tx_input : tx.vin)
   {
-    if (tx_input.type() == typeid(txin_to_key))
+    if (std::holds_alternative<txin_to_key>(tx_input))
     {
-      add_spent_key(boost::get<txin_to_key>(tx_input).k_image);
+      add_spent_key(std::get<txin_to_key>(tx_input).k_image);
     }
-    else if (tx_input.type() == typeid(txin_gen))
+    else if (std::holds_alternative<txin_gen>(tx_input))
     {
       /* nothing to do here */
       miner_tx = true;
@@ -171,9 +121,9 @@ void BlockchainDB::add_transaction(const crypto::hash& blk_hash, const std::pair
       LOG_PRINT_L1("Unsupported input type, removing key images and aborting transaction addition");
       for (const txin_v& tx_input : tx.vin)
       {
-        if (tx_input.type() == typeid(txin_to_key))
+        if (std::holds_alternative<txin_to_key>(tx_input))
         {
-          remove_spent_key(boost::get<txin_to_key>(tx_input).k_image);
+          remove_spent_key(std::get<txin_to_key>(tx_input).k_image);
         }
       }
       return;
@@ -291,8 +241,9 @@ void BlockchainDB::pop_block(block& blk, std::vector<transaction>& txs)
 
   remove_block();
 
-  for (const auto& h : boost::adaptors::reverse(blk.tx_hashes))
+  for (auto it = blk.tx_hashes.rbegin(); it != blk.tx_hashes.rend(); ++it)
   {
+    auto& h = *it;
     cryptonote::transaction tx;
     if (!get_tx(h, tx) && !get_pruned_tx(h, tx))
       throw DB_ERROR("Failed to get pruned or unpruned transaction from the db");
@@ -308,9 +259,9 @@ void BlockchainDB::remove_transaction(const crypto::hash& tx_hash)
 
   for (const txin_v& tx_input : tx.vin)
   {
-    if (tx_input.type() == typeid(txin_to_key))
+    if (std::holds_alternative<txin_to_key>(tx_input))
     {
-      remove_spent_key(boost::get<txin_to_key>(tx_input).k_image);
+      remove_spent_key(std::get<txin_to_key>(tx_input).k_image);
     }
   }
 
@@ -394,23 +345,15 @@ void BlockchainDB::reset_stats()
 
 void BlockchainDB::show_stats()
 {
-  LOG_PRINT_L1(ENDL
-    << "*********************************"
-    << ENDL
-    << "num_calls: " << num_calls
-    << ENDL
-    << "time_blk_hash: " << time_blk_hash << "ms"
-    << ENDL
-    << "time_tx_exists: " << time_tx_exists << "ms"
-    << ENDL
-    << "time_add_block1: " << time_add_block1 << "ms"
-    << ENDL
-    << "time_add_transaction: " << time_add_transaction << "ms"
-    << ENDL
-    << "time_commit1: " << time_commit1 << "ms"
-    << ENDL
-    << "*********************************"
-    << ENDL
+  LOG_PRINT_L1("\n"
+    << "*********************************\n"
+    << "num_calls: " << num_calls << "\n"
+    << "time_blk_hash: " << time_blk_hash << "ms\n"
+    << "time_tx_exists: " << time_tx_exists << "ms\n"
+    << "time_add_block1: " << time_add_block1 << "ms\n"
+    << "time_add_transaction: " << time_add_transaction << "ms\n"
+    << "time_commit1: " << time_commit1 << "ms\n"
+    << "*********************************\n"
   );
 }
 

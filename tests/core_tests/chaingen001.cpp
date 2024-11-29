@@ -41,9 +41,6 @@
 #include "chaingen.h"
 #include "chaingen_tests_list.h"
 
-using namespace std;
-
-using namespace epee;
 using namespace cryptonote;
 
 ////////
@@ -53,7 +50,7 @@ using eventV = std::vector<test_event_entry>;
 
 one_block::one_block()
 {
-  REGISTER_CALLBACK("verify_1", one_block::verify_1);
+  REGISTER_CALLBACK(verify_1);
 }
 
 bool one_block::generate(eventV &events)
@@ -71,12 +68,12 @@ bool one_block::verify_1(cryptonote::core& c, size_t ev_index, const eventV &eve
 {
     DEFINE_TESTS_ERROR_CONTEXT("one_block::verify_1");
 
-    alice = boost::get<cryptonote::account_base>(events[1]);
+    alice = std::get<cryptonote::account_base>(events[1]);
 
     // check balances
     //std::vector<const cryptonote::block*> chain;
     //map_hash2tx_t mtx;
-    //CHECK_TEST_CONDITION(find_block_chain(events, chain, mtx, get_block_hash(boost::get<cryptonote::block>(events[1]))));
+    //CHECK_TEST_CONDITION(find_block_chain(events, chain, mtx, get_block_hash(std::get<cryptonote::block>(events[1]))));
     //CHECK_TEST_CONDITION(get_block_reward(0) == get_balance(alice, events, chain, mtx));
 
     // check height
@@ -88,7 +85,7 @@ bool one_block::verify_1(cryptonote::core& c, size_t ev_index, const eventV &eve
     CHECK_TEST_CONDITION(blocks.size() == 1);
     //CHECK_TEST_CONDITION(outs.size() == blocks.size());
     CHECK_TEST_CONDITION(c.get_blockchain_total_transactions() == 1);
-    CHECK_TEST_CONDITION(blocks.back() == boost::get<cryptonote::block>(events[0]));
+    CHECK_TEST_CONDITION(blocks.back() == std::get<cryptonote::block>(events[0]));
 
     return true;
 }
@@ -99,8 +96,8 @@ bool one_block::verify_1(cryptonote::core& c, size_t ev_index, const eventV &eve
 
 gen_simple_chain_001::gen_simple_chain_001()
 {
-  REGISTER_CALLBACK("verify_callback_1", gen_simple_chain_001::verify_callback_1);
-  REGISTER_CALLBACK("verify_callback_2", gen_simple_chain_001::verify_callback_2);
+  REGISTER_CALLBACK(verify_callback_1);
+  REGISTER_CALLBACK(verify_callback_2);
 }
 
 static void make_rct_tx(eventV& events,

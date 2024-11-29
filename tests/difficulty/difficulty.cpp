@@ -37,43 +37,41 @@
 #include <stdexcept>
 
 #include "misc_log_ex.h"
+#include "common/util.h"
 #include "cryptonote_config.h"
 #include "cryptonote_basic/difficulty.h"
 
-using namespace std;
-
-#define DEFAULT_TEST_DIFFICULTY_TARGET        120
 #define DIFFICULTY_LAG                        15
 
 int main(int argc, char *argv[]) {
     TRY_ENTRY();
 
     if (argc < 2) {
-        cerr << "Wrong arguments" << endl;
+        std::cerr << "Wrong arguments\n";
         return 1;
     }
-    vector<uint64_t> timestamps, cumulative_difficulties;
-    fstream data(argv[1], fstream::in);
-    data.exceptions(fstream::badbit);
+    std::vector<uint64_t> timestamps, cumulative_difficulties;
+    std::fstream data(argv[1], std::fstream::in);
+    data.exceptions(std::fstream::badbit);
     data.clear(data.rdstate());
     uint64_t timestamp, difficulty, cumulative_difficulty = 0;
     size_t n = 0;
     while (data >> timestamp >> difficulty) {
         size_t begin, end;
-        if (n < DIFFICULTY_WINDOW_V2 + DIFFICULTY_LAG) {
+        if (n < DIFFICULTY_WINDOW + DIFFICULTY_LAG) {
             begin = 0;
-            end = min(n, (size_t) DIFFICULTY_WINDOW_V2);
+            end = std::min(n, (size_t) DIFFICULTY_WINDOW);
         } else {
             end = n - DIFFICULTY_LAG;
-            begin = end - DIFFICULTY_WINDOW_V2;
+            begin = end - DIFFICULTY_WINDOW;
         }
         uint64_t res = cryptonote::next_difficulty_v2(
-            vector<uint64_t>(timestamps.begin() + begin, timestamps.begin() + end),
-            vector<uint64_t>(cumulative_difficulties.begin() + begin, cumulative_difficulties.begin() + end), DEFAULT_TEST_DIFFICULTY_TARGET, false/*use_old_lwma2*/, false);
+            std::vector<uint64_t>(timestamps.begin() + begin, timestamps.begin() + end),
+            std::vector<uint64_t>(cumulative_difficulties.begin() + begin, cumulative_difficulties.begin() + end), tools::to_seconds(TARGET_BLOCK_TIME), false/*use_old_lwma2*/, false);
         if (res != difficulty) {
-            cerr << "Wrong difficulty for block " << n << endl
-                << "Expected: " << difficulty << endl
-                << "Found: " << res << endl;
+            std::cerr << "Wrong difficulty for block " << n
+                << "\nExpected: " << difficulty
+                << "\nFound: " << res << "\n";
             return 1;
         }
         timestamps.push_back(timestamp);
@@ -81,7 +79,7 @@ int main(int argc, char *argv[]) {
         ++n;
     }
     if (!data.eof()) {
-        data.clear(fstream::badbit);
+        data.clear(std::fstream::badbit);
     }
     return 0;
 

@@ -1,3 +1,4 @@
+// Copyright (c) 2018-2020, The Oxen Project
 // Copyright (c) 2014-2019, The Monero Project
 // 
 // All rights reserved.
@@ -32,22 +33,21 @@
 #include "common/command_line.h"
 #include "cryptonote_config.h"
 #include "daemonizer/daemonizer.h"
+#include "cryptonote_core/cryptonote_core.h"
 
 namespace daemon_args
 {
-  std::string const WINDOWS_SERVICE_NAME = "Monero Daemon";
-
   const command_line::arg_descriptor<std::string, false, true, 2> arg_config_file = {
     "config-file"
   , "Specify configuration file"
   , (daemonizer::get_default_data_dir() / std::string(CRYPTONOTE_NAME ".conf")).string()
-  , {{ &cryptonote::arg_testnet_on, &cryptonote::arg_stagenet_on }}
-  , [](std::array<bool, 2> testnet_stagenet, bool defaulted, std::string val)->std::string {
-      if (testnet_stagenet[0] && defaulted)
+  , {{ &cryptonote::arg_testnet_on, &cryptonote::arg_devnet_on }}
+  , [](std::array<bool, 2> testnet_devnet, bool defaulted, std::string val)->std::string {
+      if (testnet_devnet[0] && defaulted)
         return (daemonizer::get_default_data_dir() / "testnet" /
                 std::string(CRYPTONOTE_NAME ".conf")).string();
-      else if (testnet_stagenet[1] && defaulted)
-        return (daemonizer::get_default_data_dir() / "stagenet" /
+      else if (testnet_devnet[1] && defaulted)
+        return (daemonizer::get_default_data_dir() / "devnet" /
                 std::string(CRYPTONOTE_NAME ".conf")).string();
       return val;
     }
@@ -56,13 +56,13 @@ namespace daemon_args
     "log-file"
   , "Specify log file"
   , (daemonizer::get_default_data_dir() / std::string(CRYPTONOTE_NAME ".log")).string()
-  , {{ &cryptonote::arg_testnet_on, &cryptonote::arg_stagenet_on }}
-  , [](std::array<bool, 2> testnet_stagenet, bool defaulted, std::string val)->std::string {
-      if (testnet_stagenet[0] && defaulted)
+  , {{ &cryptonote::arg_testnet_on, &cryptonote::arg_devnet_on }}
+  , [](std::array<bool, 2> testnet_devnet, bool defaulted, std::string val)->std::string {
+      if (testnet_devnet[0] && defaulted)
         return (daemonizer::get_default_data_dir() / "testnet" /
                 std::string(CRYPTONOTE_NAME ".log")).string();
-      else if (testnet_stagenet[1] && defaulted)
-        return (daemonizer::get_default_data_dir() / "stagenet" /
+      else if (testnet_devnet[1] && defaulted)
+        return (daemonizer::get_default_data_dir() / "devnet" /
                 std::string(CRYPTONOTE_NAME ".log")).string();
       return val;
     }
@@ -86,40 +86,10 @@ namespace daemon_args
     "daemon_command"
   , "Hidden"
   };
-  const command_line::arg_descriptor<bool> arg_os_version = {
-    "os-version"
-  , "OS for which this executable was compiled"
-  };
   const command_line::arg_descriptor<unsigned> arg_max_concurrency = {
     "max-concurrency"
   , "Max number of threads to use for a parallel job"
   , 0
-  };
-
-  const command_line::arg_descriptor<bool> arg_public_node = {
-    "public-node"
-  , "Allow other users to use the node as a remote (restricted RPC mode, view-only commands) and advertise it over P2P"
-  , false
-  };
-
-  const command_line::arg_descriptor<std::string> arg_zmq_rpc_bind_ip   = {
-    "zmq-rpc-bind-ip"
-      , "IP for ZMQ RPC server to listen on"
-      , "127.0.0.1"
-  };
-
-  const command_line::arg_descriptor<std::string, false, true, 2> arg_zmq_rpc_bind_port = {
-    "zmq-rpc-bind-port"
-  , "Port for ZMQ RPC server to listen on"
-  , std::to_string(config::ZMQ_RPC_DEFAULT_PORT)
-  , {{ &cryptonote::arg_testnet_on, &cryptonote::arg_stagenet_on }}
-  , [](std::array<bool, 2> testnet_stagenet, bool defaulted, std::string val)->std::string {
-      if (testnet_stagenet[0] && defaulted)
-        return std::to_string(config::testnet::ZMQ_RPC_DEFAULT_PORT);
-      if (testnet_stagenet[1] && defaulted)
-        return std::to_string(config::stagenet::ZMQ_RPC_DEFAULT_PORT);
-      return val;
-    }
   };
 
 }  // namespace daemon_args

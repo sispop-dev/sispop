@@ -45,5 +45,21 @@ target_link_libraries(object_sizes
   PRIVATE
     lmdb
     p2p
+    cpr::cpr
     extra
     )
+
+set(dns_checks_sources
+  dns_checks.cpp
+  )
+
+sispop_add_executable(dns_checks "sispop-utils-dns-checks" dns_checks.cpp)
+
+target_link_libraries(dns_checks
+    PRIVATE
+    common
+    epee
+    version
+    Boost::program_options
+    Boost::system
+    Boost::thread)

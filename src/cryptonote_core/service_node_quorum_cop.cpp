@@ -210,8 +210,8 @@ namespace service_nodes
     uint64_t const REORG_SAFETY_BUFFER_BLOCKS = (hf_version >= cryptonote::network_version_12_checkpointing)
                                                     ? REORG_SAFETY_BUFFER_BLOCKS_POST_HF12
                                                     : REORG_SAFETY_BUFFER_BLOCKS_PRE_HF12;
-    auto my_keys = m_core.get_service_node_keys();
-    bool voting_enabled = my_keys && m_core.is_service_node(my_keys->pub, /*require_active=*/true);
+    const auto& my_keys = m_core.get_service_keys();
+    bool voting_enabled = m_core.service_node() && m_core.is_service_node(my_keys.pub, /*require_active=*/true);
 
     uint64_t const height        = cryptonote::get_block_height(block);
     uint64_t const latest_height = std::max(m_core.get_current_blockchain_height(), m_core.get_target_blockchain_height());
@@ -285,7 +285,7 @@ namespace service_nodes
             if (!alive_for_min_time)
               continue;
 
-            if (!my_keys)
+            if (!m_core.service_node())
               continue;
 
             auto quorum = m_core.get_quorum(quorum_type::obligations, m_obligations_height);
@@ -297,7 +297,7 @@ namespace service_nodes
             }
 
             if (quorum->workers.empty()) continue;
-            int index_in_group = voting_enabled ? find_index_in_quorum_group(quorum->validators, my_keys->pub) : -1;
+            int index_in_group = voting_enabled ? find_index_in_quorum_group(quorum->validators, my_keys.pub) : -1;
             if (index_in_group >= 0)
             {
               //
@@ -305,7 +305,7 @@ namespace service_nodes
               //
               auto worker_states = m_core.get_service_node_list_state(quorum->workers);
               auto worker_it = worker_states.begin();
-              CRITICAL_REGION_LOCAL(m_lock);
+              std::unique_lock lock{m_lock};
               int good = 0, total = 0;
               for (size_t node_index = 0; node_index < quorum->workers.size(); ++worker_it, ++node_index)
               {
@@ -353,14 +353,9 @@ namespace service_nodes
                                    << " blocks); abstaining (to leave decommissioned)");
                       continue;
                     }
-                     if (hf_version < cryptonote::network_version_16) {
+                    
                     LOG_PRINT_L2("Decommissioned service node " << quorum->workers[node_index] << " has no remaining credit; voting to deregister");
                     vote_for_state = new_state::deregister; // Credit ran out!
-                     } else {
-                      // Instead of just deregistering simply recommission.
-                    LOG_PRINT_L0("Recommissioned service node ");
-                    vote_for_state = new_state::recommission;
-                    }
                   } else {
                     if (credit >= DECOMMISSION_MINIMUM) {
                       vote_for_state = new_state::decommission;
@@ -368,22 +363,19 @@ namespace service_nodes
                                    << quorum->workers[node_index]
                                    << " has stopped passing required checks, but has sufficient earned credit (" << credit << " blocks) to avoid deregistration; voting to decommission");
                     } else {
-                    if (hf_version < cryptonote::network_version_16) {
+                   
                       vote_for_state = new_state::deregister;
                       LOG_PRINT_L2("Service node "
                                    << quorum->workers[node_index]
                                    << " has stopped passing required checks, but does not have sufficient earned credit ("
                                    << credit << " blocks, " << DECOMMISSION_MINIMUM
                                    << " required) to decommission; voting to deregister");
-                      } else {
-                    LOG_PRINT_L0("Recommissioned service node");
-                      vote_for_state = new_state::recommission;
-			}
+                      }
                     }
                   }
                 }
 
-                quorum_vote_t vote = service_nodes::make_state_change_vote(m_obligations_height, static_cast<uint16_t>(index_in_group), node_index, vote_for_state, *my_keys);
+                quorum_vote_t vote = service_nodes::make_state_change_vote(m_obligations_height, static_cast<uint16_t>(index_in_group), node_index, vote_for_state, my_keys);
                 cryptonote::vote_verification_context vvc;
                 if (!handle_vote(vote, vvc))
                   LOG_ERROR("Failed to add state change vote; reason: " << print_vote_verification_context(vvc, &vote));
@@ -391,21 +383,21 @@ namespace service_nodes
               if (good > 0)
                 LOG_PRINT_L2(good << " of " << total << " service nodes are active and passing checks; no state change votes required");
             }
-            else if (!tested_myself_once_per_block && (find_index_in_quorum_group(quorum->workers, my_keys->pub) >= 0))
+            else if (!tested_myself_once_per_block && (find_index_in_quorum_group(quorum->workers, my_keys.pub) >= 0))
             {
               // NOTE: Not in validating quorum , check if we're the ones
               // being tested. If so, check if we would be decommissioned
               // based on _our_ data and if so, report it to the user so they
               // know about it.
 
-              const auto states_array = m_core.get_service_node_list_state({my_keys->pub});
+              const auto states_array = m_core.get_service_node_list_state({my_keys.pub});
               if (states_array.size())
               {
                 const auto &info = *states_array[0].info;
                 if (info.can_be_voted_on(m_obligations_height))
                 {
                   tested_myself_once_per_block = true;
-                  auto my_test_results         = check_service_node(obligations_height_hf_version, my_keys->pub, info);
+                  auto my_test_results         = check_service_node(obligations_height_hf_version, my_keys.pub, info);
                   if (info.is_active())
                   {
                     if (!my_test_results.passed())
@@ -461,14 +453,14 @@ namespace service_nodes
                 continue;
               }
 
-              int index_in_group = find_index_in_quorum_group(quorum->validators, my_keys->pub);
+              int index_in_group = find_index_in_quorum_group(quorum->validators, my_keys.pub);
               if (index_in_group <= -1) continue;
 
               //
               // NOTE: I am in the quorum, handle checkpointing
               //
               crypto::hash block_hash = m_core.get_block_id_by_height(m_last_checkpointed_height);
-              quorum_vote_t vote = make_checkpointing_vote(checkpointed_height_hf_version, block_hash, m_last_checkpointed_height, static_cast<uint16_t>(index_in_group), *my_keys);
+              quorum_vote_t vote = make_checkpointing_vote(checkpointed_height_hf_version, block_hash, m_last_checkpointed_height, static_cast<uint16_t>(index_in_group), my_keys);
               cryptonote::vote_verification_context vvc = {};
               if (!handle_vote(vote, vvc))
                 LOG_ERROR("Failed to add checkpoint vote; reason: " << print_vote_verification_context(vvc, &vote));
@@ -477,6 +469,7 @@ namespace service_nodes
         }
         break;
 
+        case quorum_type::pulse:
         case quorum_type::blink:
         break;
       }
@@ -585,7 +578,7 @@ namespace service_nodes
         checkpoint.signatures.reserve(service_nodes::CHECKPOINT_QUORUM_SIZE);
         std::sort(checkpoint.signatures.begin(),
                   checkpoint.signatures.end(),
-                  [](service_nodes::voter_to_signature const &lhs, service_nodes::voter_to_signature const &rhs) {
+                  [](service_nodes::quorum_signature const &lhs, service_nodes::quorum_signature const &rhs) {
                     return lhs.voter_index < rhs.voter_index;
                   });
 
@@ -594,7 +587,7 @@ namespace service_nodes
           auto it = std::lower_bound(checkpoint.signatures.begin(),
                                      checkpoint.signatures.end(),
                                      pool_vote,
-                                     [](voter_to_signature const &lhs, pool_vote_entry const &vote) {
+                                     [](quorum_signature const &lhs, pool_vote_entry const &vote) {
                                        return lhs.voter_index < vote.vote.index_in_group;
                                      });
 
@@ -602,7 +595,7 @@ namespace service_nodes
               pool_vote.vote.index_in_group != it->voter_index)
           {
             update_checkpoint = true;
-            checkpoint.signatures.insert(it, voter_to_signature(pool_vote.vote));
+            checkpoint.signatures.insert(it, quorum_signature(pool_vote.vote.index_in_group, pool_vote.vote.signature));
           }
         }
       }
@@ -613,7 +606,7 @@ namespace service_nodes
       checkpoint = make_empty_service_node_checkpoint(vote.checkpoint.block_hash, vote.block_height);
       checkpoint.signatures.reserve(votes.size());
       for (pool_vote_entry const &pool_vote : votes)
-        checkpoint.signatures.push_back(voter_to_signature(pool_vote.vote));
+        checkpoint.signatures.push_back(quorum_signature(pool_vote.vote.index_in_group, pool_vote.vote.signature));
     }
 
     if (update_checkpoint)
@@ -674,21 +667,18 @@ namespace service_nodes
     int64_t blocks_up;
     if (!info.is_fully_funded())
       blocks_up = 0;
-    if (info.is_decommissioned()) // decommissioned; the negative of active_since_height tells us when the period leading up to the current decommission started
+    else if (info.is_decommissioned()) // decommissioned; the negative of active_since_height tells us when the period leading up to the current decommission started
       blocks_up = int64_t(info.last_decommission_height) - (-info.active_since_height);
     else
       blocks_up = int64_t(current_height) - int64_t(info.active_since_height);
 
-    // Now we calculate the credit earned from being up for `blocks_up` blocks
-    int64_t credit = 0;
-    if (blocks_up >= 0) {
-      credit = blocks_up * DECOMMISSION_CREDIT_PER_DAY / BLOCKS_EXPECTED_IN_HOURS(24);
+    // Now we calculate the credit at last commission plus any credit earned from being up for `blocks_up` blocks since
+    int64_t credit = info.recommission_credit;
+    if (blocks_up > 0)
+      credit += blocks_up * DECOMMISSION_CREDIT_PER_DAY / BLOCKS_EXPECTED_IN_HOURS(24);
 
-      if (info.decommission_count <= info.is_decommissioned()) // Has never been decommissioned (or is currently in the first decommission), so add initial starting credit
-        credit += DECOMMISSION_INITIAL_CREDIT;
-      if (credit > DECOMMISSION_MAX_CREDIT)
-        credit = DECOMMISSION_MAX_CREDIT; // Cap the available decommission credit blocks if above the max
-    }
+    if (credit > DECOMMISSION_MAX_CREDIT)
+      credit = DECOMMISSION_MAX_CREDIT; // Cap the available decommission credit blocks if above the max
 
     // If currently decommissioned, remove any used credits used for the current downtime
     if (info.is_decommissioned())

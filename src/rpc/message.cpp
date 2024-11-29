@@ -62,16 +62,16 @@ rapidjson::Value Message::toJson(rapidjson::Document& doc) const
 
   val.AddMember("status", rapidjson::StringRef(status.c_str()), al);
   val.AddMember("error_details", rapidjson::StringRef(error_details.c_str()), al);
-  INSERT_INTO_JSON_OBJECT(val, doc, rpc_version, DAEMON_RPC_VERSION_ZMQ);
+  json::insert_into_json_object(val, doc, "rpc_version", DAEMON_RPC_VERSION_ZMQ);
 
   return val;
 }
 
 void Message::fromJson(rapidjson::Value& val)
 {
-  GET_FROM_JSON_OBJECT(val, status, status);
-  GET_FROM_JSON_OBJECT(val, error_details, error_details);
-  GET_FROM_JSON_OBJECT(val, rpc_version, rpc_version);
+  json::load_from_json_object(val, "status", status);
+  json::load_from_json_object(val, "error_details", error_details);
+  json::load_from_json_object(val, "rpc_version", rpc_version);
 }
 
 
@@ -104,7 +104,7 @@ FullMessage::FullMessage(Message* message)
     err.error_str = message->status;
     err.message = message->error_details;
 
-    INSERT_INTO_JSON_OBJECT(doc, doc, error, err);
+    json::insert_into_json_object(doc, doc, "error", err);
   }
 }
 
@@ -116,12 +116,12 @@ FullMessage::FullMessage(const std::string& json_string, bool request)
     throw cryptonote::json::PARSE_FAIL();
   }
 
-  OBJECT_HAS_MEMBER_OR_THROW(doc, "jsonrpc")
+  json::require_member(doc, "jsonrpc");
 
   if (request)
   {
-    OBJECT_HAS_MEMBER_OR_THROW(doc, method_field)
-    OBJECT_HAS_MEMBER_OR_THROW(doc, params_field)
+    json::require_member(doc, method_field);
+    json::require_member(doc, params_field);
   }
   else
   {
@@ -151,7 +151,7 @@ std::string FullMessage::getJson()
 
 std::string FullMessage::getRequestType() const
 {
-  OBJECT_HAS_MEMBER_OR_THROW(doc, method_field)
+  json::require_member(doc, method_field);
   return doc[method_field].GetString();
 }
 
@@ -167,7 +167,7 @@ rapidjson::Value& FullMessage::getMessage()
   }
 
   //else
-  OBJECT_HAS_MEMBER_OR_THROW(doc, error_field)
+  json::require_member(doc, error_field);
   return doc[error_field];
 
 }
@@ -181,7 +181,7 @@ rapidjson::Value FullMessage::getMessageCopy()
 
 rapidjson::Value& FullMessage::getID()
 {
-  OBJECT_HAS_MEMBER_OR_THROW(doc, id_field)
+  json::require_member(doc, id_field);
   return doc[id_field];
 }
 
@@ -204,7 +204,7 @@ cryptonote::rpc::error FullMessage::getError()
   err.use = false;
   if (doc.HasMember(error_field))
   {
-    GET_FROM_JSON_OBJECT(doc, err, error);
+    json::load_from_json_object(doc, "error", err);
     err.use = true;
   }
 
@@ -250,7 +250,7 @@ FullMessage* FullMessage::timeoutMessage()
   cryptonote::rpc::error err;
 
   err.error_str = "RPC request timed out.";
-  INSERT_INTO_JSON_OBJECT(doc, doc, err, err);
+  json::insert_into_json_object(doc, doc, "err", err);
 
   return full_message;
 }

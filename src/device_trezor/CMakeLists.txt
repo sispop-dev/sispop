@@ -56,10 +56,9 @@ if(DEVICE_TREZOR_READY)
             cryptonote_core
             common
             sodium
-            Boost::chrono
-            Boost::regex
             libusb
             protobuf
+            cpr::cpr
             extra)
 
 else()

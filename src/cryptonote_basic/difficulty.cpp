@@ -30,10 +30,6 @@
 // Parts of this file are originally copyright (c) 2012-2013 The Cryptonote developers
 
 #include <algorithm>
-#include <cassert>
-#include <cstddef>
-#include <cstdint>
-#include <vector>
 
 #include "common/sispop.h"
 #include "int-util.h"
@@ -144,15 +140,12 @@ namespace cryptonote {
   // be reduced from 60*60*2 to 500 seconds to prevent timestamp manipulation from miner's with 
   //  > 50% hash power.  If this is too small, it can be increased to 1000 at a cost in protection.
 
-  // Cryptonote clones:  #define DIFFICULTY_BLOCKS_COUNT_V2 DIFFICULTY_WINDOW_V2 + 1
-
-
   difficulty_type next_difficulty_v2(std::vector<std::uint64_t> timestamps, std::vector<difficulty_type> cumulative_difficulties, size_t target_seconds,
       bool use_old_lwma, bool v12_initial_override) {
 
     const int64_t T = static_cast<int64_t>(target_seconds);
 
-    size_t N = DIFFICULTY_WINDOW_V2 - 1;
+    size_t N = DIFFICULTY_WINDOW - 1;
 
     // Return a difficulty of 1 for first 4 blocks if it's the start of the chain.
     if (timestamps.size() < 4) {

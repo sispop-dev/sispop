@@ -28,8 +28,8 @@
 
 #pragma once
 
-#include <boost/optional/optional.hpp>
-#include <stddef.h>
+#include <optional>
+#include <cstddef>
 #include <vector>
 #include <string>
 #include "memwipe.h"
@@ -64,8 +64,9 @@ namespace epee
     size_t length() const noexcept { return buffer.size(); }
     bool empty() const noexcept { return buffer.empty(); }
     void trim();
+    std::string_view view() const noexcept { return std::string_view{data(), size()}; }
     void split(std::vector<wipeable_string> &fields) const;
-    boost::optional<wipeable_string> parse_hexstr() const;
+    std::optional<wipeable_string> parse_hexstr() const;
     template<typename T> inline bool hex_to_pod(T &pod) const;
     template<typename T> inline bool hex_to_pod(tools::scrubbed<T> &pod) const { return hex_to_pod(unwrap(pod)); }
     void resize(size_t sz);
@@ -88,7 +89,7 @@ namespace epee
     static_assert(std::is_pod<T>::value, "expected pod type");
     if (size() != sizeof(T) * 2)
       return false;
-    boost::optional<epee::wipeable_string> blob = parse_hexstr();
+    std::optional<epee::wipeable_string> blob = parse_hexstr();
     if (!blob)
       return false;
     if (blob->size() != sizeof(T))

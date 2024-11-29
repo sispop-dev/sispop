@@ -48,8 +48,6 @@
 #include "wallet/wallet_args.h"
 #include "wallet/wallet2.h"
 
-using namespace std;
-using namespace epee;
 using namespace cryptonote;
 using boost::lexical_cast;
 namespace po = boost::program_options;
@@ -73,7 +71,7 @@ namespace
   const command_line::arg_descriptor<uint32_t> arg_participants = {"participants", genms::tr("How many participants will share parts of the multisig wallet"), 0};
   const command_line::arg_descriptor<uint32_t> arg_threshold = {"threshold", genms::tr("How many signers are required to sign a valid transaction"), 0};
   const command_line::arg_descriptor<bool, false> arg_testnet = {"testnet", genms::tr("Create testnet multisig wallets"), false};
-  const command_line::arg_descriptor<bool, false> arg_stagenet = {"stagenet", genms::tr("Create stagenet multisig wallets"), false};
+  const command_line::arg_descriptor<bool, false> arg_devnet = {"devnet", genms::tr("Create devnet multisig wallets"), false};
   const command_line::arg_descriptor<bool, false> arg_create_address_file = {"create-address-file", genms::tr("Create an address file for new wallets"), false};
 
   const command_line::arg_descriptor< std::vector<std::string> > arg_command = {"command", ""};
@@ -88,7 +86,7 @@ static bool generate_multisig(uint32_t threshold, uint32_t total, const std::str
   try
   {
     // create M wallets first
-    std::vector<boost::shared_ptr<tools::wallet2>> wallets(total);
+    std::vector<std::shared_ptr<tools::wallet2>> wallets(total);
     for (size_t n = 0; n < total; ++n)
     {
       std::string name = basename + "-" + std::to_string(n + 1);
@@ -172,16 +170,15 @@ int main(int argc, char* argv[])
   command_line::add_arg(desc_params, arg_threshold);
   command_line::add_arg(desc_params, arg_participants);
   command_line::add_arg(desc_params, arg_testnet);
-  command_line::add_arg(desc_params, arg_stagenet);
+  command_line::add_arg(desc_params, arg_devnet);
   command_line::add_arg(desc_params, arg_create_address_file);
 
-  boost::optional<po::variables_map> vm;
-  bool should_terminate = false;
-  std::tie(vm, should_terminate) = wallet_args::main(
+  auto [vm, should_terminate] = wallet_args::main(
    argc, argv,
-   "sispop-gen-multisig [(--testnet|--stagenet)] [--filename-base=<filename>] [--scheme=M/N] [--threshold=M] [--participants=N]",
+   "sispop-gen-multisig [(--testnet|--devnet)] [--filename-base=<filename>] [--scheme=M/N] [--threshold=M] [--participants=N]",
     genms::tr("This program generates a set of multisig wallets - use this simpler scheme only if all the participants trust each other"),
     desc_params,
+    po::options_description{},
     boost::program_options::positional_options_description(),
     [](const std::string &s, bool emphasis){ tools::scoped_message_writer(emphasis ? epee::console_color_white : epee::console_color_default, true) << s; },
     "sispop-gen-multisig.log"
@@ -191,15 +188,15 @@ int main(int argc, char* argv[])
   if (should_terminate)
     return 0;
 
-  bool testnet, stagenet;
+  bool testnet, devnet;
   uint32_t threshold = 0, total = 0;
   std::string basename;
 
   testnet = command_line::get_arg(*vm, arg_testnet);
-  stagenet = command_line::get_arg(*vm, arg_stagenet);
-  if (testnet && stagenet)
+  devnet = command_line::get_arg(*vm, arg_devnet);
+  if (testnet && devnet)
   {
-    tools::fail_msg_writer() << genms::tr("Error: Can't specify more than one of --testnet and --stagenet");
+    tools::fail_msg_writer() << genms::tr("Error: Can't specify more than one of --testnet and --devnet");
     return 1;
   }
   if (command_line::has_arg(*vm, arg_scheme))
@@ -244,7 +241,7 @@ int main(int argc, char* argv[])
   }
 
   bool create_address_file = command_line::get_arg(*vm, arg_create_address_file);
-  if (!generate_multisig(threshold, total, basename, testnet ? TESTNET : stagenet ? STAGENET : MAINNET, create_address_file))
+  if (!generate_multisig(threshold, total, basename, testnet ? TESTNET : devnet ? DEVNET : MAINNET, create_address_file))
     return 1;
 
   return 0;

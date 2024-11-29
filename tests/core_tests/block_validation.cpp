@@ -30,8 +30,8 @@
 
 #include "chaingen.h"
 #include "block_validation.h"
+#include "common/util.h"
 
-using namespace epee;
 using namespace cryptonote;
 
 namespace
@@ -45,13 +45,13 @@ namespace
     for (size_t i = 0; i < new_block_count; ++i)
     {
       block blk_next;
-      difficulty_type diffic = next_difficulty_v2(timestamps, cummulative_difficulties,DIFFICULTY_TARGET_V2, false /*use_old_lwma*/, false);
+      difficulty_type diffic = next_difficulty_v2(timestamps, cummulative_difficulties,tools::to_seconds(TARGET_BLOCK_TIME), false /*use_old_lwma*/, false);
       if (!generator.construct_block_manually(blk_next, blk_prev, miner_account,
         test_generator::bf_timestamp | test_generator::bf_diffic, 0, 0, blk_prev.timestamp, crypto::hash(), diffic))
         return false;
 
       cummulative_diffic += diffic;
-      if (timestamps.size() == DIFFICULTY_WINDOW_V2)
+      if (timestamps.size() == DIFFICULTY_WINDOW)
       {
         timestamps.erase(timestamps.begin());
         cummulative_difficulties.erase(cummulative_difficulties.begin());
@@ -119,7 +119,7 @@ bool gen_block_ts_in_past::generate(std::vector<test_event_entry>& events) const
   BLOCK_VALIDATION_INIT_GENERATE();
   REWIND_BLOCKS_N(events, blk_0r, blk_0, miner_account, BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW - 1);
 
-  uint64_t ts_below_median = boost::get<block>(events[BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW / 2 - 1]).timestamp;
+  uint64_t ts_below_median = std::get<block>(events[BLOCKCHAIN_TIMESTAMP_CHECK_WINDOW / 2 - 1]).timestamp;
   block blk_1;
   generator.construct_block_manually(blk_1, blk_0r, miner_account, test_generator::bf_timestamp, 0, 0, ts_below_median);
   events.push_back(blk_1);
@@ -175,9 +175,9 @@ bool gen_block_invalid_nonce::generate(std::vector<test_event_entry>& events) co
     return false;
 
   // Create invalid nonce
-  difficulty_type diffic = next_difficulty_v2(timestamps, cummulative_difficulties,DIFFICULTY_TARGET_V2, false /*use_old_lwma*/, false);
+  difficulty_type diffic = next_difficulty_v2(timestamps, cummulative_difficulties,tools::to_seconds(TARGET_BLOCK_TIME), false /*use_old_lwma*/, false);
   assert(1 < diffic);
-  const block& blk_last = boost::get<block>(events.back());
+  const block& blk_last = std::get<block>(events.back());
   uint64_t timestamp = blk_last.timestamp;
   block blk_3;
   do
@@ -264,7 +264,7 @@ bool gen_block_unlock_time_is_timestamp_in_future::generate(std::vector<test_eve
   BLOCK_VALIDATION_INIT_GENERATE();
 
   MAKE_MINER_TX_MANUALLY(miner_tx, blk_0);
-  miner_tx.unlock_time = blk_0.timestamp + 3 * CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW * DIFFICULTY_BLOCKS_ESTIMATE_TIMESPAN;
+  miner_tx.unlock_time = blk_0.timestamp + 3 * CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW * tools::to_seconds(TARGET_BLOCK_TIME);
 
   block blk_1;
   generator.construct_block_manually(blk_1, blk_0, miner_account, test_generator::bf_miner_tx, 0, 0, 0, crypto::hash(), 0, miner_tx);
@@ -280,7 +280,7 @@ bool gen_block_height_is_low::generate(std::vector<test_event_entry>& events) co
   BLOCK_VALIDATION_INIT_GENERATE();
 
   MAKE_MINER_TX_MANUALLY(miner_tx, blk_0);
-  boost::get<txin_gen>(miner_tx.vin[0]).height--;
+  std::get<txin_gen>(miner_tx.vin[0]).height--;
 
   block blk_1;
   generator.construct_block_manually(blk_1, blk_0, miner_account, test_generator::bf_miner_tx, 0, 0, 0, crypto::hash(), 0, miner_tx);
@@ -296,7 +296,7 @@ bool gen_block_height_is_high::generate(std::vector<test_event_entry>& events) c
   BLOCK_VALIDATION_INIT_GENERATE();
 
   MAKE_MINER_TX_MANUALLY(miner_tx, blk_0);
-  boost::get<txin_gen>(miner_tx.vin[0]).height++;
+  std::get<txin_gen>(miner_tx.vin[0]).height++;
 
   block blk_1;
   generator.construct_block_manually(blk_1, blk_0, miner_account, test_generator::bf_miner_tx, 0, 0, 0, crypto::hash(), 0, miner_tx);
@@ -426,11 +426,11 @@ static bool construct_miner_tx_with_extra_output(cryptonote::transaction& tx,
                                                  const cryptonote::account_public_address& extra_address)
 {
     keypair txkey = keypair::generate(hw::get_device("default"));
-    add_tx_pub_key_to_extra(tx, txkey.pub);
+    add_tx_extra<tx_extra_pub_key>(tx, txkey.pub);
 
     keypair gov_key = get_deterministic_keypair_from_height(height);
     if (already_generated_coins != 0) {
-        add_tx_pub_key_to_extra(tx, gov_key.pub);
+        add_tx_extra<tx_extra_pub_key>(tx, gov_key.pub);
     }
 
     txin_gen in;
@@ -467,7 +467,7 @@ static bool construct_miner_tx_with_extra_output(cryptonote::transaction& tx,
     if (already_generated_coins != 0) {
         const cryptonote::network_type nettype = cryptonote::FAKECHAIN;
         cryptonote::address_parse_info governance_wallet_address;
-        cryptonote::get_account_address_from_str(governance_wallet_address, nettype, *cryptonote::get_config(nettype, hard_fork_version).GOVERNANCE_WALLET_ADDRESS);
+        cryptonote::get_account_address_from_str(governance_wallet_address, nettype, cryptonote::get_config(nettype).governance_wallet_address(hard_fork_version));
 
         crypto::public_key out_eph_public_key{};
 
@@ -607,7 +607,7 @@ bool gen_block_invalid_binary_format::generate(std::vector<test_event_entry>& ev
     events.push_back(entry);
   }
 
-  sispop_register_callback(events, "check_blocks_arent_accepted", [&events, last_valid_height](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_blocks_arent_accepted", [last_valid_height](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_blocks_arent_accepted");
     CHECK_EQ(c.get_pool().get_transactions_count(), 1);
@@ -625,7 +625,7 @@ bool gen_block_invalid_binary_format::generate(std::vector<test_event_entry>& ev
 
   // Unlock blk_0 outputs
   block blk_last = blk_0;
-  assert(CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW < DIFFICULTY_WINDOW_V2);
+  assert(CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW < DIFFICULTY_WINDOW);
   for (size_t i = 0; i < CRYPTONOTE_MINED_MONEY_UNLOCK_WINDOW; ++i)
   {
     MAKE_NEXT_BLOCK(events, blk_curr, blk_last, miner_account);
@@ -638,23 +638,23 @@ bool gen_block_invalid_binary_format::generate(std::vector<test_event_entry>& ev
   difficulty_type diffic;
   do
   {
-    blk_last = boost::get<block>(events.back());
-    diffic = next_difficulty_v2(timestamps, cummulative_difficulties,DIFFICULTY_TARGET_V2, false /*use_old_lwma*/, false);
+    blk_last = std::get<block>(events.back());
+    diffic = next_difficulty_v2(timestamps, cummulative_difficulties,tools::to_seconds(TARGET_BLOCK_TIME), false /*use_old_lwma*/, false);
     if (!lift_up_difficulty(events, timestamps, cummulative_difficulties, generator, 1, blk_last, miner_account))
       return false;
     std::cout << "Block #" << events.size() << ", difficulty: " << diffic << std::endl;
   }
   while (diffic < 1500);
 
-  blk_last = boost::get<block>(events.back());
-  MAKE_TX(events, tx_0, miner_account, miner_account, MK_COINS(30), boost::get<block>(events[1]));
+  blk_last = std::get<block>(events.back());
+  MAKE_TX(events, tx_0, miner_account, miner_account, MK_COINS(30), std::get<block>(events[1]));
   DO_CALLBACK(events, "corrupt_blocks_boundary");
 
   block blk_test;
   std::vector<crypto::hash> tx_hashes;
   tx_hashes.push_back(get_transaction_hash(tx_0));
   size_t txs_weight = get_transaction_weight(tx_0);
-  diffic = next_difficulty_v2(timestamps, cummulative_difficulties,DIFFICULTY_TARGET_V2, false /*use_old_lwma*/, false);
+  diffic = next_difficulty_v2(timestamps, cummulative_difficulties,tools::to_seconds(TARGET_BLOCK_TIME), false /*use_old_lwma*/, false);
   if (!generator.construct_block_manually(blk_test, blk_last, miner_account,
     test_generator::bf_diffic | test_generator::bf_timestamp | test_generator::bf_tx_hashes, 0, 0, blk_last.timestamp,
     crypto::hash(), diffic, transaction(), tx_hashes, txs_weight))

@@ -76,6 +76,7 @@ static constexpr HardFork::Params mainnet_hard_forks[] =
   {network_version_16,                      86097, 0, 1704076200},
   {network_version_17,                      99714, 0, 1705801462},
   {network_version_18,                      99845, 0, 1706008888},
+  {network_version_19,                     319539, 0, 1732951895},
 };
 
 static constexpr HardFork::Params testnet_hard_forks[] =
@@ -90,20 +91,19 @@ static constexpr HardFork::Params testnet_hard_forks[] =
   { network_version_14_blink,               128, 0, 1692427620 }, // 2020-01-09 00:00UTC
   { network_version_15_lns,                 130, 0, 1692427740 }, // 2020-03-25 14:00AEDT (03:00UTC)
   {network_version_16,			    140, 0, 1702245292},
+  {network_version_17,                      145, 0, 1732867200},
+  {network_version_18,                      159, 0, 1732869000},
+  {network_version_19,                      200, 0, 1732872600},
 };
 
-static constexpr HardFork::Params stagenet_hard_forks[] =
+static constexpr HardFork::Params devnet_hard_forks[] =
 {
-  { network_version_7,                      1,      0, 1503046577 },
-  { network_version_8,                      100,  0, 1692426487 },
-  { network_version_9_service_nodes,        102, 0, 1692426900 },
-  { network_version_10_bulletproofs,        110, 0, 1692427080 }, // 2018-12-13 23:30UTC
-  { network_version_11_infinite_staking,    118, 0, 1692427200 }, // 2019-03-26 13:00AEDT
-  { network_version_12_checkpointing,       120, 0, 1692427260 }, // 2019-07-24 14:00AEDT
-  { network_version_13_enforce_checkpoints, 125, 0, 1692427500 }, // 2019-10-23 19:00AEDT
-  { network_version_14_blink,               128, 0, 1692427620 }, // 2020-01-09 00:00UTC
-  { network_version_15_lns,                 130, 0, 1692427740 }, // 2020-03-25 14:00AEDT (03:00UTC)
-  {network_version_16,			    140, 0, 1702245292},
+  { network_version_7,                      1,      0, 1597170000 },
+  { network_version_15_lns,                 2,      0, 1597170000 }, // 2020-08-11 18:20 UTC
+  {network_version_16,                      140, 0, 1702245292},
+  {network_version_17,                      145, 0, 1732867200},
+  {network_version_18,                      159, 0, 1732869000},
+  {network_version_19,                      200, 0, 1732872600},
 };
 
 uint64_t HardFork::get_hardcoded_hard_fork_height(network_type nettype, cryptonote::network_version version)
@@ -125,7 +125,7 @@ HardFork::ParamsIterator HardFork::get_hardcoded_hard_forks(network_type nettype
 {
   if (nettype == MAINNET)       return {mainnet_hard_forks, std::end(mainnet_hard_forks)};
   else if (nettype == TESTNET)  return {testnet_hard_forks, std::end(testnet_hard_forks)};
-  else if (nettype == STAGENET) return {stagenet_hard_forks, std::end(stagenet_hard_forks)};
+  else if (nettype == DEVNET) return {devnet_hard_forks, std::end(devnet_hard_forks)};
   return {nullptr, nullptr};
 }
 
@@ -139,35 +139,36 @@ HardFork::HardFork(cryptonote::BlockchainDB &db, uint8_t original_version, time_
   current_fork_index(0)
 {
   if (window_size == 0)
-    throw "window_size needs to be strictly positive";
+    throw std::logic_error{"window_size needs to be strictly positive"};
   if (default_threshold_percent > 100)
-    throw "default_threshold_percent needs to be between 0 and 100";
+    throw std::logic_error{"default_threshold_percent needs to be between 0 and 100"};
 }
 
-bool HardFork::add_fork(uint8_t version, uint64_t height, uint8_t threshold, time_t time)
+void HardFork::add_fork(uint8_t version, uint64_t height, uint8_t threshold, time_t time)
 {
-  CRITICAL_REGION_LOCAL(lock);
+  std::unique_lock l{lock};
 
   // add in order
   if (version == 0)
-    return false;
+    throw std::runtime_error{"Cannot add a hard fork with HF version 0"};
   if (!heights.empty()) {
-    if (version <= heights.back().version)
-      return false;
-    if (height <= heights.back().height)
-      return false;
-    if (time <= heights.back().time)
-      return false;
+    const auto& [v, h, _thresh, t] = heights.back();
+    if (version <= v)
+      throw std::runtime_error{"Cannot add hard fork: version(" + std::to_string(version) + ") must be > previous HF version(" + std::to_string(v) + ")"};
+    if (height <= h)
+      throw std::runtime_error{"Cannot add hard fork: height(" + std::to_string(height) + ") must be > previous HF height(" + std::to_string(h) + ")"};
+    if (time < t)
+      throw std::runtime_error{"Cannot add hard fork: timestamp(" + std::to_string(time) + ") must be >= previous HF timestamp(" + std::to_string(t) + ")"};
   }
   if (threshold > 100)
-    return false;
+    throw std::runtime_error{"Cannot add hard fork: invalid threshold (" + std::to_string(threshold) + ")"};
+
   heights.push_back({version, height, threshold, time});
-  return true;
 }
 
-bool HardFork::add_fork(uint8_t version, uint64_t height, time_t time)
+void HardFork::add_fork(uint8_t version, uint64_t height, time_t time)
 {
-  return add_fork(version, height, default_threshold_percent, time);
+  add_fork(version, height, default_threshold_percent, time);
 }
 
 uint8_t HardFork::get_effective_version(uint8_t voting_version) const
@@ -188,7 +189,7 @@ bool HardFork::do_check(uint8_t block_version, uint8_t voting_version) const
 
 bool HardFork::check(const cryptonote::block &block) const
 {
-  CRITICAL_REGION_LOCAL(lock);
+  std::unique_lock l{lock};
   return do_check(::get_block_version(block), ::get_block_vote(block));
 }
 
@@ -201,13 +202,13 @@ bool HardFork::do_check_for_height(uint8_t block_version, uint8_t voting_version
 
 bool HardFork::check_for_height(const cryptonote::block &block, uint64_t height) const
 {
-  CRITICAL_REGION_LOCAL(lock);
+  std::unique_lock l{lock};
   return do_check_for_height(::get_block_version(block), ::get_block_vote(block), height);
 }
 
 bool HardFork::add(uint8_t block_version, uint8_t voting_version, uint64_t height)
 {
-  CRITICAL_REGION_LOCAL(lock);
+  std::unique_lock l{lock};
 
   if (!do_check(block_version, voting_version))
     return false;
@@ -241,7 +242,7 @@ bool HardFork::add(const cryptonote::block &block, uint64_t height)
 
 void HardFork::init()
 {
-  CRITICAL_REGION_LOCAL(lock);
+  std::unique_lock l{lock};
 
   // add a placeholder for the default version, to avoid special cases
   if (heights.empty())
@@ -271,7 +272,7 @@ uint8_t HardFork::get_block_version(uint64_t height) const
 
 bool HardFork::reorganize_from_block_height(uint64_t height)
 {
-  CRITICAL_REGION_LOCAL(lock);
+  std::unique_lock l{lock};
   if (height >= db.height())
     return false;
 
@@ -318,7 +319,7 @@ bool HardFork::reorganize_from_chain_height(uint64_t height)
 
 bool HardFork::rescan_from_block_height(uint64_t height)
 {
-  CRITICAL_REGION_LOCAL(lock);
+  std::unique_lock l{lock};
   db_rtxn_guard rtxn_guard(&db);
   if (height >= db.height())
     return false;
@@ -358,7 +359,7 @@ void HardFork::on_block_popped(uint64_t nblocks)
 {
   CHECK_AND_ASSERT_THROW_MES(nblocks > 0, "nblocks must be greater than 0");
 
-  CRITICAL_REGION_LOCAL(lock);
+  std::unique_lock l{lock};
 
   const uint64_t new_chain_height = db.height();
   const uint64_t old_chain_height = new_chain_height + nblocks;
@@ -381,7 +382,7 @@ void HardFork::on_block_popped(uint64_t nblocks)
 
 int HardFork::get_voted_fork_index(uint64_t height) const
 {
-  CRITICAL_REGION_LOCAL(lock);
+  std::unique_lock l{lock};
   uint32_t accumulated_votes = 0;
   for (int n = heights.size() - 1; n >= 0; --n) {
     uint8_t v = heights[n].version;
@@ -396,7 +397,7 @@ int HardFork::get_voted_fork_index(uint64_t height) const
 
 HardFork::State HardFork::get_state(time_t t) const
 {
-  CRITICAL_REGION_LOCAL(lock);
+  std::unique_lock l{lock};
 
   // no hard forks setup yet
   if (heights.size() <= 1)
@@ -417,10 +418,10 @@ HardFork::State HardFork::get_state() const
 
 uint8_t HardFork::get(uint64_t height) const
 {
-  CRITICAL_REGION_LOCAL(lock);
+  std::unique_lock l{lock};
   if (height > db.height()) {
     assert(false);
-    return INVALID_HF_VERSION_FOR_HEIGHT;
+    return INVALID_HF_VERSION;
   }
   if (height == db.height()) {
     return get_current_version();
@@ -430,19 +431,19 @@ uint8_t HardFork::get(uint64_t height) const
 
 uint8_t HardFork::get_current_version() const
 {
-  CRITICAL_REGION_LOCAL(lock);
+  std::unique_lock l{lock};
   return heights[current_fork_index].version;
 }
 
 uint8_t HardFork::get_ideal_version() const
 {
-  CRITICAL_REGION_LOCAL(lock);
+  std::unique_lock l{lock};
   return heights.back().version;
 }
 
 uint8_t HardFork::get_ideal_version(uint64_t height) const
 {
-  CRITICAL_REGION_LOCAL(lock);
+  std::unique_lock l{lock};
   for (unsigned int n = heights.size() - 1; n > 0; --n) {
     if (height >= heights[n].height) {
       return heights[n].version;
@@ -466,7 +467,7 @@ uint64_t HardFork::get_earliest_ideal_height_for_version(uint8_t version) const
 
 uint8_t HardFork::get_next_version() const
 {
-  CRITICAL_REGION_LOCAL(lock);
+  std::unique_lock l{lock};
   uint64_t height = db.height();
   for (auto i = heights.rbegin(); i != heights.rend(); ++i) {
     if (height >= i->height) {
@@ -478,7 +479,7 @@ uint8_t HardFork::get_next_version() const
 
 bool HardFork::get_voting_info(uint8_t version, uint32_t &window, uint32_t &votes, uint32_t &threshold, uint64_t &earliest_height, uint8_t &voting) const
 {
-  CRITICAL_REGION_LOCAL(lock);
+  std::unique_lock l{lock};
 
   const uint8_t current_version = heights[current_fork_index].version;
   const bool enabled = current_version >= version;

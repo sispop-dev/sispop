@@ -34,7 +34,6 @@
 
 #define EMISSION_SPEED_FACTOR_PER_MINUTE 20
 
-using namespace epee;
 using namespace cryptonote;
 
 namespace
@@ -43,7 +42,7 @@ namespace
     const account_public_address& miner_address, std::vector<uint64_t>& block_weights, size_t target_tx_weight,
     size_t target_block_weight, uint64_t fee = 0)
   {
-    if (!construct_miner_tx(height, misc_utils::median(block_weights), already_generated_coins, target_block_weight, fee, miner_address, miner_tx))
+    if (!construct_miner_tx(height, misc_utils::median(block_weights), already_generated_coins, target_block_weight, fee, miner_tx, cryptonote::sispop_miner_tx_context::miner_block(cryptonote::FAKECHAIN, mminer_address)))
       return false;
 
     size_t current_weight = get_transaction_weight(miner_tx);
@@ -122,9 +121,9 @@ namespace
 gen_block_reward::gen_block_reward()
   : m_invalid_block_index(0)
 {
-  REGISTER_CALLBACK_METHOD(gen_block_reward, mark_invalid_block);
-  REGISTER_CALLBACK_METHOD(gen_block_reward, mark_checked_block);
-  REGISTER_CALLBACK_METHOD(gen_block_reward, check_block_rewards);
+  REGISTER_CALLBACK(mark_invalid_block);
+  REGISTER_CALLBACK(mark_checked_block);
+  REGISTER_CALLBACK(check_block_rewards);
 }
 
 bool gen_block_reward::generate(std::vector<test_event_entry>& events) const
@@ -260,17 +259,17 @@ bool gen_block_reward::check_block_rewards(cryptonote::core& /*c*/, size_t /*ev_
 
   for (size_t i = 0; i < 5; ++i)
   {
-    block blk_i = boost::get<block>(events[m_checked_blocks_indices[i]]);
+    block blk_i = std::get<block>(events[m_checked_blocks_indices[i]]);
     CHECK_EQ(blk_rewards[i], get_tx_out_amount(blk_i.miner_tx));
   }
 
-  block blk_n1 = boost::get<block>(events[m_checked_blocks_indices[5]]);
+  block blk_n1 = std::get<block>(events[m_checked_blocks_indices[5]]);
   CHECK_EQ(blk_rewards[5] + 3 * TESTS_DEFAULT_FEE, get_tx_out_amount(blk_n1.miner_tx));
 
-  block blk_n2 = boost::get<block>(events[m_checked_blocks_indices[6]]);
+  block blk_n2 = std::get<block>(events[m_checked_blocks_indices[6]]);
   CHECK_EQ(blk_rewards[6] + (5 + 7) * TESTS_DEFAULT_FEE, get_tx_out_amount(blk_n2.miner_tx));
 
-  block blk_n3 = boost::get<block>(events[m_checked_blocks_indices[7]]);
+  block blk_n3 = std::get<block>(events[m_checked_blocks_indices[7]]);
   CHECK_EQ((11 + 13) * TESTS_DEFAULT_FEE, get_tx_out_amount(blk_n3.miner_tx));
 
   return true;

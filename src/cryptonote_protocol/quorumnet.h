@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020, The Sispop Project
+// Copyright (c) 2019-2020, The Oxen Project
 //
 // All rights reserved.
 //

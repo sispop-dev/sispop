@@ -15,10 +15,8 @@ namespace epee
     {
       std::string jsonrpc;
       std::string method;
-      epee::serialization::storage_entry id;
-      t_param     params;
-
-      request(): id{}, params{} {}
+      epee::serialization::storage_entry id{};
+      t_param params{};
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(jsonrpc)
@@ -30,10 +28,8 @@ namespace epee
 
     struct error
     {
-      int64_t code;
+      int64_t code{0};
       std::string message;
-
-      error(): code(0) {}
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(code)
@@ -41,60 +37,31 @@ namespace epee
       END_KV_SERIALIZE_MAP()
     };
     
-    struct dummy_error
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
-
-    struct dummy_result
-    {
-      BEGIN_KV_SERIALIZE_MAP()
-      END_KV_SERIALIZE_MAP()
-    };
-
-    template<typename t_param, typename t_error>
+    template<typename t_param, bool with_error = false>
     struct response
     {
       std::string jsonrpc;
-      t_param     result;
-      epee::serialization::storage_entry id;
-      t_error     error;
-
-      response(): result{}, id(), error{} {}
+      t_param     result{};
+      epee::serialization::storage_entry id{};
+      json_rpc::error error{};
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(jsonrpc)
         KV_SERIALIZE(id)
         KV_SERIALIZE(result)
-        KV_SERIALIZE(error)
+        if (with_error)
+          KV_SERIALIZE(error)
       END_KV_SERIALIZE_MAP()
     };
 
-    template<typename t_param>
-    struct response<t_param, dummy_error>
+    template<typename T>
+    using response_with_error = response<T, true>;
+
+    struct error_response
     {
       std::string jsonrpc;
-      t_param     result;
-      epee::serialization::storage_entry id;
-
-      response(): result{}, id{} {}
-
-      BEGIN_KV_SERIALIZE_MAP()
-        KV_SERIALIZE(jsonrpc)
-        KV_SERIALIZE(id)
-        KV_SERIALIZE(result)
-      END_KV_SERIALIZE_MAP()
-    };
-
-    template<typename t_error>
-    struct response<dummy_result, t_error>
-    {
-      std::string jsonrpc;
-      t_error     error;
-      epee::serialization::storage_entry id;
-
-      response(): error{}, id{} {}
+      json_rpc::error error{};
+      epee::serialization::storage_entry id{};
 
       BEGIN_KV_SERIALIZE_MAP()
         KV_SERIALIZE(jsonrpc)
@@ -102,8 +69,6 @@ namespace epee
         KV_SERIALIZE(error)
       END_KV_SERIALIZE_MAP()
     };
-
-    typedef response<dummy_result, error> error_response;
   }
 }
 

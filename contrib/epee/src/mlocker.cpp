@@ -35,10 +35,15 @@
 #include <sys/mman.h>
 #endif
 #include "misc_log_ex.h"
-#include "syncobj.h"
 #include "mlocker.h"
 
 #include <atomic>
+#include <cerrno>
+#include <cstdint>
+#include <cstring>
+#include <map>
+#include <mutex>
+#include <utility>
 
 #undef SISPOP_DEFAULT_LOG_CATEGORY
 #define SISPOP_DEFAULT_LOG_CATEGORY "mlocker"
@@ -93,9 +98,9 @@ namespace epee
   size_t mlocker::page_size = 0;
   size_t mlocker::num_locked_objects = 0;
 
-  boost::mutex &mlocker::mutex()
+  std::mutex &mlocker::mutex()
   {
-    static boost::mutex *vmutex = new boost::mutex();
+    static std::mutex *vmutex = new std::mutex();
     return *vmutex;
   }
   std::map<size_t, unsigned int> &mlocker::map()
@@ -106,7 +111,7 @@ namespace epee
 
   size_t mlocker::get_page_size()
   {
-    CRITICAL_REGION_LOCAL(mutex());
+    std::lock_guard lock{mutex()};
     if (page_size == 0)
       page_size = query_page_size();
     return page_size;
@@ -131,7 +136,7 @@ namespace epee
     if (page_size == 0)
       return;
 
-    CRITICAL_REGION_LOCAL(mutex());
+    std::lock_guard lock{mutex()};
     const size_t first = ((uintptr_t)ptr) / page_size;
     const size_t last = (((uintptr_t)ptr) + len - 1) / page_size;
     for (size_t page = first; page <= last; ++page)
@@ -148,7 +153,7 @@ namespace epee
     size_t page_size = get_page_size();
     if (page_size == 0)
       return;
-    CRITICAL_REGION_LOCAL(mutex());
+    std::lock_guard lock{mutex()};
     const size_t first = ((uintptr_t)ptr) / page_size;
     const size_t last = (((uintptr_t)ptr) + len - 1) / page_size;
     for (size_t page = first; page <= last; ++page)
@@ -160,13 +165,13 @@ namespace epee
 
   size_t mlocker::get_num_locked_pages()
   {
-    CRITICAL_REGION_LOCAL(mutex());
+    std::lock_guard lock{mutex()};
     return map().size();
   }
 
   size_t mlocker::get_num_locked_objects()
   {
-    CRITICAL_REGION_LOCAL(mutex());
+    std::lock_guard lock{mutex()};
     return num_locked_objects;
   }
 

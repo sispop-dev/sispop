@@ -34,7 +34,6 @@ target_link_libraries(serialization
   PRIVATE
     cryptonote_core
     cryptonote_protocol
-    Boost::chrono
     Boost::thread
     version
     extra)

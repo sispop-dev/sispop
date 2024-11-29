@@ -32,9 +32,6 @@
 
 //#define DBG
 
-#ifndef RCTSIGS_H
-#define RCTSIGS_H
-
 #include <cstddef>
 #include <vector>
 #include <tuple>
@@ -136,5 +133,3 @@ namespace rct {
     key get_pre_mlsag_hash(const rctSig &rv, hw::device &hwdev);
     bool signMultisig(rctSig &rv, const std::vector<unsigned int> &indices, const keyV &k, const multisig_out &msout, const key &secret_key);
 }
-#endif  /* RCTSIGS_H */
-

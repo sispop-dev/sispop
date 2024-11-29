@@ -26,9 +26,9 @@ constexpr uint64_t MINER_REWARD_HF17      = BLOCK_REWARD_HF17 * 40 / 100;
 constexpr uint64_t SN_REWARD_HF17         = BLOCK_REWARD_HF17 * 50 / 100;
 constexpr uint64_t FOUNDATION_REWARD_HF17 = BLOCK_REWARD_HF17 * 10 / 100;
 
-static_assert(MINER_REWARD_HF15 + SN_REWARD_HF15 + FOUNDATION_REWARD_HF15 == BLOCK_REWARD_HF15, "math fail");
-static_assert(MINER_REWARD_HF16 + SN_REWARD_HF16 + FOUNDATION_REWARD_HF16 == BLOCK_REWARD_HF16, "math fail");
-static_assert(MINER_REWARD_HF17 + SN_REWARD_HF17 + FOUNDATION_REWARD_HF17 == BLOCK_REWARD_HF17, "math fail");
+static_assert(MINER_REWARD_HF15 + SN_REWARD_HF15 + FOUNDATION_REWARD_HF15 == BLOCK_REWARD_HF15);
+static_assert(MINER_REWARD_HF16 + SN_REWARD_HF16 + FOUNDATION_REWARD_HF16 == BLOCK_REWARD_HF16);
+static_assert(MINER_REWARD_HF17 + SN_REWARD_HF17 + FOUNDATION_REWARD_HF17 == BLOCK_REWARD_HF17);
 // -------------------------------------------------------------------------------------------------
 //
 // Blink

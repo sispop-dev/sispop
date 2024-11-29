@@ -30,9 +30,10 @@
 
 #pragma once
 
-#include <iostream>
 #include <vector>
 #include <stdexcept>
+#include <cstddef>
+#include <cstdint>
 
 namespace tools {
 

@@ -37,8 +37,8 @@ struct get_tx_validation_base : public test_chain_unit_base
     : m_invalid_tx_index(0)
     , m_invalid_block_index(0)
   {
-    REGISTER_CALLBACK_METHOD(get_tx_validation_base, mark_invalid_tx);
-    REGISTER_CALLBACK_METHOD(get_tx_validation_base, mark_invalid_block);
+    REGISTER_CALLBACK(mark_invalid_tx);
+    REGISTER_CALLBACK(mark_invalid_block);
   }
 
   bool check_tx_verification_context(const cryptonote::tx_verification_context& tvc, bool tx_added, size_t event_idx, const cryptonote::transaction& /*tx*/)

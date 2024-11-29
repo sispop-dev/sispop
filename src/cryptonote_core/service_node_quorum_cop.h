@@ -32,8 +32,8 @@
 #include "cryptonote_protocol/cryptonote_protocol_handler_common.h"
 #include "cryptonote_basic/cryptonote_basic_impl.h"
 #include "cryptonote_core/service_node_voting.h"
-
-#include "common/sispop.h"
+#include <cassert>
+#include <mutex>
 
 namespace cryptonote
 {
@@ -57,6 +57,13 @@ namespace service_nodes
     END_SERIALIZE()
   };
 
+  inline std::ostream &operator<<(std::ostream &os, quorum const &q)
+  {
+    for (size_t i = 0; i < q.validators.size(); i++) os << "V[" << i << "] " << q.validators[i] << "\n";
+    for (size_t i = 0; i < q.workers.size(); i++) os    << "W[" << i << "] " << q.workers[i] << "\n";
+    return os;
+  }
+
   struct quorum_manager
   {
     std::shared_ptr<const quorum> obligations;
@@ -64,12 +71,14 @@ namespace service_nodes
     // to avoid drastic changes for now to a lot of the service node API
     std::shared_ptr<const quorum> checkpointing;
     std::shared_ptr<const quorum> blink;
+    std::shared_ptr<const quorum> pulse;
 
     std::shared_ptr<const quorum> get(quorum_type type) const
     {
       if (type == quorum_type::obligations) return obligations;
       else if (type == quorum_type::checkpointing) return checkpointing;
       else if (type == quorum_type::blink) return blink;
+      else if (type == quorum_type::pulse) return pulse;
       MERROR("Developer error: Unhandled quorum enum with value: " << (size_t)type);
       assert(!"Developer error: Unhandled quorum enum with value: ");
       return nullptr;
@@ -112,7 +121,7 @@ namespace service_nodes
     voting_pool       m_vote_pool;
     uint64_t          m_obligations_height;
     uint64_t          m_last_checkpointed_height;
-    mutable epee::critical_section m_lock;
+    mutable std::recursive_mutex m_lock;
   };
 
   int find_index_in_quorum_group(std::vector<crypto::public_key> const &group, const crypto::public_key &my_pubkey);

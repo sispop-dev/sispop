@@ -30,6 +30,7 @@
 
 #include "sispop_tests.h"
 #include "cryptonote_core/service_node_list.h"
+#include "common/random.h"
 
 extern "C"
 {
@@ -90,7 +91,7 @@ bool sispop_checkpointing_alt_chain_handle_alt_blocks_at_tip::generate(std::vect
   // block that confirms the alt block.
   uint64_t curr_height   = gen.height();
   crypto::hash curr_hash = get_block_hash(gen.top().block);
-  sispop_register_callback(events, "check_alt_block_count", [&events, curr_height, curr_hash](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_alt_block_count", [curr_height, curr_hash](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_alt_block_count");
 
@@ -109,7 +110,7 @@ bool sispop_checkpointing_alt_chain_handle_alt_blocks_at_tip::generate(std::vect
   gen.create_and_add_next_block();
   fork.create_and_add_next_block();
   crypto::hash expected_top_hash = cryptonote::get_block_hash(fork.top().block);
-  sispop_register_callback(events, "check_chain_reorged", [&events, expected_top_hash](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_chain_reorged", [expected_top_hash](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_chain_reorged");
     CHECK_EQ(c.get_blockchain_storage().get_alternative_blocks_count(), 0);
@@ -156,7 +157,7 @@ bool sispop_checkpointing_alt_chain_more_service_node_checkpoints_less_pow_overt
   uint64_t const fork_top_height   = cryptonote::get_block_height(fork_with_more_checkpoints.top().block);
   crypto::hash const fork_top_hash = cryptonote::get_block_hash(fork_with_more_checkpoints.top().block);
 
-  sispop_register_callback(events, "check_switched_to_alt_chain", [&events, fork_top_hash, fork_top_height](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_switched_to_alt_chain", [fork_top_hash, fork_top_height](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_switched_to_alt_chain");
     uint64_t top_height;
@@ -232,7 +233,7 @@ bool sispop_checkpointing_alt_chain_receive_checkpoint_votes_should_reorg_back::
   // Upon adding the last block, we should now switch to our forked chain
   fork.create_and_add_next_block({});
   crypto::hash const fork_top_hash = cryptonote::get_block_hash(fork.top().block);
-  sispop_register_callback(events, "check_switched_to_alt_chain", [&events, fork_top_hash](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_switched_to_alt_chain", [fork_top_hash](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_switched_to_alt_chain");
     uint64_t top_height;
@@ -332,7 +333,7 @@ bool sispop_checkpointing_alt_chain_with_increasing_service_node_checkpoints::ge
   fork.add_service_node_checkpoint(fork.height(), service_nodes::CHECKPOINT_MIN_VOTES);
 
   crypto::hash const gen_top_hash = cryptonote::get_block_hash(gen.top().block);
-  sispop_register_callback(events, "check_still_on_main_chain", [&events, gen_top_hash](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_still_on_main_chain", [gen_top_hash](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_still_on_main_chain");
     uint64_t top_height;
@@ -353,7 +354,7 @@ bool sispop_checkpointing_alt_chain_with_increasing_service_node_checkpoints::ge
   fork.create_and_add_next_block({}, &fork_second_checkpoint);
 
   crypto::hash const fork_top_hash = cryptonote::get_block_hash(fork.top().block);
-  sispop_register_callback(events, "check_switched_to_alt_chain", [&events, fork_top_hash](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_switched_to_alt_chain", [fork_top_hash](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_switched_to_alt_chain");
     uint64_t top_height;
@@ -424,7 +425,7 @@ bool sispop_checkpointing_service_node_checkpoint_from_votes::generate(std::vect
   for (size_t i = 0; i < service_nodes::CHECKPOINT_MIN_VOTES - 1; i++)
     gen.events_.push_back(sispop_blockchain_addable<service_nodes::quorum_vote_t>(checkpoint_votes[i]));
 
-  sispop_register_callback(events, "check_service_node_checkpoint_rejected_insufficient_votes", [&events, checkpointed_height](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_service_node_checkpoint_rejected_insufficient_votes", [checkpointed_height](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_service_node_checkpoint_rejected_insufficient_votes");
     cryptonote::Blockchain const &blockchain = c.get_blockchain_storage();
@@ -435,7 +436,7 @@ bool sispop_checkpointing_service_node_checkpoint_from_votes::generate(std::vect
 
   // NOTE: Add last vote and check checkpoint has been generated
   gen.events_.push_back(checkpoint_votes.back());
-  sispop_register_callback(events, "check_service_node_checkpoint_accepted", [&events, checkpointed_height](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_service_node_checkpoint_accepted", [checkpointed_height](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_service_node_checkpoint_accepted");
     cryptonote::Blockchain const &blockchain = c.get_blockchain_storage();
@@ -524,7 +525,7 @@ bool sispop_core_block_reward_unpenalized::generate(std::vector<test_event_entry
   uint64_t unpenalized_block_reward     = cryptonote::block_reward_unpenalized_formula_v8(gen.height());
   uint64_t expected_service_node_reward = cryptonote::service_node_reward_formula(unpenalized_block_reward, newest_hf);
 
-  sispop_register_callback(events, "check_block_rewards", [&events, unpenalized_block_reward, expected_service_node_reward](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_block_rewards", [unpenalized_block_reward, expected_service_node_reward](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_block_rewards");
     uint64_t top_height;
@@ -593,8 +594,14 @@ bool sispop_core_fee_burning::generate(std::vector<test_event_entry>& events)
   // Try to add another block with a fee that claims into the amount of the fee that must be burned
   txs.push_back(add_burning_tx(send_fee_burn[2]));
 
-  auto bad_fee_block = gen.create_next_block(txs, nullptr, send_fee_burn[2][1] - send_fee_burn[2][2] + 2);
-  gen.add_block(bad_fee_block, false, "Invalid miner reward");
+  {
+    sispop_create_block_params block_params = gen.next_block_params();
+    block_params.total_fee = send_fee_burn[2][1] - send_fee_burn[2][2] + 2;
+
+    sispop_blockchain_entry next = {};
+    assert(gen.create_block(next, block_params, txs));
+    gen.add_block(next, false, "Invalid miner reward");
+  }
 
   sispop_register_callback(events, "check_fee_burned", [good_hash, good_miner_reward](cryptonote::core &c, size_t ev_index)
   {
@@ -620,7 +627,6 @@ bool sispop_core_fee_burning::generate(std::vector<test_event_entry>& events)
 bool sispop_core_governance_batched_reward::generate(std::vector<test_event_entry>& events)
 {
   std::vector<std::pair<uint8_t, uint64_t>> hard_forks = sispop_generate_sequential_hard_fork_table(cryptonote::network_version_10_bulletproofs);
-  const cryptonote::config_t &network = cryptonote::get_config(cryptonote::FAKECHAIN, cryptonote::network_version_count - 1);
 
   uint64_t hf10_height = 0;
   for (std::pair<uint8_t, uint64_t> hf_pair : hard_forks)
@@ -637,6 +643,7 @@ bool sispop_core_governance_batched_reward::generate(std::vector<test_event_entr
   sispop_chain_generator batched_governance_generator(events, hard_forks);
   {
     batched_governance_generator.add_blocks_until_version(cryptonote::network_version_10_bulletproofs);
+    constexpr auto& network = cryptonote::get_config(cryptonote::FAKECHAIN);
     uint64_t blocks_to_gen = network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS - batched_governance_generator.height();
     batched_governance_generator.add_n_blocks(blocks_to_gen);
   }
@@ -668,7 +675,7 @@ bool sispop_core_governance_batched_reward::generate(std::vector<test_event_entr
     }
   }
 
-  sispop_register_callback(events, "check_batched_governance_amount_matches", [&events, hf10_height, expected_total_governance_paid](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_batched_governance_amount_matches", [hf10_height, expected_total_governance_paid](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_batched_governance_amount_matches");
 
@@ -694,7 +701,7 @@ bool sispop_core_governance_batched_reward::generate(std::vector<test_event_entr
 
 bool sispop_core_block_rewards_lrc6::generate(std::vector<test_event_entry>& events)
 {
-  auto& network = cryptonote::get_config(cryptonote::FAKECHAIN, cryptonote::network_version_16);
+  constexpr auto& network = cryptonote::get_config(cryptonote::FAKECHAIN);
   std::vector<std::pair<uint8_t, uint64_t>> hard_forks = sispop_generate_sequential_hard_fork_table(cryptonote::network_version_15_lns);
   hard_forks.emplace_back(cryptonote::network_version_16, hard_forks.back().second + network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS + 10);
   sispop_chain_generator batched_governance_generator(events, hard_forks);
@@ -802,13 +809,13 @@ bool sispop_core_test_deregister_preferred::generate(std::vector<test_event_entr
       uint64_t height;
       uint64_t expected_reward;
       cryptonote::blobdata extra_nonce;
-      c.get_block_template(full_blk, miner.get_keys().m_account_address, diffic, height, expected_reward, extra_nonce);
+      c.create_next_miner_block_template(full_blk, miner.get_keys().m_account_address, diffic, height, expected_reward, extra_nonce);
     }
 
     map_hash2tx_t mtx;
     {
       std::vector<cryptonote::block> chain;
-      CHECK_TEST_CONDITION(find_block_chain(events, chain, mtx, get_block_hash(boost::get<cryptonote::block>(events[0]))));
+      CHECK_TEST_CONDITION(find_block_chain(events, chain, mtx, get_block_hash(std::get<cryptonote::block>(events[0]))));
     }
 
     const auto deregister_count =
@@ -1323,6 +1330,7 @@ bool sispop_name_system_get_mappings_by_owners::generate(std::vector<test_event_
     gen.create_and_add_next_block({tx1});
   }
   uint64_t session_height1 = gen.height();
+  gen.add_n_blocks(10);
 
   std::string session_name2 = "MyName2";
   crypto::hash session_tx_hash2;
@@ -1332,6 +1340,7 @@ bool sispop_name_system_get_mappings_by_owners::generate(std::vector<test_event_
     gen.create_and_add_next_block({tx1});
   }
   uint64_t session_height2 = gen.height();
+  gen.add_n_blocks(10);
 
   std::string session_name3 = "MyName3";
   crypto::hash session_tx_hash3;
@@ -1341,6 +1350,7 @@ bool sispop_name_system_get_mappings_by_owners::generate(std::vector<test_event_
     gen.create_and_add_next_block({tx1});
   }
   uint64_t session_height3 = gen.height();
+  gen.add_n_blocks(10);
 
   sispop_register_callback(events, "check_lns_entries", [=](cryptonote::core &c, size_t ev_index)
   {
@@ -1390,7 +1400,7 @@ bool sispop_name_system_get_mappings::generate(std::vector<test_event_entry> &ev
   }
   uint64_t session_height = gen.height();
 
-  sispop_register_callback(events, "check_lns_entries", [&events, bob_key, session_height, session_name1, session_tx_hash](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_lns_entries", [bob_key, session_height, session_name1, session_tx_hash](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_lns_entries");
     lns::name_system_db &lns_db = c.get_blockchain_storage().name_system_db();
@@ -2172,7 +2182,7 @@ bool sispop_name_system_update_mapping_multiple_owners::generate(std::vector<tes
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
       lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
-      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
+      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_ed25519_signature(hash, owner1_key);
 
       cryptonote::transaction tx2 = gen.create_and_add_sispop_name_system_tx_update(miner, lns::mapping_type::session, name, &temp_keys.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
@@ -2194,7 +2204,7 @@ bool sispop_name_system_update_mapping_multiple_owners::generate(std::vector<tes
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
       lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
-      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
+      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_ed25519_signature(hash, owner2_key);
 
       cryptonote::transaction tx2 = gen.create_and_add_sispop_name_system_tx_update(miner, lns::mapping_type::session, name, &temp_keys.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
@@ -2232,7 +2242,7 @@ bool sispop_name_system_update_mapping_multiple_owners::generate(std::vector<tes
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
       lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
-      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
+      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_monero_signature(hash, owner1.wallet.address.m_spend_public_key, account1.get_keys().m_spend_secret_key);
 
       cryptonote::transaction tx2 = gen.create_and_add_sispop_name_system_tx_update(miner, lns::mapping_type::session, name, &temp_keys.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
@@ -2254,7 +2264,7 @@ bool sispop_name_system_update_mapping_multiple_owners::generate(std::vector<tes
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
       lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
-      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
+      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_monero_signature(hash, owner2.wallet.address.m_spend_public_key, account2.get_keys().m_spend_secret_key);
 
       cryptonote::transaction tx2 = gen.create_and_add_sispop_name_system_tx_update(miner, lns::mapping_type::session, name, &temp_keys.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
@@ -2296,7 +2306,7 @@ bool sispop_name_system_update_mapping_multiple_owners::generate(std::vector<tes
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
       lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
-      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
+      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_ed25519_signature(hash, owner1_key);
 
       cryptonote::transaction tx2 = gen.create_and_add_sispop_name_system_tx_update(miner, lns::mapping_type::session, name, &temp_keys.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
@@ -2318,7 +2328,7 @@ bool sispop_name_system_update_mapping_multiple_owners::generate(std::vector<tes
     {
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
       lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
-      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
+      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_monero_signature(hash, owner2.wallet.address.m_spend_public_key, account2.get_keys().m_spend_secret_key);
 
       cryptonote::transaction tx2 = gen.create_and_add_sispop_name_system_tx_update(miner, lns::mapping_type::session, name, &temp_keys.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
@@ -2360,7 +2370,7 @@ bool sispop_name_system_update_mapping_multiple_owners::generate(std::vector<tes
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
 
       lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
-      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
+      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_monero_signature(hash, owner1.wallet.address.m_spend_public_key, account1.get_keys().m_spend_secret_key);
 
       cryptonote::transaction tx2 = gen.create_and_add_sispop_name_system_tx_update(miner, lns::mapping_type::session, name, &temp_keys.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
@@ -2383,7 +2393,7 @@ bool sispop_name_system_update_mapping_multiple_owners::generate(std::vector<tes
       lns_keys_t temp_keys = make_lns_keys(gen.add_account());
 
       lns::mapping_value encrypted_value = helper_encrypt_lns_value(name, temp_keys.session_value);
-      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_span(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
+      crypto::hash hash = lns::tx_extra_signature_hash(encrypted_value.to_view(), nullptr /*owner*/, nullptr /*backup_owner*/, txid);
       auto signature = lns::make_ed25519_signature(hash, owner2_key);
 
       cryptonote::transaction tx2 = gen.create_and_add_sispop_name_system_tx_update(miner, lns::mapping_type::session, name, &temp_keys.session_value, nullptr /*owner*/, nullptr /*backup_owner*/, &signature);
@@ -2464,7 +2474,8 @@ bool sispop_name_system_update_mapping_replay::generate(std::vector<test_event_e
   {
     cryptonote::transaction tx1 = gen.create_and_add_sispop_name_system_tx_update(miner, lns::mapping_type::session, name, &bob_key.session_value);
     gen.create_and_add_next_block({tx1});
-    assert(cryptonote::get_sispop_name_system_from_tx_extra(tx1.extra, lns_entry));
+    [[maybe_unused]] bool found_tx_extra = cryptonote::get_field_from_tx_extra(tx1.extra, lns_entry);
+    assert(found_tx_extra);
   }
 
   // Replay the (1)st update mapping, should fail because the update is to the same session value
@@ -2605,7 +2616,7 @@ bool sispop_service_nodes_alt_quorums::generate(std::vector<test_event_entry>& e
   uint64_t height_with_fork = gen.height();
 
   service_nodes::quorum_manager fork_quorums = fork.top_quorum();
-  sispop_register_callback(events, "check_alt_quorums_exist", [&events, fork_quorums, height_with_fork](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_alt_quorums_exist", [fork_quorums, height_with_fork](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_alt_quorums_exist");
 
@@ -2657,7 +2668,7 @@ bool sispop_service_nodes_checkpoint_quorum_size::generate(std::vector<test_even
     gen.add_blocks_until_next_checkpointable_height();
 
   uint64_t check_height_1 = gen.height();
-  sispop_register_callback(events, "check_checkpoint_quorum_should_be_empty", [&events, check_height_1](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_checkpoint_quorum_should_be_empty", [check_height_1](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_checkpoint_quorum_should_be_empty");
     std::shared_ptr<const service_nodes::quorum> quorum = c.get_quorum(service_nodes::quorum_type::checkpointing, check_height_1);
@@ -2678,7 +2689,7 @@ bool sispop_service_nodes_checkpoint_quorum_size::generate(std::vector<test_even
   assert(tries != MAX_TRIES);
 
   uint64_t check_height_2 = gen.height();
-  sispop_register_callback(events, "check_checkpoint_quorum_should_be_populated", [&events, check_height_2](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "check_checkpoint_quorum_should_be_populated", [check_height_2](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("check_checkpoint_quorum_should_be_populated");
     std::shared_ptr<const service_nodes::quorum> quorum = c.get_quorum(service_nodes::quorum_type::checkpointing, check_height_2);
@@ -2811,8 +2822,8 @@ bool sispop_service_nodes_test_rollback::generate(std::vector<test_event_entry>&
     {
       /// obtain public key of node A
       const auto event_a = events.at(deregister_index);
-      CHECK_TEST_CONDITION(event_a.type() == typeid(sispop_blockchain_addable<sispop_transaction>));
-      const auto dereg_tx = boost::get<sispop_blockchain_addable<sispop_transaction>>(event_a);
+      CHECK_TEST_CONDITION(std::holds_alternative<sispop_blockchain_addable<sispop_transaction>>(event_a));
+      const auto dereg_tx = std::get<sispop_blockchain_addable<sispop_transaction>>(event_a);
       CHECK_TEST_CONDITION(dereg_tx.data.tx.type == cryptonote::txtype::state_change);
 
       cryptonote::tx_extra_service_node_state_change deregistration;
@@ -2833,8 +2844,8 @@ bool sispop_service_nodes_test_rollback::generate(std::vector<test_event_entry>&
       /// obtain public key of node B
       constexpr size_t reg_evnt_idx = 73;
       const auto event_b = events.at(reg_evnt_idx);
-      CHECK_TEST_CONDITION(event_b.type() == typeid(sispop_blockchain_addable<sispop_transaction>));
-      const auto reg_tx = boost::get<sispop_blockchain_addable<sispop_transaction>>(event_b);
+      CHECK_TEST_CONDITION(std::holds_alternative<sispop_blockchain_addable<sispop_transaction>>(event_b));
+      const auto reg_tx = std::get<sispop_blockchain_addable<sispop_transaction>>(event_b);
 
       crypto::public_key pk_b;
       if (!cryptonote::get_service_node_pubkey_from_tx_extra(reg_tx.data.tx.extra, pk_b)) {
@@ -2881,7 +2892,7 @@ bool sispop_service_nodes_test_swarms_basic::generate(std::vector<test_event_ent
   assert(gen.hf_version_ == cryptonote::network_version_9_service_nodes);
 
   gen.add_blocks_until_version(cryptonote::network_version_10_bulletproofs);
-  sispop_register_callback(events, "test_initial_swarms", [&events](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "test_initial_swarms", [](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_swarms_basic::test_initial_swarms");
     const auto sn_list = c.get_service_node_list_state({}); /// Check that there is one active swarm and the swarm queue is not empty
@@ -2903,7 +2914,7 @@ bool sispop_service_nodes_test_swarms_basic::generate(std::vector<test_event_ent
     gen.create_and_add_next_block({tx});
   }
 
-  sispop_register_callback(events, "test_with_one_more_sn", [&events](cryptonote::core &c, size_t ev_index) /// test that another swarm has been created
+  sispop_register_callback(events, "test_with_one_more_sn", [](cryptonote::core &c, size_t ev_index) /// test that another swarm has been created
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_with_one_more_sn");
     const auto sn_list = c.get_service_node_list_state({});
@@ -2923,7 +2934,7 @@ bool sispop_service_nodes_test_swarms_basic::generate(std::vector<test_event_ent
     gen.create_and_add_next_block({tx});
   }
 
-  sispop_register_callback(events, "test_with_more_sn", [&events](cryptonote::core &c, size_t ev_index) /// test that another swarm has been created
+  sispop_register_callback(events, "test_with_more_sn", [](cryptonote::core &c, size_t ev_index) /// test that another swarm has been created
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_with_more_sn");
     const auto sn_list = c.get_service_node_list_state({});
@@ -2948,7 +2959,7 @@ bool sispop_service_nodes_test_swarms_basic::generate(std::vector<test_event_ent
   }
 
   gen.create_and_add_next_block(dereg_txs);
-  sispop_register_callback(events, "test_after_first_deregisters", [&events](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "test_after_first_deregisters", [](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_after_first_deregisters");
     const auto sn_list = c.get_service_node_list_state({});
@@ -2971,7 +2982,7 @@ bool sispop_service_nodes_test_swarms_basic::generate(std::vector<test_event_ent
   }
   gen.create_and_add_next_block(dereg_txs);
 
-  sispop_register_callback(events, "test_after_final_deregisters", [&events](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "test_after_final_deregisters", [](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_after_first_deregisters");
     const auto sn_list = c.get_service_node_list_state({});
@@ -3008,7 +3019,7 @@ bool sispop_service_nodes_insufficient_contribution::generate(std::vector<test_e
   cryptonote::transaction stake = gen.create_and_add_staking_tx(sn_keys.pub, gen.first_miner_, MK_COINS(1));
   gen.create_and_add_next_block({stake});
 
-  sispop_register_callback(events, "test_insufficient_stake_does_not_get_accepted", [&events, sn_keys](cryptonote::core &c, size_t ev_index)
+  sispop_register_callback(events, "test_insufficient_stake_does_not_get_accepted", [sn_keys](cryptonote::core &c, size_t ev_index)
   {
     DEFINE_TESTS_ERROR_CONTEXT("test_insufficient_stake_does_not_get_accepted");
     const auto sn_list = c.get_service_node_list_state({sn_keys.pub});
@@ -3019,5 +3030,194 @@ bool sispop_service_nodes_insufficient_contribution::generate(std::vector<test_e
     return true;
   });
 
+  return true;
+}
+
+static sispop_chain_generator setup_pulse_tests(std::vector<test_event_entry> &events)
+{
+  std::vector<std::pair<uint8_t, uint64_t>> hard_forks = sispop_generate_sequential_hard_fork_table();
+  sispop_chain_generator result(events, hard_forks);
+
+  result.add_blocks_until_version(hard_forks.back().first);
+  result.add_mined_money_unlock_blocks();
+
+  std::vector<cryptonote::transaction> registration_txs(service_nodes::pulse_min_service_nodes(cryptonote::FAKECHAIN));
+  for (auto i = 0u; i < service_nodes::pulse_min_service_nodes(cryptonote::FAKECHAIN); ++i)
+    registration_txs[i] = result.create_and_add_registration_tx(result.first_miner());
+
+  // NOTE: Generate Valid Blocks
+  result.create_and_add_next_block({registration_txs});
+  result.create_and_add_next_block();
+  return result;
+}
+
+bool sispop_pulse_invalid_validator_bitset::generate(std::vector<test_event_entry> &events)
+{
+  sispop_chain_generator gen = setup_pulse_tests(events);
+  gen.add_event_msg("Invalid Block: Validator bitset wrong");
+  sispop_blockchain_entry entry     = {};
+  sispop_create_block_params params = gen.next_block_params();
+  gen.block_begin(entry, params, {} /*tx_list*/);
+
+  // NOTE: Overwrite valiadator bitset to be wrong
+  entry.block.pulse.validator_bitset = ~service_nodes::pulse_validator_bit_mask();
+
+  gen.block_end(entry, params);
+  gen.add_block(entry, false /*can_be_added_to_blockchain*/, "Invalid Pulse Block, specifies the wrong validator bitset");
+
+  return true;
+}
+
+bool sispop_pulse_invalid_signature::generate(std::vector<test_event_entry> &events)
+{
+  sispop_chain_generator gen = setup_pulse_tests(events);
+  gen.add_event_msg("Invalid Block: Wrong signature given (null signature)");
+  sispop_blockchain_entry entry     = {};
+  sispop_create_block_params params = gen.next_block_params();
+  gen.block_begin(entry, params, {} /*tx_list*/);
+
+  // NOTE: Overwrite signature
+  entry.block.signatures[0].signature = {};
+  gen.block_end(entry, params);
+  gen.add_block(entry, false /*can_be_added_to_blockchain*/, "Invalid Pulse Block, specifies the wrong validator bitset");
+
+  return true;
+}
+
+bool sispop_pulse_oob_voter_index::generate(std::vector<test_event_entry> &events)
+{
+  sispop_chain_generator gen = setup_pulse_tests(events);
+  gen.add_event_msg("Invalid Block: Quorum index that indexes out of bounds");
+  sispop_blockchain_entry entry     = {};
+  sispop_create_block_params params = gen.next_block_params();
+  gen.block_begin(entry, params, {} /*tx_list*/);
+
+  // NOTE: Overwrite oob voter index
+  entry.block.signatures.back().voter_index = service_nodes::PULSE_QUORUM_NUM_VALIDATORS + 1;
+  gen.block_end(entry, params);
+  gen.add_block(entry, false /*can_be_added_to_blockchain*/, "Invalid Pulse Block, specifies the wrong validator bitset");
+
+  return true;
+}
+
+bool sispop_pulse_non_participating_validator::generate(std::vector<test_event_entry> &events)
+{
+  sispop_chain_generator gen = setup_pulse_tests(events);
+  gen.add_event_msg("Invalid Block: Validator gave signature but is not locked in to participate this round.");
+  sispop_blockchain_entry entry     = {};
+  sispop_create_block_params params = gen.next_block_params();
+  gen.block_begin(entry, params, {} /*tx_list*/);
+
+  // NOTE: Manually generate signatures to break test
+  {
+    entry.block.pulse = {};
+    entry.block.signatures.clear();
+
+    {
+      entry.block.pulse.round = 0;
+      for (size_t i = 0; i < sizeof(entry.block.pulse.random_value.data); i++)
+        entry.block.pulse.random_value.data[i] = static_cast<char>(tools::uniform_distribution_portable(tools::rng, 256));
+    }
+
+    service_nodes::quorum quorum = {};
+    {
+      std::vector<service_nodes::pubkey_and_sninfo> active_snode_list = params.prev.service_node_state.active_service_nodes_infos();
+      quorum = generate_pulse_quorum(cryptonote::FAKECHAIN, gen.db_, cryptonote::get_block_height(entry.block) + 1, params.block_leader.key, entry.block.major_version, active_snode_list, entry.block.pulse.round);
+      assert(quorum.validators.size() == service_nodes::PULSE_QUORUM_NUM_VALIDATORS);
+      assert(quorum.workers.size() == 1);
+    }
+
+    // NOTE: First 7 validators are locked in. We received signatures from the
+    // first 6 in the quorum, then the 8th validator in the quorum (who is not
+    // meant to be participating).
+    static_assert(service_nodes::PULSE_QUORUM_NUM_VALIDATORS > service_nodes::PULSE_BLOCK_REQUIRED_SIGNATURES);
+    entry.block.pulse.validator_bitset = 0b0000'000'0111'1111;
+    size_t const voter_indexes[]       = {0, 1, 2, 3, 4, 5, 7};
+
+    crypto::hash block_hash = cryptonote::get_block_hash(entry.block);
+    for (size_t index : voter_indexes)
+    {
+      service_nodes::service_node_keys validator_keys = gen.get_cached_keys(quorum.validators[index]);
+      assert(validator_keys.pub == quorum.validators[index]);
+
+      service_nodes::quorum_signature signature = {};
+      signature.voter_index                     = index;
+      crypto::generate_signature(block_hash, validator_keys.pub, validator_keys.key, signature.signature);
+      entry.block.signatures.push_back(signature);
+    }
+  }
+
+  gen.block_end(entry, params);
+  gen.add_block(entry, false /*can_be_added_to_blockchain*/, "Invalid Pulse Block, specifies the wrong validator bitset");
+
+  return true;
+}
+
+bool sispop_pulse_generate_all_rounds::generate(std::vector<test_event_entry> &events)
+{
+  sispop_chain_generator gen = setup_pulse_tests(events);
+
+  for (uint8_t round = 0; round < static_cast<uint8_t>(-1); round++)
+  {
+    sispop_blockchain_entry entry     = {};
+    sispop_create_block_params params = gen.next_block_params();
+    params.pulse_round              = round;
+    gen.block_begin(entry, params, {} /*tx_list*/);
+    gen.block_end(entry, params);
+    gen.add_block(entry, true);
+  }
+
+  return true;
+}
+
+bool sispop_pulse_out_of_order_voters::generate(std::vector<test_event_entry> &events)
+{
+  sispop_chain_generator gen = setup_pulse_tests(events);
+  gen.add_event_msg("Invalid Block: Quorum voters are out of order");
+  sispop_blockchain_entry entry     = {};
+  sispop_create_block_params params = gen.next_block_params();
+  gen.block_begin(entry, params, {} /*tx_list*/);
+  // NOTE: Swap voters so that the votes are not sorted in order
+  auto tmp                       = entry.block.signatures.back();
+  entry.block.signatures.back()  = entry.block.signatures.front();
+  entry.block.signatures.front() = tmp;
+  gen.block_end(entry, params);
+  gen.add_block(entry, false /*can_be_added_to_blockchain*/, "Invalid Pulse Block, specifies the signatures not in sorted order");
+
+  return true;
+}
+
+bool sispop_pulse_reject_miner_block::generate(std::vector<test_event_entry> &events)
+{
+  sispop_chain_generator gen = setup_pulse_tests(events);
+  gen.add_event_msg("Invalid Block: PoW Block but we have enough service nodes for Pulse");
+  sispop_blockchain_entry entry     = {};
+  sispop_create_block_params params = gen.next_block_params();
+  params.type = sispop_create_block_type::miner;
+  gen.block_begin(entry, params, {} /*tx_list*/);
+
+  // NOTE: Create an ordinary miner block even when we have enough Service Nodes for Pulse.
+  fill_nonce_with_sispop_generator(&gen, entry.block, TEST_DEFAULT_DIFFICULTY, cryptonote::get_block_height(entry.block));
+
+  gen.block_end(entry, params);
+  gen.add_block(entry, false /*can_be_added_to_blockchain*/, "Invalid Pulse Block, block was mined with a miner but we have enough nodes for Pulse");
+  return true;
+}
+
+bool sispop_pulse_generate_blocks_and_invalid_blocks::generate(std::vector<test_event_entry> &events)
+{
+  std::vector<std::pair<uint8_t, uint64_t>> hard_forks = sispop_generate_sequential_hard_fork_table();
+  sispop_chain_generator gen(events, hard_forks);
+
+  gen.add_blocks_until_version(hard_forks.back().first);
+  gen.add_mined_money_unlock_blocks();
+
+  int constexpr NUM_SERVICE_NODES = service_nodes::PULSE_QUORUM_SIZE + 1 /*leader*/;
+  std::vector<cryptonote::transaction> registration_txs(NUM_SERVICE_NODES);
+  for (auto i = 0u; i < NUM_SERVICE_NODES; ++i)
+    registration_txs[i] = gen.create_and_add_registration_tx(gen.first_miner());
+
+  gen.create_and_add_next_block({registration_txs});
+  gen.create_and_add_next_block();
   return true;
 }

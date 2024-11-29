@@ -32,7 +32,8 @@
 #include <cstdint>
 #include <iosfwd>
 #include <string>
-#include <boost/utility/string_ref.hpp>
+#include <string_view>
+#include <vector>
 
 #include "wipeable_string.h"
 #include "span.h"
@@ -73,6 +74,6 @@ namespace epee
   struct from_hex
   {
       //! \return An std::vector of unsigned integers from the `src`
-      static std::vector<uint8_t> vector(boost::string_ref src);
+      static std::vector<uint8_t> vector(std::string_view src);
   };
 }

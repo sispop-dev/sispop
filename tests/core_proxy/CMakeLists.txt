@@ -36,7 +36,6 @@ target_link_libraries(core_proxy
     net
     version
     epee
-    Boost::regex
     Boost::program_options
     miniupnpc
     extra)

@@ -28,132 +28,77 @@
 
 #pragma once 
 
-#include <boost/variant.hpp>
-#include <boost/any.hpp>
+#include <variant>
 #include <string>
 #include <vector>
 #include <deque>
+#include <cstdint>
 #include "misc_log_ex.h"
-
-#define PORTABLE_STORAGE_SIGNATUREA 0x01011101
-#define PORTABLE_STORAGE_SIGNATUREB 0x01020101 // bender's nightmare 
-#define PORTABLE_STORAGE_FORMAT_VER 1
-
-#define PORTABLE_RAW_SIZE_MARK_MASK   0x03 
-#define PORTABLE_RAW_SIZE_MARK_BYTE   0
-#define PORTABLE_RAW_SIZE_MARK_WORD   1
-#define PORTABLE_RAW_SIZE_MARK_DWORD  2
-#define PORTABLE_RAW_SIZE_MARK_INT64  3
-
-#ifndef MAX_STRING_LEN_POSSIBLE       
-#define MAX_STRING_LEN_POSSIBLE       2000000000 //do not let string be so big
-#endif
-
-//data types 
-#define SERIALIZE_TYPE_INT64                1
-#define SERIALIZE_TYPE_INT32                2
-#define SERIALIZE_TYPE_INT16                3
-#define SERIALIZE_TYPE_INT8                 4
-#define SERIALIZE_TYPE_UINT64               5
-#define SERIALIZE_TYPE_UINT32               6
-#define SERIALIZE_TYPE_UINT16               7
-#define SERIALIZE_TYPE_UINT8                8
-#define SERIALIZE_TYPE_DUOBLE               9
-#define SERIALIZE_TYPE_STRING               10
-#define SERIALIZE_TYPE_BOOL                 11
-#define SERIALIZE_TYPE_OBJECT               12
-#define SERIALIZE_TYPE_ARRAY                13
-
-#define SERIALIZE_FLAG_ARRAY              0x80
-
+#include "int-util.h"
 
 namespace epee
 {
+
   namespace serialization
   {
+    constexpr uint32_t PORTABLE_STORAGE_SIGNATUREA = SWAP32LE(0x01011101);
+    constexpr uint32_t PORTABLE_STORAGE_SIGNATUREB = SWAP32LE(0x01020101); // bender's nightmare 
+    constexpr uint8_t PORTABLE_STORAGE_FORMAT_VER = 1;
+
+    // When sending a "varint" the binary serialization uses the bottom 2 bits to store the size,
+    // either 1, 2, 4, or 8 bytes for 6/14/30/62 bits of storage.  God help you if you want to store
+    // something >= 2^62 (but don't worry, it throws an exception if you try).
+    constexpr uint8_t
+      PORTABLE_RAW_SIZE_MARK_MASK  = 0b11,
+      PORTABLE_RAW_SIZE_MARK_6BIT  = 0,
+      PORTABLE_RAW_SIZE_MARK_14BIT = 1,
+      PORTABLE_RAW_SIZE_MARK_30BIT = 2,
+      PORTABLE_RAW_SIZE_MARK_62BIT = 3;
+
+    constexpr size_t MAX_STRING_LEN_POSSIBLE = 2000000000; //do not let string be so big
+
     struct section;
 
-    template<typename T> struct entry_container { typedef std::vector<T> type; static void reserve(type &t, size_t n) { t.reserve(n); } };
-    template<> struct entry_container<bool> { typedef std::deque<bool> type; static void reserve(type &t, size_t n) {} };
+    template <typename T>
+    using array_t = std::conditional_t<std::is_same_v<T, bool>, std::deque<bool>, std::vector<T>>;
 
-    /************************************************************************/
-    /*                                                                      */
-    /************************************************************************/
-    template<class t_entry_type>
-    struct array_entry_t
-    {
-      array_entry_t():m_it(m_array.end()){}        
-      array_entry_t(const array_entry_t& other):m_array(other.m_array), m_it(m_array.end()){}
+    using array_entry = std::variant<
+      array_t<uint64_t>,
+      array_t<uint32_t>,
+      array_t<uint16_t>,
+      array_t<uint8_t>,
+      array_t<int64_t>,
+      array_t<int32_t>,
+      array_t<int16_t>,
+      array_t<int8_t>,
+      array_t<double>,
+      array_t<bool>,
+      array_t<std::string>,
+      array_t<section>
+    >;
+    // FIXME: dropped recursive arrays -- is this okay?
 
-      const t_entry_type* get_first_val() const 
-      {
-        m_it = m_array.begin();
-        return get_next_val();
-      }
+    using storage_entry = std::variant<
+      uint64_t,
+      uint32_t,
+      uint16_t,
+      uint8_t,
+      int64_t,
+      int32_t,
+      int16_t,
+      int8_t,
+      double,
+      bool,
+      std::string,
+      section,
+      array_entry
+    >;
 
-      t_entry_type* get_first_val() 
-      {
-        m_it = m_array.begin();
-        return get_next_val();
-      }
+    template <typename T, typename = void>
+    constexpr bool variant_contains = false;
 
-
-      const t_entry_type* get_next_val() const 
-      {
-        if(m_it == m_array.end())
-          return nullptr;
-        return &(*(m_it++));
-      }
-
-      t_entry_type* get_next_val() 
-      {
-        if(m_it == m_array.end())
-          return nullptr;
-        return (t_entry_type*)&(*(m_it++));//fuckoff
-      }
-
-      t_entry_type& insert_first_val(const t_entry_type& v)
-      {
-        m_array.clear();
-        m_it = m_array.end();
-        return insert_next_value(v);
-      }
-
-      t_entry_type& insert_next_value(const t_entry_type& v)
-      {
-        m_array.push_back(v);
-        return m_array.back();
-      }
-
-      void reserve(size_t n)
-      {
-        entry_container<t_entry_type>::reserve(m_array, n);
-      }
-
-      typename entry_container<t_entry_type>::type m_array;
-      mutable typename entry_container<t_entry_type>::type::const_iterator m_it;
-    };
-
-
-    typedef  boost::make_recursive_variant<
-      array_entry_t<uint64_t>, 
-      array_entry_t<uint32_t>, 
-      array_entry_t<uint16_t>, 
-      array_entry_t<uint8_t>, 
-      array_entry_t<int64_t>, 
-      array_entry_t<int32_t>, 
-      array_entry_t<int16_t>, 
-      array_entry_t<int8_t>, 
-      array_entry_t<double>, 
-      array_entry_t<bool>, 
-      array_entry_t<std::string>,
-      array_entry_t<section>, 
-      array_entry_t<boost::recursive_variant_> 
-    >::type array_entry;
-
-    typedef boost::variant<uint64_t, uint32_t, uint16_t, uint8_t, int64_t, int32_t, int16_t, int8_t, double, bool, std::string, section, array_entry> storage_entry;
-
-    typedef std::string binarybuffer;//it's ok      
+    template <typename T, typename... Us>
+    constexpr bool variant_contains<T, std::variant<Us...>> = (... || std::is_same_v<T, Us>);
 
     /************************************************************************/
     /*                                                                      */
@@ -163,8 +108,28 @@ namespace epee
       std::map<std::string, storage_entry> m_entries;
     };
 
-    //handle-like aliases
-    typedef section*      hsection;  
-    typedef array_entry*  harray;
+    template <typename T> constexpr bool TYPE_IS_NOT_SERIALIZABLE = false;
+
+    template <typename T>
+    constexpr uint8_t no_such_type() { static_assert(TYPE_IS_NOT_SERIALIZABLE<T>); return 0; }
+
+    //data types
+    template <typename T> constexpr uint8_t SERIALIZE_TYPE_TAG = no_such_type<T>();
+    template <> inline constexpr uint8_t SERIALIZE_TYPE_TAG<int64_t>     = 1;
+    template <> inline constexpr uint8_t SERIALIZE_TYPE_TAG<int32_t>     = 2;
+    template <> inline constexpr uint8_t SERIALIZE_TYPE_TAG<int16_t>     = 3;
+    template <> inline constexpr uint8_t SERIALIZE_TYPE_TAG<int8_t>      = 4;
+    template <> inline constexpr uint8_t SERIALIZE_TYPE_TAG<uint64_t>    = 5;
+    template <> inline constexpr uint8_t SERIALIZE_TYPE_TAG<uint32_t>    = 6;
+    template <> inline constexpr uint8_t SERIALIZE_TYPE_TAG<uint16_t>    = 7;
+    template <> inline constexpr uint8_t SERIALIZE_TYPE_TAG<uint8_t>     = 8;
+    template <> inline constexpr uint8_t SERIALIZE_TYPE_TAG<double>      = 9;
+    template <> inline constexpr uint8_t SERIALIZE_TYPE_TAG<std::string> = 10;
+    template <> inline constexpr uint8_t SERIALIZE_TYPE_TAG<bool>        = 11;
+    template <> inline constexpr uint8_t SERIALIZE_TYPE_TAG<section>     = 12;
+    //template <> inline constexpr uint8_t SERIALIZE_TYPE_TAG<array>       = 13; // nested array
+
+    constexpr uint8_t SERIALIZE_FLAG_ARRAY = 0x80;
+
   }
 }

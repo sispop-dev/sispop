@@ -35,95 +35,52 @@
 #include "cryptonote_protocol/cryptonote_protocol_defs.h"
 #include "common/sfinae_helpers.h"
 
-#define OBJECT_HAS_MEMBER_OR_THROW(val, key) \
-  do \
-  { \
-    if (!val.HasMember(key)) \
-    { \
-      throw cryptonote::json::MISSING_KEY(key); \
-    } \
-  } while (0);
-
-#define INSERT_INTO_JSON_OBJECT(jsonVal, doc, key, source) \
-    rapidjson::Value key##Val; \
-    cryptonote::json::toJsonValue(doc, source, key##Val); \
-    jsonVal.AddMember(#key, key##Val, doc.GetAllocator());
-
-#define GET_FROM_JSON_OBJECT(source, dst, key) \
-    OBJECT_HAS_MEMBER_OR_THROW(source, #key) \
-    decltype(dst) dstVal##key; \
-    cryptonote::json::fromJsonValue(source[#key], dstVal##key); \
-    dst = dstVal##key;
-
 namespace cryptonote
 {
+
+using namespace std::literals;
 
 namespace json
 {
 
-struct JSON_ERROR : public std::exception
+struct JSON_ERROR : public std::runtime_error
 {
-  protected:
-    JSON_ERROR() { }
-    std::string m;
-
-  public:
-    virtual ~JSON_ERROR() { }
-
-    const char* what() const throw()
-    {
-      return m.c_str();
-    }
+  using std::runtime_error::runtime_error;
 };
 
 struct MISSING_KEY : public JSON_ERROR
 {
-  MISSING_KEY(const char* key)
-  {
-    m = std::string("Key \"") + key + "\" missing from object.";
-  }
+  MISSING_KEY(const char* key) : JSON_ERROR("Key \""s + key + "\" missing from object.") {}
 };
 
 struct WRONG_TYPE : public JSON_ERROR
 {
-  WRONG_TYPE(const char* type)
-  {
-    m = std::string("Json value has incorrect type, expected: ") + type;
-  }
+  WRONG_TYPE(const char* type) : JSON_ERROR("Json value has incorrect type, expected: "s + type) {}
 };
 
 struct BAD_INPUT : public JSON_ERROR
 {
-  BAD_INPUT()
-  {
-    m = "An item failed to convert from json object to native object";
-  }
+  BAD_INPUT() : JSON_ERROR("An item failed to convert from json object to native object") {}
 };
 
 struct PARSE_FAIL : public JSON_ERROR
 {
-  PARSE_FAIL()
-  {
-    m = "Failed to parse the json request";
-  }
+  PARSE_FAIL() : JSON_ERROR("Failed to parse the json request") {}
 };
 
 template<typename Type>
-inline constexpr bool is_to_hex()
-{
-  return std::is_pod<Type>() && !std::is_integral<Type>();
-}
+constexpr bool is_to_hex = std::is_standard_layout_v<Type> && std::is_trivial_v<Type> && !std::is_integral_v<Type>;
 
 
 // POD to json value
 template <class Type>
-typename std::enable_if<is_to_hex<Type>()>::type toJsonValue(rapidjson::Document& doc, const Type& pod, rapidjson::Value& value)
+typename std::enable_if_t<is_to_hex<Type>> toJsonValue(rapidjson::Document& doc, const Type& pod, rapidjson::Value& value)
 {
   value = rapidjson::Value(epee::string_tools::pod_to_hex(pod).c_str(), doc.GetAllocator());
 }
 
 template <class Type>
-typename std::enable_if<is_to_hex<Type>()>::type fromJsonValue(const rapidjson::Value& val, Type& t)
+typename std::enable_if_t<is_to_hex<Type>> fromJsonValue(const rapidjson::Value& val, Type& t)
 {
   if (!val.IsString())
   {
@@ -285,23 +242,23 @@ void toJsonValue(rapidjson::Document& doc, const cryptonote::rpc::output_distrib
 void fromJsonValue(const rapidjson::Value& val, cryptonote::rpc::output_distribution& dist);
 
 template <typename Map>
-typename std::enable_if<sfinae::is_map_like<Map>::value, void>::type toJsonValue(rapidjson::Document& doc, const Map& map, rapidjson::Value& val);
+std::enable_if_t<sfinae::is_map_like<Map>> toJsonValue(rapidjson::Document& doc, const Map& map, rapidjson::Value& val);
 
 template <typename Map>
-typename std::enable_if<sfinae::is_map_like<Map>::value, void>::type fromJsonValue(const rapidjson::Value& val, Map& map);
+std::enable_if_t<sfinae::is_map_like<Map>> fromJsonValue(const rapidjson::Value& val, Map& map);
 
 template <typename Vec>
-typename std::enable_if<sfinae::is_vector_like<Vec>::value, void>::type toJsonValue(rapidjson::Document& doc, const Vec &vec, rapidjson::Value& val);
+std::enable_if_t<sfinae::is_list_like<Vec>> toJsonValue(rapidjson::Document& doc, const Vec &vec, rapidjson::Value& val);
 
 template <typename Vec>
-typename std::enable_if<sfinae::is_vector_like<Vec>::value, void>::type fromJsonValue(const rapidjson::Value& val, Vec& vec);
+std::enable_if_t<sfinae::is_list_like<Vec>> fromJsonValue(const rapidjson::Value& val, Vec& vec);
 
 
 // ideally would like to have the below functions in the .cpp file, but
 // unfortunately because of how templates work they have to be here.
 
 template <typename Map>
-typename std::enable_if<sfinae::is_map_like<Map>::value, void>::type toJsonValue(rapidjson::Document& doc, const Map& map, rapidjson::Value& val)
+std::enable_if_t<sfinae::is_map_like<Map>> toJsonValue(rapidjson::Document& doc, const Map& map, rapidjson::Value& val)
 {
   val.SetObject();
 
@@ -318,7 +275,7 @@ typename std::enable_if<sfinae::is_map_like<Map>::value, void>::type toJsonValue
 }
 
 template <typename Map>
-typename std::enable_if<sfinae::is_map_like<Map>::value, void>::type fromJsonValue(const rapidjson::Value& val, Map& map)
+std::enable_if_t<sfinae::is_map_like<Map>> fromJsonValue(const rapidjson::Value& val, Map& map)
 {
   if (!val.IsObject())
   {
@@ -339,7 +296,7 @@ typename std::enable_if<sfinae::is_map_like<Map>::value, void>::type fromJsonVal
 }
 
 template <typename Vec>
-typename std::enable_if<sfinae::is_vector_like<Vec>::value, void>::type toJsonValue(rapidjson::Document& doc, const Vec &vec, rapidjson::Value& val)
+std::enable_if_t<sfinae::is_list_like<Vec>> toJsonValue(rapidjson::Document& doc, const Vec &vec, rapidjson::Value& val)
 {
   val.SetArray();
 
@@ -352,7 +309,7 @@ typename std::enable_if<sfinae::is_vector_like<Vec>::value, void>::type toJsonVa
 }
 
 template <typename Vec>
-typename std::enable_if<sfinae::is_vector_like<Vec>::value, void>::type fromJsonValue(const rapidjson::Value& val, Vec& vec)
+std::enable_if_t<sfinae::is_list_like<Vec>> fromJsonValue(const rapidjson::Value& val, Vec& vec)
 {
   if (!val.IsArray())
   {
@@ -365,6 +322,30 @@ typename std::enable_if<sfinae::is_vector_like<Vec>::value, void>::type fromJson
     fromJsonValue(val[i], v);
     vec.push_back(v);
   }
+}
+
+template <typename T, size_t N>
+void insert_into_json_object(rapidjson::Value& parent, rapidjson::Document& doc, const char(& key)[N], T&& source)
+{
+  rapidjson::Value val;
+  toJsonValue(doc, std::forward<T>(source), val);
+  parent.AddMember(key, std::move(val), doc.GetAllocator());
+}
+
+inline void require_member(const rapidjson::Value& parent, const char* key)
+{
+  if (!parent.HasMember(key))
+    throw MISSING_KEY{key};
+}
+
+
+template <typename T>
+void load_from_json_object(const rapidjson::Value& parent, const char* key, T& dest)
+{
+  require_member(parent, key);
+  T tmp;
+  fromJsonValue(parent[key], tmp);
+  dest = std::move(tmp);
 }
 
 }  // namespace json

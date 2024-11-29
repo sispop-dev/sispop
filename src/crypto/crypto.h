@@ -32,7 +32,7 @@
 
 #include <cstddef>
 #include <iostream>
-#include <boost/optional.hpp>
+#include <optional>
 #include <type_traits>
 #include <vector>
 #include <random>
@@ -178,23 +178,12 @@ namespace crypto {
   };
 
   void generate_random_bytes_thread_safe(size_t N, uint8_t *bytes);
+  void add_extra_entropy_thread_safe(const void *ptr, size_t bytes);
 
   /* Generate N random bytes
    */
   inline void rand(size_t N, uint8_t *bytes) {
     generate_random_bytes_thread_safe(N, bytes);
-  }
-
-  constexpr size_t SIZE_TS_IN_HASH = sizeof(crypto::hash) / sizeof(size_t);
-  static_assert(SIZE_TS_IN_HASH * sizeof(size_t) == sizeof(crypto::hash) && alignof(crypto::hash) >= alignof(size_t),
-      "Expected crypto::hash size/alignment not satisfied");
-
-  // Combine hashes together via XORs.
-  inline void hash_xor(crypto::hash &dest, const crypto::hash &src) {
-    size_t (&dest_)[SIZE_TS_IN_HASH] = reinterpret_cast<size_t (&)[SIZE_TS_IN_HASH]>(dest);
-    const size_t (&src_)[SIZE_TS_IN_HASH] = reinterpret_cast<const size_t (&)[SIZE_TS_IN_HASH]>(src);
-    for (size_t i = 0; i < SIZE_TS_IN_HASH; ++i)
-      dest_[i] ^= src_[i];
   }
 
   /* Generate a value filled with random bytes.
@@ -327,18 +316,9 @@ namespace crypto {
   inline std::ostream &operator <<(std::ostream &o, const crypto::x25519_public_key &v) {
     epee::to_hex::formatted(o, epee::as_byte_span(v)); return o;
   }
-  const extern crypto::public_key null_pkey;
-  const extern crypto::secret_key null_skey;
+  constexpr inline crypto::public_key null_pkey{};
+  const inline crypto::secret_key null_skey{};
 }
-
-EPEE_TYPE_IS_SPANNABLE(crypto::ec_scalar)
-EPEE_TYPE_IS_SPANNABLE(crypto::public_key)
-EPEE_TYPE_IS_SPANNABLE(crypto::key_derivation)
-EPEE_TYPE_IS_SPANNABLE(crypto::key_image)
-EPEE_TYPE_IS_SPANNABLE(crypto::signature)
-EPEE_TYPE_IS_SPANNABLE(crypto::ed25519_signature)
-EPEE_TYPE_IS_SPANNABLE(crypto::ed25519_public_key)
-EPEE_TYPE_IS_SPANNABLE(crypto::x25519_public_key)
 
 CRYPTO_MAKE_HASHABLE(public_key)
 CRYPTO_MAKE_HASHABLE_CONSTANT_TIME(secret_key)

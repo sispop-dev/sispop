@@ -39,8 +39,8 @@ add_library(cryptonote_core
   sispop_name_system.cpp
   tx_pool.cpp
   tx_sanity_check.cpp
-  miner.cpp
-  cryptonote_tx_utils.cpp)
+  cryptonote_tx_utils.cpp
+  pulse.cpp)
 
 target_link_libraries(cryptonote_core
   PUBLIC
@@ -54,7 +54,6 @@ target_link_libraries(cryptonote_core
     sqlite3
   PRIVATE
     Boost::program_options
-    Boost::chrono
     systemd
     extra)
 

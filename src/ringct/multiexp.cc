@@ -447,7 +447,6 @@ ge_p3 straus_p3(const std::vector<MultiexpData> &data, const std::shared_ptr<str
 {
   CHECK_AND_ASSERT_THROW_MES(cache == NULL || cache->size >= data.size(), "Cache is too small");
   MULTIEXP_PERF(PERF_TIMER_UNIT(straus, 1000000));
-  bool HiGi = cache != NULL;
   STEP = STEP ? STEP : 192;
 
   MULTIEXP_PERF(PERF_TIMER_START_UNIT(setup, 1000000));

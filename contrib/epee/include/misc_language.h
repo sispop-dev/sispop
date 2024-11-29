@@ -29,8 +29,12 @@
 #pragma once
 
 #include <limits>
-#include <boost/thread.hpp>
-#include <boost/chrono/duration.hpp>
+#include <thread>
+#include <chrono>
+#include <memory>
+#include <vector>
+#include <algorithm>
+
 namespace epee
 {
 #define STD_TRY_BEGIN() try {
@@ -97,7 +101,7 @@ namespace misc_utils
 	inline
 	void sleep_no_w(long ms)
 	{
-		boost::this_thread::sleep_for(boost::chrono::milliseconds{ms});
+		std::this_thread::sleep_for(std::chrono::milliseconds{ms});
 	}
 
   template<class type_vec_type>
@@ -130,7 +134,7 @@ namespace misc_utils
     virtual ~call_befor_die_base(){}
   };
 
-  typedef boost::shared_ptr<call_befor_die_base> auto_scope_leave_caller;
+  using auto_scope_leave_caller = std::shared_ptr<call_befor_die_base>;
 
 
   template<class t_scope_leave_handler>
@@ -152,11 +156,6 @@ namespace misc_utils
     auto_scope_leave_caller slc(new call_befor_die<t_scope_leave_handler>(f));
     return slc;
   }
-
-  template<typename T> struct struct_init: T
-  {
-    struct_init(): T{} {}
-  };
 
 }
 }

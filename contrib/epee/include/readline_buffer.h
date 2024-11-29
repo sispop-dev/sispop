@@ -1,5 +1,6 @@
 #pragma once
 
+#include <string>
 #include <streambuf>
 #include <sstream>
 #include <vector>
@@ -30,15 +31,7 @@ namespace rdln
     size_t m_prompt_length;
     static std::vector<std::string>& completion_commands();
   };
-  
-  class suspend_readline
-  {
-  public:
-    suspend_readline();
-    ~suspend_readline();
-  private:
-    readline_buffer* m_buffer;
-    bool m_restart;
-  };
+
+  void clear_screen();
 }
 
