@@ -845,7 +845,7 @@ bool sispop_chain_generator::block_begin(sispop_blockchain_entry &entry, sispop_
   if (blk.major_version >= cryptonote::network_version_10_bulletproofs &&
       cryptonote::height_has_governance_output(cryptonote::FAKECHAIN, blk.major_version, height))
   {
-    constexpr uint64_t num_blocks       = cryptonote::get_config(cryptonote::FAKECHAIN).GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS;
+    constexpr uint64_t num_blocks  = (hard_fork_version >= network_version_19) ? cryptonote::get_config(cryptonote::FAKECHAIN).GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS_V2 : cryptonote::get_config(cryptonote::FAKECHAIN).GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS;
     uint64_t start_height               = height - num_blocks;
 
     if (blk.major_version == cryptonote::network_version_15_lns)

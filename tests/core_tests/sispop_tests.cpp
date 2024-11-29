@@ -644,7 +644,7 @@ bool sispop_core_governance_batched_reward::generate(std::vector<test_event_entr
   {
     batched_governance_generator.add_blocks_until_version(cryptonote::network_version_10_bulletproofs);
     constexpr auto& network = cryptonote::get_config(cryptonote::FAKECHAIN);
-    uint64_t blocks_to_gen = network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS - batched_governance_generator.height();
+    uint64_t blocks_to_gen = ((hard_fork_version >= network_version_19) ? cryptonote::get_config(nettype()).GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS_V2 : cryptonote::get_config(nettype()).GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS) - batched_governance_generator.height();
     batched_governance_generator.add_n_blocks(blocks_to_gen);
   }
 
@@ -703,10 +703,11 @@ bool sispop_core_block_rewards_lrc6::generate(std::vector<test_event_entry>& eve
 {
   constexpr auto& network = cryptonote::get_config(cryptonote::FAKECHAIN);
   std::vector<std::pair<uint8_t, uint64_t>> hard_forks = sispop_generate_sequential_hard_fork_table(cryptonote::network_version_15_lns);
-  hard_forks.emplace_back(cryptonote::network_version_16, hard_forks.back().second + network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS + 10);
+  hard_forks.emplace_back(cryptonote::network_version_16, hard_forks.back().second + ((hard_fork_version >= network_version_19) ? cryptonote::get_config(nettype()).GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS_V2 : cryptonote::get_config(nettype()).GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS) + 10);
   sispop_chain_generator batched_governance_generator(events, hard_forks);
   batched_governance_generator.add_blocks_until_version(cryptonote::network_version_16);
-  batched_governance_generator.add_n_blocks(network.GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS);
+  batched_governance_generator.add_n_blocks((hard_fork_version >= network_version_19) ? cryptonote::get_config(nettype()).GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS_V2 : cryptonote::get_config(nettype()).GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS);
+
 
   uint64_t hf15_height = 0, hf16_height = 0;
   for (const auto &hf : hard_forks)

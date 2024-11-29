@@ -154,7 +154,7 @@ namespace cryptonote
     if (hard_fork_version <= network_version_9_service_nodes)
       return true;
 
-    if (height % cryptonote::get_config(nettype).GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS != 0)
+    if (height % cryptonote::get_config(nettype).GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS != 0 || height % cryptonote::get_config(nettype).GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS_V2 != 0)
     {
       return false;
     }

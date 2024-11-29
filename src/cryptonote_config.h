@@ -228,7 +228,7 @@ namespace config
   inline constexpr uint32_t GENESIS_NONCE = 70;
 
   inline constexpr uint64_t GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS = BLOCKS_EXPECTED_IN_DAYS(7);
-
+  inline constexpr uint64_t GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS_V2 = BLOCKS_EXPECTED_IN_DAYS(1);
   inline constexpr std::array GOVERNANCE_WALLET_ADDRESS =
   {
     "49HsfhWTvKZgc4qH1hwcEpM99Ng2TqmcxVHJoSkSQvV3N9iVJP1NT6gJTWRvuTWMNqeDgHNUcrpYVdnXW5Ep33W33YfwqRe"sv,
@@ -265,6 +265,7 @@ namespace config
     inline constexpr uint32_t GENESIS_NONCE = 10001;
 
     inline constexpr uint64_t GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS = 1000;
+  inline constexpr uint64_t GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS_V2 = BLOCKS_EXPECTED_IN_DAYS(1);
     inline constexpr std::array GOVERNANCE_WALLET_ADDRESS =
     {
       "T6SUprTYE5rQpep9iQFxyPcKVd91DFR1fQ1Qsyqp5eYLiFc8XuYd3reRE71qDL8c3DXioUbDEpDFdaUpetnL37NS1R3rzoKxi"sv, // hardfork v7-9
@@ -291,6 +292,7 @@ namespace config
     inline constexpr uint32_t GENESIS_NONCE = 12345;
 
     inline constexpr uint64_t GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS = BLOCKS_EXPECTED_IN_DAYS(7);
+  inline constexpr uint64_t GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS_V2 = BLOCKS_EXPECTED_IN_DAYS(1);
     inline constexpr std::array GOVERNANCE_WALLET_ADDRESS =
     {
       "dV3EhSE1xXgSzswBgVioqFNTfcqGopvTrcYjs4YDLHUfU64DuHxFoEmbwoyipTidGiTXx5EuYdgzZhDLMTo9uEv82M4A7Uimp"sv, // hardfork v7-9
@@ -344,6 +346,7 @@ namespace cryptonote
     std::string_view GENESIS_TX;
     uint32_t GENESIS_NONCE;
     uint64_t GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS;
+    uint64_t GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS_V2;
     std::array<std::string_view, 2> GOVERNANCE_WALLET_ADDRESS;
 
     inline constexpr std::string_view governance_wallet_address(int hard_fork_version) const {
@@ -369,6 +372,7 @@ namespace cryptonote
     ::config::GENESIS_TX,
     ::config::GENESIS_NONCE,
     ::config::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
+    ::config::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS_V2,
     ::config::GOVERNANCE_WALLET_ADDRESS,
   };
   inline constexpr network_config testnet_config = {
@@ -386,6 +390,7 @@ namespace cryptonote
     ::config::testnet::GENESIS_TX,
     ::config::testnet::GENESIS_NONCE,
     ::config::testnet::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
+    ::config::testnet::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS_V2,
     ::config::testnet::GOVERNANCE_WALLET_ADDRESS,
   };
   inline constexpr network_config devnet_config = {
@@ -403,6 +408,7 @@ namespace cryptonote
     ::config::devnet::GENESIS_TX,
     ::config::devnet::GENESIS_NONCE,
     ::config::devnet::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
+    ::config::devnet::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS_V2,
     ::config::devnet::GOVERNANCE_WALLET_ADDRESS,
   };
   inline constexpr network_config fakenet_config = {
@@ -420,6 +426,7 @@ namespace cryptonote
     ::config::GENESIS_TX,
     ::config::GENESIS_NONCE,
     100, //::config::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
+    10,
     ::config::GOVERNANCE_WALLET_ADDRESS,
   };
 
