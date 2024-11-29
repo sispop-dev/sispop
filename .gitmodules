@@ -9,7 +9,7 @@
 	url = https://github.com/sispopplatform/RandomX
 [submodule "external/sispop-mq"]
 	path = external/sispop-mq
-	url = https://github.com/sispop-project/sispop-mq.git
+	url = https://github.com/sispop-project/sispop-mq
 [submodule "external/googletest"]
 	path = external/googletest
 	url = https://github.com/google/googletest
