@@ -39,6 +39,7 @@ include(CheckLinkerFlag)
 include(CheckLibraryExists)
 include(CheckFunctionExists)
 
+
 if (IOS)
     INCLUDE(CmakeLists_IOS.txt)
 endif()
@@ -61,7 +62,6 @@ project(sispop
     LANGUAGES CXX C)
 set(SISPOP_RELEASE_CODENAME "Cold Water")
 
-add_compile_options(-fassociative-math)
 # String value to append to the full version string; this is intended to easily identify whether a
 # binary was build from the release or development branches.  This should be permanently set to an
 # empty string on `master`, "-dev" on the `dev` branch, and can be set externally (via cmake

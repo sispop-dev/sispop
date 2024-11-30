@@ -134,4 +134,10 @@ namespace tools
   constexpr Enum enum_top = static_cast<Enum>(enum_count<Enum> - 1);
 
   uint64_t cumulative_block_sync_weight(cryptonote::network_type nettype, uint64_t start_block, uint64_t num_blocks);
+
+  template <typename T, typename... Any>
+  constexpr bool equals_any(const T& v, const Any&... any) {
+    return (... || (v == any));
+  }
+
 }

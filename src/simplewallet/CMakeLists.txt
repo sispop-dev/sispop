@@ -40,6 +40,7 @@ target_link_libraries(simplewallet
     Boost::program_options
     Boost::filesystem
     icu
+    qrcodegen
     Boost::thread
     extra)
 

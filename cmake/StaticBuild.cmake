@@ -98,18 +98,18 @@ set(ZMQ_SOURCE zeromq-${ZMQ_VERSION}.tar.gz)
 set(ZMQ_HASH SHA512=b6251641e884181db9e6b0b705cced7ea4038d404bdae812ff47bdd0eed12510b6af6846b85cb96898e253ccbac71eca7fe588673300ddb9c3109c973250c8e4
     CACHE STRING "libzmq source hash")
 
-set(ZLIB_VERSION 1.2.11 CACHE STRING "zlib version")
+set(ZLIB_VERSION 1.3.1 CACHE STRING "zlib version")
 set(ZLIB_MIRROR ${LOCAL_MIRROR} https://zlib.net
     CACHE STRING "zlib mirror(s)")
 set(ZLIB_SOURCE zlib-${ZLIB_VERSION}.tar.gz)
-set(ZLIB_HASH SHA512=73fd3fff4adeccd4894084c15ddac89890cd10ef105dd5e1835e1e9bbb6a49ff229713bd197d203edfa17c2727700fce65a2a235f07568212d820dca88b528ae
+set(ZLIB_HASH SHA256=9a93b2b7dfdac77ceba5a558a580e74667dd6fede4585b91eefb60f03b72df23
     CACHE STRING "zlib source hash")
 
-set(CURL_VERSION 7.71.1 CACHE STRING "curl version")
+set(CURL_VERSION 1.3.1 CACHE STRING "curl version")
 set(CURL_MIRROR ${LOCAL_MIRROR} https://curl.haxx.se/download https://curl.askapache.com
   CACHE STRING "curl mirror(s)")
 set(CURL_SOURCE curl-${CURL_VERSION}.tar.xz)
-set(CURL_HASH SHA256=40f83eda27cdbeb25cd4da48cefb639af1b9395d6026d2da1825bf059239658c
+set(CURL_HASH SHA512=359c08d88a5dec441255b36afe1a821730eca0ca8800ba52f57132b9e7d21f32457623907b4ae4876904b5e505eb1a59652372bb7de8dbd8db429dae9785e036
   CACHE STRING "curl source hash")
 
 
@@ -488,40 +488,88 @@ set_target_properties(libzmq PROPERTIES
     INTERFACE_COMPILE_DEFINITIONS "ZMQ_STATIC")
 
 
-
-set(curl_LIBS "")
-if(WIN32)
-  set(curl_ssl_opts --without-ssl --with-schannel)
-elseif(APPLE)
-  set(curl_ssl_opts --without-ssl --with-secure-transport)
+set(curl_extra)
+if(APPLE)
+  if(IOS)
+    # This CPP crap shouldn't be necessary but is because Apple's toolchain is trash
+    set(curl_extra "LDFLAGS=-L${DEPS_DESTDIR}/lib -isysroot ${CMAKE_OSX_SYSROOT}" CPP=cpp)
+  endif()
 else()
-  set(curl_ssl_opts --with-ssl=${DEPS_DESTDIR})
-  set(curl_LIBS "LIBS=-pthread")
+  set(curl_extra "LIBS=-pthread")
 endif()
 
-build_external(curl
-  DEPENDS openssl_external zlib_external
-  CONFIGURE_COMMAND ./configure ${cross_host} ${cross_rc} --prefix=${DEPS_DESTDIR} --disable-shared
-  --enable-static --disable-ares --disable-ftp --disable-ldap --disable-laps --disable-rtsp
-  --disable-dict --disable-telnet --disable-tftp --disable-pop3 --disable-imap --disable-smb
-  --disable-smtp --disable-gopher --disable-manual --disable-libcurl-option --enable-http
-  --enable-ipv6 --disable-threaded-resolver --disable-pthreads --disable-verbose --disable-sspi
-  --enable-crypto-auth --disable-ntlm-wb --disable-tls-srp --disable-unix-sockets --disable-cookies
-  --enable-http-auth --enable-doh --disable-mime --enable-dateparse --disable-netrc --without-libidn2
-  --disable-progress-meter --without-brotli --with-zlib=${DEPS_DESTDIR} ${curl_ssl_opts}
-  --without-libmetalink --without-librtmp --disable-versioned-symbols --enable-hidden-symbols
-  --without-zsh-functions-dir --without-fish-functions-dir
-  "CC=${deps_cc}" "CFLAGS=-O2 ${flto}" ${curl_LIBS}
-  BUILD_BYPRODUCTS
-    ${DEPS_DESTDIR}/lib/libcurl.a
-    ${DEPS_DESTDIR}/include/curl/curl.h
-)
+set(curl_arches default)
+set(curl_lib_outputs)
+if(IOS)
+  # On iOS things get a little messy: curl won't build a multi-arch library (with `clang -arch arch1
+  # -arch arch2`) so we have to build them separately then glue them together if we're building
+  # multiple.
+  set(curl_arches ${CMAKE_OSX_ARCHITECTURES})
+  list(GET curl_arches 0 curl_arch0)
+  list(LENGTH CMAKE_OSX_ARCHITECTURES num_arches)
+endif()
+
+foreach(curl_arch ${curl_arches})
+  set(curl_target_suffix "")
+  set(curl_prefix "${DEPS_DESTDIR}")
+  if(curl_arch STREQUAL "default")
+    set(curl_cflags_extra "")
+  elseif(IOS)
+    set(cflags_extra " -arch ${curl_arch}")
+    if(num_arches GREATER 1)
+      set(curl_target_suffix "-${curl_arch}")
+      set(curl_prefix "${DEPS_DESTDIR}/tmp/${curl_arch}")
+    endif()
+  else()
+    message(FATAL_ERROR "unexpected curl_arch=${curl_arch}")
+  endif()
+
+  build_external(curl
+    TARGET_SUFFIX ${curl_target_suffix}
+    DEPENDS zlib_external
+    CONFIGURE_COMMAND ./configure ${cross_host} ${cross_extra} --prefix=${curl_prefix} --disable-shared
+    --enable-static --disable-ares --disable-ftp --disable-ldap --disable-laps --disable-rtsp
+    --disable-dict --disable-telnet --disable-tftp --disable-pop3 --disable-imap --disable-smb
+    --disable-smtp --disable-gopher --disable-manual --disable-libcurl-option --enable-http
+    --enable-ipv6 --disable-threaded-resolver --disable-pthreads --disable-verbose --disable-sspi
+    --enable-crypto-auth --disable-ntlm-wb --disable-tls-srp --disable-unix-sockets --disable-cookies
+    --enable-http-auth --enable-doh --disable-mime --enable-dateparse --disable-netrc --without-libidn2
+    --disable-progress-meter --without-brotli --with-zlib=${DEPS_DESTDIR}
+    --without-ssl --without-schannel --without-secure-transport
+    --without-nghttp2 --without-nghttp3 --without-ngtcp2 --without-quiche
+    --without-librtmp --disable-versioned-symbols --enable-hidden-symbols
+    --without-zsh-functions-dir --without-fish-functions-dir --without-zstd --without-libpsl
+    --without-nghttp2 --without-nghttp3 --without-ngtcp2 --without-quiche
+    "CC=${deps_cc}" "CFLAGS=${deps_noarch_CFLAGS}${cflags_extra}" ${curl_extra}
+    BUILD_COMMAND true
+    INSTALL_COMMAND make -C lib install && make -C include install
+    BUILD_BYPRODUCTS
+      ${curl_prefix}/lib/libcurl.a
+      ${curl_prefix}/include/curl/curl.h
+  )
+  list(APPEND curl_lib_targets curl${curl_target_suffix}_external)
+  list(APPEND curl_lib_outputs ${curl_prefix}/lib/libcurl.a)
+endforeach()
+
+message(STATUS "TARGETS: ${curl_lib_targets}")
+
+if(IOS AND num_arches GREATER 1)
+  # We are building multiple architectures for different iOS devices, so we need to glue the
+  # separate libraries into one. (Normally multiple -arch values passed to clang does this for us,
+  # but curl refuses to build that way).
+  add_custom_target(curl_external
+    COMMAND lipo ${curl_lib_outputs} -create -output ${DEPS_DESTDIR}/libcurl.a
+    COMMAND ${CMAKE_COMMAND} -E copy_directory ${DEPS_DESTDIR}/tmp/${curl_arch0}/include/curl ${DEPS_DESTDIR}/include/curl
+    BYPRODUCTS ${DEPS_DESTDIR}/lib/libcurl.a ${DEPS_DESTDIR}/include/curl/curl.h
+    DEPENDS ${curl_lib_targets})
+endif()
+
 add_static_target(CURL::libcurl curl_external libcurl.a)
 set(libcurl_link_libs zlib)
 if(CMAKE_CROSSCOMPILING AND ARCH_TRIPLET MATCHES mingw)
-  list(APPEND libcurl_link_libs crypt32)
+  list(APPEND libcurl_link_libs ws2_32;bcrypt)
 elseif(APPLE)
-  list(APPEND libcurl_link_libs "-framework Security")
+  list(APPEND libcurl_link_libs "-framework SystemConfiguration")
 endif()
 set_target_properties(CURL::libcurl PROPERTIES
   INTERFACE_LINK_LIBRARIES "${libcurl_link_libs}"

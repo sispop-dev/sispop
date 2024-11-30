@@ -1,4 +1,4 @@
-// Copyright (c)      2018-2023, The Oxen Project
+// Copyright (c)      2024, The Oxen Project
 //
 // All rights reserved.
 //
@@ -353,7 +353,7 @@ namespace service_nodes
                                    << " blocks); abstaining (to leave decommissioned)");
                       continue;
                     }
-                    
+
                     LOG_PRINT_L2("Decommissioned service node " << quorum->workers[node_index] << " has no remaining credit; voting to deregister");
                     vote_for_state = new_state::deregister; // Credit ran out!
                   } else {
@@ -363,14 +363,12 @@ namespace service_nodes
                                    << quorum->workers[node_index]
                                    << " has stopped passing required checks, but has sufficient earned credit (" << credit << " blocks) to avoid deregistration; voting to decommission");
                     } else {
-                   
                       vote_for_state = new_state::deregister;
                       LOG_PRINT_L2("Service node "
                                    << quorum->workers[node_index]
                                    << " has stopped passing required checks, but does not have sufficient earned credit ("
                                    << credit << " blocks, " << DECOMMISSION_MINIMUM
                                    << " required) to decommission; voting to deregister");
-                      }
                     }
                   }
                 }

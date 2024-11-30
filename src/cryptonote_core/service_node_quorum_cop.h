@@ -1,4 +1,4 @@
-// Copyright (c)      2018-2023, The Oxen Project
+// Copyright (c)      2024, The Oxen Project
 //
 // All rights reserved.
 //

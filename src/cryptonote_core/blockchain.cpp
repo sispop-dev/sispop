@@ -2041,7 +2041,6 @@ bool Blockchain::handle_alternative_block(const block& b, const crypto::hash& id
       uint64_t block_reward = get_outs_money_amount(b.miner_tx);
       const uint64_t prev_generated_coins = alt_chain.size() ? prev_data.already_generated_coins : m_db->get_block_already_generated_coins(block_height - 1);
       alt_data.already_generated_coins = (block_reward < (MONEY_SUPPLY - prev_generated_coins)) ? prev_generated_coins + block_reward : MONEY_SUPPLY;
->>>>>>> pr-1220
       m_db->add_alt_block(id, alt_data, cryptonote::block_to_blob(b), checkpoint_blob.empty() ? nullptr : &checkpoint_blob);
 
       // Check current height for pre-existing checkpoint

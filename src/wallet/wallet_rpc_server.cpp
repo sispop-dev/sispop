@@ -549,10 +549,6 @@ namespace tools
     m_last_auto_refresh_time = std::chrono::steady_clock::time_point::min();
     return true;
   }
-//------------------------------------------------------------------------------------------------------------------------------
-void wallet_rpc_server::require_open() {
-
-}
   //------------------------------------------------------------------------------------------------------------------------------
   void wallet_rpc_server::require_open()
   {
@@ -820,8 +816,6 @@ void wallet_rpc_server::require_open() {
     {
       res.height           = m_wallet->get_blockchain_current_height();
       res.immutable_height = m_wallet->get_immutable_height();
-      std::string err;
-      res.daemon_height = m_wallet->get_daemon_blockchain_height(err);
     }
     return res;
   }
@@ -3215,16 +3209,9 @@ namespace {
       const auto wallet_dir = command_line::get_arg(m_vm, arg_wallet_dir);
       const auto prompt_for_password = command_line::get_arg(m_vm, arg_prompt_for_password);
       const auto password_prompt = prompt_for_password ? password_prompter : nullptr;
-      const auto http_wallet = command_line::get_arg(vm, arg_http_wallet);
 
       if(!wallet_file.empty() && !from_json.empty())
         throw std::logic_error{tr("Can't specify more than one of --wallet-file and --generate-from-json")};
-
-      if (http_wallet && wallet_dir.empty())
-      {
-        LOG_ERROR(tools::wallet_rpc_server::tr("--http-wallet requires --wallet-dir"));
-        return false;
-      }
 
       if (!wallet_dir.empty())
         return nullptr;

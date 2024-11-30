@@ -9217,7 +9217,7 @@ void wallet2::get_outs(std::vector<std::vector<tools::wallet2::get_outs_entry>> 
       if (has_rct_distribution)
       {
         // check we're clear enough of rct start, to avoid corner cases below
-      THROW_WALLET_EXCEPTION_IF(rct_offsets.size() < std::max(1, CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE),
+        THROW_WALLET_EXCEPTION_IF(rct_offsets.size() <= CRYPTONOTE_DEFAULT_TX_SPENDABLE_AGE,
           error::get_output_distribution, "Not enough rct outputs");
         THROW_WALLET_EXCEPTION_IF(rct_offsets.back() <= max_rct_index,
             error::get_output_distribution, "Daemon reports suspicious number of rct outputs");
@@ -12703,12 +12703,6 @@ bool wallet2::check_reserve_proof(const cryptonote::account_public_address &addr
     "Signature header check error");
   sig_str.remove_prefix(RESERVE_PROOF_MAGIC.size());
 
-  int version = 2; // assume newest version
-  if (boost::string_ref{sig_str}.starts_with(header_v1))
-      version = 1;
-  else if (boost::string_ref{sig_str}.starts_with(header_v2))
-      version = 2;
-
   std::string sig_decoded;
   THROW_WALLET_EXCEPTION_IF(!tools::base58::decode(sig_str, sig_decoded), error::wallet_internal_error,
     "Signature decoding error");
@@ -12769,7 +12763,7 @@ bool wallet2::check_reserve_proof(const cryptonote::account_public_address &addr
     const cryptonote::txout_to_key* const out_key = std::get_if<cryptonote::txout_to_key>(std::addressof(tx.vout[proof.index_in_tx].target));
     THROW_WALLET_EXCEPTION_IF(!out_key, error::wallet_internal_error, "Output key wasn't found");
 
-    // TODO(sispop): We should make a catch-all function that gets all the public
+    // TODO(loki): We should make a catch-all function that gets all the public
     // keys out into an array and iterate through all insteaad of multiple code
     // paths for additional keys and the main public key storage which can then
     // have multiple keys ..
@@ -12780,11 +12774,11 @@ bool wallet2::check_reserve_proof(const cryptonote::account_public_address &addr
     const bool is_miner = tx.vin.size() == 1 && std::holds_alternative<cryptonote::txin_gen>(tx.vin[0]);
     if (is_miner)
     {
-      // NOTE(sispop): The service node reward is added as a duplicate TX public
+      // NOTE(loki): The service node reward is added as a duplicate TX public
       // key instead of into the additional public key, so we need to check upto
       // 2 public keys when we're checking miner transactions.
 
-      // TODO(sispop): This might still be broken for governance rewards since it uses a deterministic key iirc.
+      // TODO(loki): This might still be broken for governance rewards since it uses a deterministic key iirc.
       crypto::public_key main_keys[2] = {
           get_tx_pub_key_from_extra(tx, 0),
           get_tx_pub_key_from_extra(tx, 1),
@@ -12835,7 +12829,7 @@ bool wallet2::check_reserve_proof(const cryptonote::account_public_address &addr
       crypto::secret_key shared_secret;
       crypto::derivation_to_scalar(derivation, proof.index_in_tx, shared_secret);
       rct::ecdhTuple ecdh_info = tx.rct_signatures.ecdhInfo[proof.index_in_tx];
-      rct::ecdhDecode(ecdh_info, rct::sk2rct(shared_secret), tx.rct_signatures.type == rct::RCTTypeBulletproof2);
+      rct::ecdhDecode(ecdh_info, rct::sk2rct(shared_secret), tools::equals_any(tx.rct_signatures.type, rct::RCTTypeBulletproof2));
       amount = rct::h2d(ecdh_info.amount);
     }
     total += amount;
@@ -14231,22 +14225,22 @@ std::string wallet2::make_uri(const std::string &address, const std::string &pay
   cpr::Parameters params;
 
   if (!payment_id.empty())
-    params.AddParameter({"tx_payment_id", payment_id}, curl);
+    params.Add({"tx_payment_id", payment_id});
 
   if (amount > 0) // URI encoded amount is in decimal units, not atomic units
-    params.AddParameter({"tx_amount", cryptonote::print_money(amount)}, curl);
+    params.Add({"tx_amount", cryptonote::print_money(amount)});
 
   if (!recipient_name.empty())
-    params.AddParameter({"recipient_name", recipient_name}, curl);
+    params.Add({"recipient_name", recipient_name});
 
   if (!tx_description.empty())
-    params.AddParameter({"tx_description", tx_description}, curl);
+    params.Add({"tx_description", tx_description});
 
   std::string uri{uri_prefix};
   uri += address;
-  if (!params.content.empty()) {
+  if (auto content = params.GetContent(curl); !content.empty()) {
     uri += '?';
-    uri += params.content;
+    uri += std::move(content);
   }
   return uri;
 }
