@@ -223,6 +223,14 @@ namespace config
     "49HsfhWTvKZgc4qH1hwcEpM99Ng2TqmcxVHJoSkSQvV3N9iVJP1NT6gJTWRvuTWMNqeDgHNUcrpYVdnXW5Ep33W33YfwqRe",
   };
 
+  // Predefined validator public keys.
+  extern const crypto::public_key VALIDATOR_PK1;
+  extern const crypto::public_key VALIDATOR_PK2;
+  extern const crypto::public_key VALIDATOR_PK3;
+  extern const crypto::public_key VALIDATOR_PK4;
+  extern const crypto::public_key VALIDATOR_PK5;
+
+
   namespace testnet
   {
     uint64_t const CRYPTONOTE_PUBLIC_ADDRESS_BASE58_PREFIX = 156;
@@ -245,6 +253,11 @@ namespace config
       "T6TU9yWHiYwKnJLWKoBQyWKXQSkRv7WnPacqFzrw5kPvgJJM7oQn4GNCPDimwU87RxVy69cRgpMoFUeZpTqyjGR91nW2PYdkq", // hardfork v10
     };
 
+  extern const crypto::public_key VALIDATOR_PK1;
+  extern const crypto::public_key VALIDATOR_PK2;
+  extern const crypto::public_key VALIDATOR_PK3;
+  extern const crypto::public_key VALIDATOR_PK4;
+  extern const crypto::public_key VALIDATOR_PK5;
   }
 
   namespace stagenet
@@ -268,6 +281,12 @@ namespace config
       "5A8U5rKBGTQNN3JoNDFPyTgARrmvqyMgR15ZGSFWhRgJ9JA62V6gUox8NbVCq9Y2jCVcuWPETLAzoNSWvCyYBxGtRPG4TVq", // hardfork v7-9
       "5A8U5rKBGTQNN3JoNDFPyTgARrmvqyMgR15ZGSFWhRgJ9JA62V6gUox8NbVCq9Y2jCVcuWPETLAzoNSWvCyYBxGtRPG4TVq", // hardfork v10
     };
+
+  extern const crypto::public_key VALIDATOR_PK1;
+  extern const crypto::public_key VALIDATOR_PK2;
+  extern const crypto::public_key VALIDATOR_PK3;
+  extern const crypto::public_key VALIDATOR_PK4;
+  extern const crypto::public_key VALIDATOR_PK5;
   }
 }
 
@@ -314,6 +333,11 @@ namespace cryptonote
     uint32_t GENESIS_NONCE;
     uint64_t GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS;
     std::string const *GOVERNANCE_WALLET_ADDRESS;
+    extern const crypto::public_key VALIDATOR_PK1;
+    extern const crypto::public_key VALIDATOR_PK2;
+    extern const crypto::public_key VALIDATOR_PK3;
+    extern const crypto::public_key VALIDATOR_PK4;
+    extern const crypto::public_key VALIDATOR_PK5;
   };
   inline const config_t& get_config(network_type nettype, int hard_fork_version = 7)
   {
@@ -328,6 +352,11 @@ namespace cryptonote
       ::config::NETWORK_ID,
       ::config::GENESIS_TX,
       ::config::GENESIS_NONCE,
+      ::config::VALIDATOR_PK1,
+      ::config::VALIDATOR_PK2,
+      ::config::VALIDATOR_PK3,
+      ::config::VALIDATOR_PK4,
+      ::config::VALIDATOR_PK5,
       ::config::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
       &::config::GOVERNANCE_WALLET_ADDRESS[0],
     };
@@ -343,6 +372,11 @@ namespace cryptonote
       ::config::testnet::NETWORK_ID,
       ::config::testnet::GENESIS_TX,
       ::config::testnet::GENESIS_NONCE,
+      ::config::testnet::VALIDATOR_PK1,
+      ::config::testnet::VALIDATOR_PK2,
+      ::config::testnet::VALIDATOR_PK3,
+      ::config::testnet::VALIDATOR_PK4,
+      ::config::testnet::VALIDATOR_PK5,
       ::config::testnet::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
       &::config::testnet::GOVERNANCE_WALLET_ADDRESS[0],
     };
@@ -358,6 +392,11 @@ namespace cryptonote
       ::config::stagenet::NETWORK_ID,
       ::config::stagenet::GENESIS_TX,
       ::config::stagenet::GENESIS_NONCE,
+      ::config::testnet::VALIDATOR_PK1,
+      ::config::testnet::VALIDATOR_PK2,
+      ::config::testnet::VALIDATOR_PK3,
+      ::config::testnet::VALIDATOR_PK4,
+      ::config::testnet::VALIDATOR_PK5,
       ::config::stagenet::GOVERNANCE_REWARD_INTERVAL_IN_BLOCKS,
       &::config::stagenet::GOVERNANCE_WALLET_ADDRESS[0],
     };

@@ -121,7 +121,7 @@ Blockchain::Blockchain(tx_memory_pool& tx_pool, service_nodes::service_node_list
   m_btc_valid(false),
   m_batch_success(true),
   m_prepare_height(0),
-  m_pulse(init_validators())  // Initialize Pulse with validators
+  m_pulse(validator::init_validators()) // Initialize Pulse with validators
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
 }
@@ -1107,19 +1107,6 @@ bool Blockchain::blink_rollback(uint64_t rollback_height)
   if (stop_batch)
     m_db->batch_stop();
   return ret;
-}
-//------------------------------------------------------------------
-std::vector<pulse::Validator> Blockchain::init_validators() {
-    std::vector<pulse::Validator> validators;
-    crypto::public_key pk;
-    crypto::secret_key sk;
-
-    //(TODO): Add predefined validators (this could be dynamic later)
-    for (int i = 0; i < 3; ++i) {
-        crypto::generate_keys(pk, sk);
-        validators.push_back({"Validator_" + std::to_string(i), pk, sk});
-    }
-    return validators;
 }
 //------------------------------------------------------------------
 // This function attempts to switch to an alternate chain, returning
