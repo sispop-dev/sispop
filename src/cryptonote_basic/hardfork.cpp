@@ -76,6 +76,7 @@ static constexpr HardFork::Params mainnet_hard_forks[] =
   {network_version_16,                      86097, 0, 1704076200},
   {network_version_17,                      99714, 0, 1705801462},
   {network_version_18,                      99845, 0, 1706008888},
+  {network_version_19,                     342171, 0, 1733443017},
 };
 
 static constexpr HardFork::Params testnet_hard_forks[] =
@@ -90,6 +91,7 @@ static constexpr HardFork::Params testnet_hard_forks[] =
   { network_version_14_blink,               128, 0, 1692427620 }, // 2020-01-09 00:00UTC
   { network_version_15_lns,                 130, 0, 1692427740 }, // 2020-03-25 14:00AEDT (03:00UTC)
   {network_version_16,			    140, 0, 1702245292},
+  {network_version_19,                      150, 0, 1733183817},
 };
 
 static constexpr HardFork::Params stagenet_hard_forks[] =
@@ -104,6 +106,7 @@ static constexpr HardFork::Params stagenet_hard_forks[] =
   { network_version_14_blink,               128, 0, 1692427620 }, // 2020-01-09 00:00UTC
   { network_version_15_lns,                 130, 0, 1692427740 }, // 2020-03-25 14:00AEDT (03:00UTC)
   {network_version_16,			    140, 0, 1702245292},
+  {network_version_19,                      150, 0, 1733183817},
 };
 
 uint64_t HardFork::get_hardcoded_hard_fork_height(network_type nettype, cryptonote::network_version version)
