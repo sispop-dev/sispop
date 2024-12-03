@@ -61,6 +61,7 @@
 #include "common/varint.h"
 #include "common/pruning.h"
 #include "common/lock.h"
+#include "cryptonote_core/pulse.h"
 
 #ifdef ENABLE_SYSTEMD
 extern "C" {
@@ -119,7 +120,8 @@ Blockchain::Blockchain(tx_memory_pool& tx_pool, service_nodes::service_node_list
   m_service_node_list(service_node_list),
   m_btc_valid(false),
   m_batch_success(true),
-  m_prepare_height(0)
+  m_prepare_height(0),
+  m_pulse(init_validators())  // Initialize Pulse with validators
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
 }
@@ -957,6 +959,10 @@ difficulty_type Blockchain::get_difficulty_for_next_block()
 
   LOG_PRINT_L3("Blockchain::" << __func__);
 
+    if (m_hardfork->get_current_version() >= cryptonote::network_version_19) {
+        return FIXED_DIFFICULTY; // Fixed difficulty
+    }
+
   crypto::hash top_hash = get_tail_id();
   {
     auto diff_lock = tools::unique_lock(m_difficulty_lock);
@@ -1101,6 +1107,19 @@ bool Blockchain::blink_rollback(uint64_t rollback_height)
   if (stop_batch)
     m_db->batch_stop();
   return ret;
+}
+//------------------------------------------------------------------
+std::vector<pulse::Validator> Blockchain::init_validators() {
+    std::vector<pulse::Validator> validators;
+    crypto::public_key pk;
+    crypto::secret_key sk;
+
+    //(TODO): Add predefined validators (this could be dynamic later)
+    for (int i = 0; i < 3; ++i) {
+        crypto::generate_keys(pk, sk);
+        validators.push_back({"Validator_" + std::to_string(i), pk, sk});
+    }
+    return validators;
 }
 //------------------------------------------------------------------
 // This function attempts to switch to an alternate chain, returning
@@ -4378,6 +4397,19 @@ bool Blockchain::add_new_block(const block& bl, block_verification_context& bvc,
   crypto::hash id = get_block_hash(bl);
   auto lock = tools::unique_locks(m_tx_pool, *this);
   db_rtxn_guard rtxn_guard(m_db);
+
+    if (m_hardfork->get_current_version() >= cryptonote::network_version_19) {
+        if (!pulse::validate_block(block)) {
+            MERROR("Pulse block validation failed.");
+            return false;
+        }
+    } else {
+        if (!validate_proof_of_work(block)) {
+            MERROR("Proof of Work validation failed.");
+            return false;
+        }
+    }
+
   if(have_block(id))
   {
     LOG_PRINT_L3("block with id = " << id << " already exists");

@@ -1060,7 +1060,7 @@ namespace cryptonote
 #ifndef IN_UNIT_TESTS
   private:
 #endif
-
+    pulse::Pulse m_pulse;  // Pulse consensus mechanism
     bool load_missing_blocks_into_sispop_subsystems();
 
     // TODO: evaluate whether or not each of these typedefs are left over from blockchain_storage
