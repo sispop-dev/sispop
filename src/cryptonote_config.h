@@ -223,12 +223,11 @@ namespace config
     "49HsfhWTvKZgc4qH1hwcEpM99Ng2TqmcxVHJoSkSQvV3N9iVJP1NT6gJTWRvuTWMNqeDgHNUcrpYVdnXW5Ep33W33YfwqRe",
   };
 
-  // Predefined validator public keys.
-  extern const crypto::public_key VALIDATOR_PK1;
-  extern const crypto::public_key VALIDATOR_PK2;
-  extern const crypto::public_key VALIDATOR_PK3;
-  extern const crypto::public_key VALIDATOR_PK4;
-  extern const crypto::public_key VALIDATOR_PK5;
+  extern const crypto::public_key VALIDATOR_PK1 = "";
+  extern const crypto::public_key VALIDATOR_PK2 = "";
+  extern const crypto::public_key VALIDATOR_PK3 = "";
+  extern const crypto::public_key VALIDATOR_PK4 = "";
+  extern const crypto::public_key VALIDATOR_PK5 = "";
 
 
   namespace testnet
@@ -253,11 +252,11 @@ namespace config
       "T6TU9yWHiYwKnJLWKoBQyWKXQSkRv7WnPacqFzrw5kPvgJJM7oQn4GNCPDimwU87RxVy69cRgpMoFUeZpTqyjGR91nW2PYdkq", // hardfork v10
     };
 
-  extern const crypto::public_key VALIDATOR_PK1;
-  extern const crypto::public_key VALIDATOR_PK2;
-  extern const crypto::public_key VALIDATOR_PK3;
-  extern const crypto::public_key VALIDATOR_PK4;
-  extern const crypto::public_key VALIDATOR_PK5;
+  extern const crypto::public_key VALIDATOR_PK1 = "";
+  extern const crypto::public_key VALIDATOR_PK2 = "";
+  extern const crypto::public_key VALIDATOR_PK3 = "";
+  extern const crypto::public_key VALIDATOR_PK4 = "";
+  extern const crypto::public_key VALIDATOR_PK5 = "";
   }
 
   namespace stagenet
@@ -282,11 +281,11 @@ namespace config
       "5A8U5rKBGTQNN3JoNDFPyTgARrmvqyMgR15ZGSFWhRgJ9JA62V6gUox8NbVCq9Y2jCVcuWPETLAzoNSWvCyYBxGtRPG4TVq", // hardfork v10
     };
 
-  extern const crypto::public_key VALIDATOR_PK1;
-  extern const crypto::public_key VALIDATOR_PK2;
-  extern const crypto::public_key VALIDATOR_PK3;
-  extern const crypto::public_key VALIDATOR_PK4;
-  extern const crypto::public_key VALIDATOR_PK5;
+  extern const crypto::public_key VALIDATOR_PK1 = "";
+  extern const crypto::public_key VALIDATOR_PK2 = "";
+  extern const crypto::public_key VALIDATOR_PK3 = "";
+  extern const crypto::public_key VALIDATOR_PK4 = "";
+  extern const crypto::public_key VALIDATOR_PK5 = "";
   }
 }
 

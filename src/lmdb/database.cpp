@@ -24,9 +24,56 @@
 // INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
 // STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
 // THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 #include "database.h"
 #include "lmdb/error.h"
 #include "lmdb/util.h"
+#include "crypto/crypto.h"
+#include <string>
+#include <cstdlib>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <shlobj.h>
+#else
+#include <cstdlib>
+#endif
+
+expect<environment> open_validator_environment(const char* path) noexcept {
+    MONERO_PRECOND(path != nullptr);
+
+    MDB_env* obj = nullptr;
+    MONERO_LMDB_CHECK(mdb_env_create(std::addressof(obj)));
+    environment out{obj};
+
+    MONERO_LMDB_CHECK(mdb_env_set_maxdbs(out.get(), 1));
+    MONERO_LMDB_CHECK(mdb_env_open(out.get(), path, 0, open_flags));
+    return {std::move(out)};
+}
+
+std::string get_validator_db_path() {
+#ifdef _WIN32
+    char path[MAX_PATH];
+    if (SHGetFolderPathA(NULL, CSIDL_APPDATA, NULL, 0, path) != S_OK) {
+        throw std::runtime_error("Failed to get AppData path");
+    }
+    return std::string(path) + "\\Sispop\\validator.db";
+#else
+    const char* home_dir = getenv("HOME");
+    if (home_dir == nullptr) {
+        throw std::runtime_error("HOME environment variable not set");
+    }
+    return std::string(home_dir) + "/.sispop/validator.db";
+#endif
+}
+
+void init_validator_db() {
+    std::string db_path = get_validator_db_path();
+    auto env = open_validator_environment(db_path.c_str()).value(); // Open environment
+    auto txn = lmdb::txn::begin(env.get_handle());
+    auto dbi = lmdb::dbi::open(txn, "validators", MDB_CREATE);
+    txn.commit();
+}
 
 #ifdef _WIN32
 namespace

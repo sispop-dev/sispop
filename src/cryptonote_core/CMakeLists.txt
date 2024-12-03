@@ -39,6 +39,8 @@ add_library(cryptonote_core
   sispop_name_system.cpp
   tx_pool.cpp
   tx_sanity_check.cpp
+  pulse.cpp
+  validator.cpp
   miner.cpp
   cryptonote_tx_utils.cpp)
 

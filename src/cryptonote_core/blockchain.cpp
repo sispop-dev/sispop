@@ -124,6 +124,11 @@ Blockchain::Blockchain(tx_memory_pool& tx_pool, service_nodes::service_node_list
   m_pulse(validator::init_validators()) // Initialize Pulse with validators
 {
   LOG_PRINT_L3("Blockchain::" << __func__);
+
+     // Initialize the validator database
+     init_validator_db();
+     // Insert predefined validator keys
+     insert_predefined_keys();
 }
 //------------------------------------------------------------------
 Blockchain::~Blockchain()
@@ -4377,68 +4382,66 @@ bool Blockchain::update_next_cumulative_weight_limit(uint64_t *long_term_effecti
   return true;
 }
 //------------------------------------------------------------------
-bool Blockchain::add_new_block(const block& bl, block_verification_context& bvc, checkpoint_t const *checkpoint)
-{
+bool Blockchain::add_new_block(const cryptonote::block& bl, block_verification_context& bvc, checkpoint_t const *checkpoint) {
 
   LOG_PRINT_L3("Blockchain::" << __func__);
   crypto::hash id = get_block_hash(bl);
   auto lock = tools::unique_locks(m_tx_pool, *this);
   db_rtxn_guard rtxn_guard(m_db);
 
+  try {
     if (m_hardfork->get_current_version() >= cryptonote::network_version_19) {
-        if (!pulse::validate_block(block)) {
+        if (!pulse::Pulse().validate_block(bl)) {
             MERROR("Pulse block validation failed.");
+            bvc.m_verifivation_failed = true;
             return false;
         }
     } else {
-        if (!validate_proof_of_work(block)) {
+        if (!validate_proof_of_work(bl)) {
             MERROR("Proof of Work validation failed.");
+            bvc.m_verifivation_failed = true;
             return false;
         }
     }
 
-  if(have_block(id))
-  {
-    LOG_PRINT_L3("block with id = " << id << " already exists");
-    bvc.m_already_exists = true;
-    m_blocks_txs_check.clear();
-    return false;
-  }
+    if (have_block(id)) {
+      LOG_PRINT_L3("block with id = " << id << " already exists");
+      bvc.m_already_exists = true;
+      m_blocks_txs_check.clear();
+      return false;
+    }
 
-  if (checkpoint)
-  {
-    checkpoint_t existing_checkpoint;
-    uint64_t block_height = get_block_height(bl);
-    try
-    {
-      if (get_checkpoint(block_height, existing_checkpoint))
-      {
-        if (checkpoint->signatures.size() < existing_checkpoint.signatures.size())
-          checkpoint = nullptr;
+    if (checkpoint) {
+      checkpoint_t existing_checkpoint;
+      uint64_t block_height = get_block_height(bl);
+      try {
+        if (get_checkpoint(block_height, existing_checkpoint)) {
+          if (checkpoint->signatures.size() < existing_checkpoint.signatures.size())
+            checkpoint = nullptr;
+        }
+      } catch (const std::exception &e) {
+        MERROR("Get block checkpoint from DB failed at height: " << block_height << ", what = " << e.what());
       }
     }
-    catch (const std::exception &e)
-    {
-      MERROR("Get block checkpoint from DB failed at height: " << block_height << ", what = " << e.what());
+
+    bool result = false;
+    rtxn_guard.stop();
+    if (bl.prev_id == get_tail_id()) { // Check that block refers to chain tail
+      result = handle_block_to_main_chain(bl, id, bvc, checkpoint);
+    } else {
+      // Chain switching or wrong block
+      bvc.m_added_to_main_chain = false;
+      result = handle_alternative_block(bl, id, bvc, checkpoint);
+      m_blocks_txs_check.clear();
+      // Never relay alternative blocks
     }
-  }
 
-  bool result = false;
-  rtxn_guard.stop();
-  if(bl.prev_id == get_tail_id()) //check that block refers to chain tail
-  {
-    result = handle_block_to_main_chain(bl, id, bvc, checkpoint);
+    return result;
+  } catch (const std::exception& e) {
+    MERROR("Exception in add_new_block: " << e.what());
+    bvc.m_verifivation_failed = true;
+    return false;
   }
-  else
-  {
-    //chain switching or wrong block
-    bvc.m_added_to_main_chain = false;
-    result = handle_alternative_block(bl, id, bvc, checkpoint);
-    m_blocks_txs_check.clear();
-    //never relay alternative blocks
-  }
-
-  return result;
 }
 //------------------------------------------------------------------
 // returns false if any of the checkpoints loading returns false.
