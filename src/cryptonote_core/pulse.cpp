@@ -3,13 +3,15 @@
 #include "serialization/binary_utils.h"
 #include "common/util.h"
 #include "validator.h"
+#include <sodium.h>
 #include <stdexcept>
 #include <mutex>
+#include "cryptonote_basic/cryptonote_basic.h"
 
 namespace pulse {
 
-Pulse::Pulse()
-    : validators(validator::init_validators()), current_validator_index(0) {
+Pulse::Pulse(const std::vector<validator::Validator>& validators)
+    : validators(validators), current_validator_index(0) {
     if (sodium_init() < 0) {
         LOG_ERROR("Libsodium initialization failed.");
         throw std::runtime_error("Libsodium initialization failed.");

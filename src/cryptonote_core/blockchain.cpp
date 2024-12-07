@@ -61,7 +61,7 @@
 #include "common/varint.h"
 #include "common/pruning.h"
 #include "common/lock.h"
-#include "cryptonote_core/pulse.h"
+#include "cryptonote_core/validator_utils.h"
 
 #ifdef ENABLE_SYSTEMD
 extern "C" {
@@ -4382,67 +4382,87 @@ bool Blockchain::update_next_cumulative_weight_limit(uint64_t *long_term_effecti
   return true;
 }
 //------------------------------------------------------------------
-bool Blockchain::add_new_block(const cryptonote::block& bl, block_verification_context& bvc, checkpoint_t const *checkpoint) {
+// Implementation for proof of work validation
+bool Blockchain::validate_proof_of_work(const cryptonote::block& bl) {
+    crypto::hash proof_of_work;
+    uint64_t height = get_block_height(bl);  // Assuming there's a method to get the block height
+    int miners = 1;  // Set to the appropriate number of miners if needed
 
-  LOG_PRINT_L3("Blockchain::" << __func__);
-  crypto::hash id = get_block_hash(bl);
-  auto lock = tools::unique_locks(m_tx_pool, *this);
-  db_rtxn_guard rtxn_guard(m_db);
+    // Call the correct get_block_longhash function
+    cryptonote::get_block_longhash(this, bl, proof_of_work, height, miners);
 
-  try {
-    if (m_hardfork->get_current_version() >= cryptonote::network_version_19) {
-        if (!pulse::Pulse().validate_block(bl)) {
-            MERROR("Pulse block validation failed.");
-            bvc.m_verifivation_failed = true;
-            return false;
-        }
-    } else {
-        if (!validate_proof_of_work(bl)) {
-            MERROR("Proof of Work validation failed.");
-            bvc.m_verifivation_failed = true;
-            return false;
-        }
+    // Retrieve the difficulty for the block's height
+    difficulty_type difficulty = get_difficulty_for_next_block();
+    // Check if the PoW meets the difficulty requirements
+    if (!check_hash(proof_of_work, difficulty)) {
+        return false;
     }
-
-    if (have_block(id)) {
-      LOG_PRINT_L3("block with id = " << id << " already exists");
-      bvc.m_already_exists = true;
-      m_blocks_txs_check.clear();
-      return false;
-    }
-
-    if (checkpoint) {
-      checkpoint_t existing_checkpoint;
-      uint64_t block_height = get_block_height(bl);
-      try {
-        if (get_checkpoint(block_height, existing_checkpoint)) {
-          if (checkpoint->signatures.size() < existing_checkpoint.signatures.size())
-            checkpoint = nullptr;
-        }
-      } catch (const std::exception &e) {
-        MERROR("Get block checkpoint from DB failed at height: " << block_height << ", what = " << e.what());
-      }
-    }
-
-    bool result = false;
-    rtxn_guard.stop();
-    if (bl.prev_id == get_tail_id()) { // Check that block refers to chain tail
-      result = handle_block_to_main_chain(bl, id, bvc, checkpoint);
-    } else {
-      // Chain switching or wrong block
-      bvc.m_added_to_main_chain = false;
-      result = handle_alternative_block(bl, id, bvc, checkpoint);
-      m_blocks_txs_check.clear();
-      // Never relay alternative blocks
-    }
-
-    return result;
-  } catch (const std::exception& e) {
-    MERROR("Exception in add_new_block: " << e.what());
-    bvc.m_verifivation_failed = true;
-    return false;
-  }
+    return true;
 }
+//------------------------------------------------------------------
+bool Blockchain::add_new_block(const cryptonote::block& bl, block_verification_context& bvc, checkpoint_t const *checkpoint) {
+    LOG_PRINT_L3("Blockchain::" << __func__);
+    crypto::hash id = get_block_hash(bl);
+    auto lock = tools::unique_locks(m_tx_pool, *this);
+    db_rtxn_guard rtxn_guard(m_db);
+
+    try {
+        if (m_hardfork->get_current_version() >= cryptonote::network_version_19) {
+            // Initialize Pulse with validators before validating the block
+            pulse::Pulse pulse_instance(validator::init_validators());
+            if (!pulse_instance.validate_block(bl)) {
+                MERROR("Pulse block validation failed.");
+                bvc.m_verifivation_failed = true;
+                return false;
+            }
+        } else {
+            if (!validate_proof_of_work(bl)) {
+                MERROR("Proof of Work validation failed.");
+                bvc.m_verifivation_failed = true;
+                return false;
+            }
+        }
+
+        if (have_block(id)) {
+            LOG_PRINT_L3("block with id = " << id << " already exists");
+            bvc.m_already_exists = true;
+            m_blocks_txs_check.clear();
+            return false;
+        }
+
+        if (checkpoint) {
+            checkpoint_t existing_checkpoint;
+            uint64_t block_height = get_block_height(bl);
+            try {
+                if (get_checkpoint(block_height, existing_checkpoint)) {
+                    if (checkpoint->signatures.size() < existing_checkpoint.signatures.size())
+                        checkpoint = nullptr;
+                }
+            } catch (const std::exception &e) {
+                MERROR("Get block checkpoint from DB failed at height: " << block_height << ", what = " << e.what());
+            }
+        }
+
+        bool result = false;
+        rtxn_guard.stop();
+        if (bl.prev_id == get_tail_id()) { // Check that block refers to chain tail
+            result = handle_block_to_main_chain(bl, id, bvc, checkpoint);
+        } else {
+            // Chain switching or wrong block
+            bvc.m_added_to_main_chain = false;
+            result = handle_alternative_block(bl, id, bvc, checkpoint);
+            m_blocks_txs_check.clear();
+            // Never relay alternative blocks
+        }
+
+        return result;
+    } catch (const std::exception& e) {
+        MERROR("Exception in add_new_block: " << e.what());
+        bvc.m_verifivation_failed = true;
+        return false;
+    }
+}
+
 //------------------------------------------------------------------
 // returns false if any of the checkpoints loading returns false.
 // That should happen only if a checkpoint is added that conflicts

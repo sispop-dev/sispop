@@ -472,8 +472,13 @@ namespace cryptonote
     transaction miner_tx;
     std::vector<crypto::hash> tx_hashes;
 
+    // Add the height member
+     uint64_t height;
     // hash cash
     mutable crypto::hash hash;
+
+    // Method to get block height
+    uint64_t get_height() const { return height; }
 
     BEGIN_SERIALIZE_OBJECT()
       if (!typename Archive<W>::is_saving())
@@ -481,6 +486,7 @@ namespace cryptonote
 
       FIELDS(*static_cast<block_header *>(this))
       FIELD(miner_tx)
+      FIELD(height)
       FIELD(tx_hashes)
       if (tx_hashes.size() > CRYPTONOTE_MAX_TX_PER_BLOCK)
         return false;

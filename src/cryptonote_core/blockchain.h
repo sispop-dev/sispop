@@ -58,6 +58,7 @@
 #include "cryptonote_basic/hardfork.h"
 #include "blockchain_db/blockchain_db.h"
 #include "cryptonote_core/sispop_name_system.h"
+#include "cryptonote_core/pulse.h"
 
 struct sqlite3;
 namespace service_nodes { class service_node_list; };
@@ -371,6 +372,7 @@ namespace cryptonote
      */
     bool have_block(const crypto::hash& id) const;
 
+    bool validate_proof_of_work(const cryptonote::block& bl);
     /**
      * @brief gets the total number of transactions on the main chain
      *

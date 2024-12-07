@@ -3,6 +3,7 @@
 #include <lmdb++.h>
 #include "crypto/crypto.h"
 #include <string>
+#include "cryptonote_core/validator_utils.h"
 
 #ifdef _WIN32
 #include <windows.h>
@@ -49,6 +50,15 @@ void init_validator_db() {
     auto dbi = lmdb::dbi::open(txn, "validators", MDB_CREATE);
     txn.commit();
 }
+namespace validator {
+
+    const crypto::public_key VALIDATOR_PK1 = epee::string_tools::hex_to_pod<crypto::public_key>("49HsfhWTvKZgc4qH1hwcEpM99Ng2TqmcxVHJoSkSQvV3N9iVJP1NT6gJTWRvuTWMNqeDgHNUcrpYVdnXW5Ep33W33YfwqRe");
+    const crypto::public_key VALIDATOR_PK2 = epee::string_tools::hex_to_pod<crypto::public_key>("49HsfhWTvKZgc4qH1hwcEpM99Ng2TqmcxVHJoSkSQvV3N9iVJP1NT6gJTWRvuTWMNqeDgHNUcrpYVdnXW5Ep33W33YfwqRe");
+    const crypto::public_key VALIDATOR_PK3 = epee::string_tools::hex_to_pod<crypto::public_key>("49HsfhWTvKZgc4qH1hwcEpM99Ng2TqmcxVHJoSkSQvV3N9iVJP1NT6gJTWRvuTWMNqeDgHNUcrpYVdnXW5Ep33W33YfwqRe");
+    const crypto::public_key VALIDATOR_PK4 = epee::string_tools::hex_to_pod<crypto::public_key>("49HsfhWTvKZgc4qH1hwcEpM99Ng2TqmcxVHJoSkSQvV3N9iVJP1NT6gJTWRvuTWMNqeDgHNUcrpYVdnXW5Ep33W33YfwqRe");
+    const crypto::public_key VALIDATOR_PK5 = epee::string_tools::hex_to_pod<crypto::public_key>("49HsfhWTvKZgc4qH1hwcEpM99Ng2TqmcxVHJoSkSQvV3N9iVJP1NT6gJTWRvuTWMNqeDgHNUcrpYVdnXW5Ep33W33YfwqRe");
+
+}
 
 // Insert predefined keys into the validator database
 void insert_predefined_keys() {
@@ -57,12 +67,11 @@ void insert_predefined_keys() {
     auto txn = lmdb::txn::begin(env.get_handle());
     auto dbi = lmdb::dbi::open(txn, "validators");
 
-    const auto& config = cryptonote::get_config(m_nettype, version);
-    dbi.put(txn, "Validator_1", lmdb::val(config.VALIDATOR_PK1.data, sizeof(config.VALIDATOR_PK1.data)));
-    dbi.put(txn, "Validator_2", lmdb::val(config.VALIDATOR_PK2.data, sizeof(config.VALIDATOR_PK2.data)));
-    dbi.put(txn, "Validator_3", lmdb::val(config.VALIDATOR_PK3.data, sizeof(config.VALIDATOR_PK3.data)));
-    dbi.put(txn, "Validator_4", lmdb::val(config.VALIDATOR_PK4.data, sizeof(config.VALIDATOR_PK4.data)));
-    dbi.put(txn, "Validator_5", lmdb::val(config.VALIDATOR_PK5.data, sizeof(config.VALIDATOR_PK5.data)));
+    dbi.put(txn, "Validator_1", lmdb::val(validator::VALIDATOR_PK1.data, sizeof(validator::VALIDATOR_PK1.data)));
+    dbi.put(txn, "Validator_2", lmdb::val(validator::VALIDATOR_PK2.data, sizeof(validator::VALIDATOR_PK2.data)));
+    dbi.put(txn, "Validator_3", lmdb::val(validator::VALIDATOR_PK3.data, sizeof(validator::VALIDATOR_PK3.data)));
+    dbi.put(txn, "Validator_4", lmdb::val(validator::VALIDATOR_PK4.data, sizeof(validator::VALIDATOR_PK4.data)));
+    dbi.put(txn, "Validator_5", lmdb::val(validator::VALIDATOR_PK5.data, sizeof(validator::VALIDATOR_PK5.data)));
 
     txn.commit();
 }

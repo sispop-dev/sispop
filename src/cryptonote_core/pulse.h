@@ -1,39 +1,38 @@
 #ifndef PULSE_H
 #define PULSE_H
 
-#include <vector>
-#include <string>
-#include <sodium.h>
-#include <mutex> // For thread safety
-#include "cryptonote_basic/cryptonote_basic.h" // For block & tx definitions
+#include "cryptonote_basic/cryptonote_basic_impl.h"  // Adjust this to the correct header file
 #include "crypto/crypto.h"
-#include "validator.h" // Include the validator header
+#include "validator.h"
+#include <vector>
+#include <mutex>
 
 namespace pulse {
 
 class Pulse {
 public:
-    // Constructor
-    Pulse();
+    // Constructor with validators
+    Pulse(const std::vector<validator::Validator>& validators);
 
-    // Generates a new block based on the previous block and provided data
+    // Block generation function
     cryptonote::block generate_block(const cryptonote::block& previous_block, const std::string& data);
 
-    // Validates the provided block
+    // Block validation function
     bool validate_block(const cryptonote::block& block) const;
 
-    // Returns the current validator based on the block height
-    validator::Validator get_current_validator(uint64_t height) const;
-
 private:
+    // Validators
     std::vector<validator::Validator> validators;
+
+    // Current validator index
     uint64_t current_validator_index;
-    mutable std::mutex mutex_; // For thread safety
 
-    // Signs the provided block with the validator's keys
+    // Mutex for thread safety
+    mutable std::mutex mutex_;
+
+    // Utility functions
+    validator::Validator get_current_validator(uint64_t height) const;
     crypto::signature sign_block(const cryptonote::block& block, const validator::Validator& validator) const;
-
-    // Verifies the signature of the provided block with the validator's public key
     bool verify_signature(const cryptonote::block& block, const validator::Validator& validator) const;
 };
 
