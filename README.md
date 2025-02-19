@@ -16,6 +16,10 @@ Portions Copyright (c) 2012-2013 The Cryptonote developers.
 - GitHub: [https://github.com/sispop-dev/sispop](https://github.com/sispop-dev/sispop)
 - Discord: [https://discord.gg/9nw78CkZJb](https://discord.gg/9nw78CkZJb)
 
+
+## NEW UPDATES
+Sispop project will be release and update on the 24th of March 2025. 
+
 ## Vulnerability disclosure
 
 - Check out our [Vulnerability Response Process](https://sispopplatform.github.io/sispop-docs/Contributing/VULNERABILITY_RESPONSE_SISPOP), encourages prompt disclosure of any Vulnerabilities
