@@ -18,7 +18,7 @@ Portions Copyright (c) 2012-2013 The Cryptonote developers.
 
 
 ## NEW UPDATES
-Sispop project will be releasing an update on the 24th of March 2025. 
+Sispop project will be releasing an update on the 30th of June 2025. 
 
 ## Vulnerability disclosure
 
