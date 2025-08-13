@@ -64,8 +64,8 @@ sispop_add_executable(blockchain_blackball "sispop-blockchain-mark-spent-outputs
 target_link_libraries(blockchain_blackball
   PRIVATE
     blockchain_tools_common_libs
+    cryptonote_core
     wallet)
-
 
 sispop_add_executable(blockchain_usage "sispop-blockchain-usage"
   blockchain_usage.cpp

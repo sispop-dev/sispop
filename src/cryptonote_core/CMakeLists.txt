@@ -38,6 +38,7 @@ add_library(cryptonote_core
   tx_blink.cpp
   sispop_name_system.cpp
   tx_pool.cpp
+  tx_based_pow.cpp
   tx_sanity_check.cpp
   miner.cpp
   cryptonote_tx_utils.cpp)

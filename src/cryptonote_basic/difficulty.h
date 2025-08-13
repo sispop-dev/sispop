@@ -34,6 +34,14 @@
 #include <vector>
 
 #include "crypto/hash.h"
+#include "cryptonote_basic/cryptonote_basic.h"
+
+constexpr double LWMA_ADJUST = 0.998;
+constexpr int64_t SOLVETIME_MIN_FACTOR = -7;
+constexpr int64_t SOLVETIME_MAX_FACTOR = 7;
+constexpr int64_t MIN_LWMA_FACTOR = 20;
+constexpr uint64_t MAX_INITIAL_DIFFICULTY_V12 = 5000000; // For v12_initial_override
+constexpr uint64_t MAX_INITIAL_DIFFICULTY_V19 = 10000; // For v19_initial_override
 
 namespace cryptonote
 {
@@ -53,6 +61,14 @@ namespace cryptonote
      */
     bool check_hash(const crypto::hash &hash, difficulty_type difficulty);
 
-    difficulty_type next_difficulty_v2(std::vector<std::uint64_t> timestamps, std::vector<difficulty_type> cumulative_difficulties, size_t target_seconds,
-        bool use_old_lwma, bool v12_initial_override);
+    difficulty_type next_difficulty_v2(
+    std::vector<std::uint64_t> timestamps,
+    std::vector<difficulty_type> cumulative_difficulties,
+    size_t target_seconds,
+    bool use_old_lwma,
+    bool v12_initial_override,
+    bool v19_initial_override  = false,
+    const std::vector<cryptonote::transaction>& txs = {} // default empty for backwards compatibility
+);
+
 }

@@ -44,6 +44,9 @@
 #include "string_tools.h"
 #include "storages/portable_storage_template_helper.h"
 #include "boost/logic/tribool.hpp"
+#include "tx_based_pow.h"
+#include "cryptonote_core/blockchain.h"
+#include "crypto/hash-ops.h"
 
 #ifdef __APPLE__
   #include <sys/times.h>
@@ -81,8 +84,8 @@ using namespace epee;
 
 #include "miner.h"
 
-extern "C" void rx_slow_hash_allocate_state();
-extern "C" void rx_slow_hash_free_state();
+//extern "C" void rx_slow_hash_allocate_state();
+//extern "C" void rx_slow_hash_free_state();
 
 namespace cryptonote
 {
@@ -135,16 +138,29 @@ namespace cryptonote
   }
   //-----------------------------------------------------------------------------------------------------
   bool miner::set_block_template(const block& bl, const difficulty_type& di, uint64_t height, uint64_t block_reward)
+{
+  CRITICAL_REGION_LOCAL(m_template_lock);
+  if (bl.major_version >= 19) // Version 0.19: tx-based PoW
   {
-    CRITICAL_REGION_LOCAL(m_template_lock);
-    m_template = bl;
-    m_diffic = di;
-    m_height = height;
-    m_block_reward = block_reward;
-    ++m_template_no;
-    m_starter_nonce = crypto::rand<uint32_t>();
-    return true;
+    // Retrieve block transactions (excluding miner tx)
+    std::vector<transaction> txs;
+    std::vector<crypto::hash> missed;
+    if (!m_pbc->get_transactions(bl.tx_hashes, txs, missed) || !missed.empty())
+    {
+      LOG_ERROR("Failed to retrieve transactions for block template at height " << height);
+      return false;
+    }
+
   }
+
+  m_template = bl;
+  m_diffic = di;
+  m_height = height;
+  m_block_reward = block_reward;
+  ++m_template_no;
+  m_starter_nonce = crypto::rand<uint64_t>(); // Use uint64_t for tx-based PoW
+  return true;
+}
   //-----------------------------------------------------------------------------------------------------
   bool miner::on_block_chain_update()
   {
@@ -154,27 +170,47 @@ namespace cryptonote
     return request_block_template();
   }
   //-----------------------------------------------------------------------------------------------------
-  bool miner::request_block_template()
+#include "tx_based_pow.h" // Ensure this is included in miner.cpp
+
+bool miner::request_block_template()
+{
+  block bl;
+  difficulty_type di{};
+  uint64_t height{};
+  uint64_t expected_reward;
+
+  cryptonote::blobdata extra_nonce;
+  if (m_extra_messages.size() && m_config.current_extra_message_index < m_extra_messages.size())
   {
-    block bl;
-    difficulty_type di{};
-    uint64_t height{};
-    uint64_t expected_reward; //only used for RPC calls - could possibly be useful here too?
+    extra_nonce = m_extra_messages[m_config.current_extra_message_index];
+  }
 
-    cryptonote::blobdata extra_nonce;
-    if(m_extra_messages.size() && m_config.current_extra_message_index < m_extra_messages.size())
-    {
-      extra_nonce = m_extra_messages[m_config.current_extra_message_index];
-    }
+  // Determine major_version based on blockchain height
+  uint8_t major_version = m_pbc->get_hard_fork_version(m_pbc->get_current_blockchain_height());
+  if (m_pbc->get_current_blockchain_height() >= 3000000) // Hard fork height for v0.19
+  {
+    major_version = 19; // Set for tx-based PoW
+  }
 
-    if(!m_phandler->get_block_template(bl, m_mine_address, di, height, expected_reward, extra_nonce))
+  m_phandler->get_block_template(bl, m_mine_address, di, height, expected_reward, extra_nonce);
+
+  // Verify block template for tx-based PoW
+  if (major_version >= 19)
+  {
+    // Ensure transactions are available for tx-based PoW
+    std::vector<transaction> txs;
+    txs.push_back(bl.miner_tx);
+    std::vector<crypto::hash> missed;
+    if (!m_pbc->get_transactions(bl.tx_hashes, txs, missed) || !missed.empty())
     {
-      LOG_ERROR("Failed to get_block_template(), stopping mining");
+      LOG_ERROR("Failed to retrieve transactions for block template at height " << height);
       return false;
     }
-    set_block_template(bl, di, height, expected_reward);
-    return true;
   }
+
+  set_block_template(bl, di, height, expected_reward);
+  return true;
+}
   //-----------------------------------------------------------------------------------------------------
   bool miner::on_idle()
   {
@@ -362,64 +398,66 @@ namespace cryptonote
     return m_threads_total;
   }
   //-----------------------------------------------------------------------------------------------------
-  bool miner::start(const account_public_address& adr, size_t threads_count, bool do_background, bool ignore_battery, uint64_t stop_after, bool slow_mining)
+#include "tx_based_pow.h" // Ensure this is included in miner.cpp
+
+bool miner::start(const account_public_address& adr, size_t threads_count, bool do_background, bool ignore_battery, uint64_t stop_after, bool slow_mining)
+{
+  m_block_reward = 0;
+  m_mine_address = adr;
+  m_threads_total = static_cast<uint32_t>(threads_count);
+  if (threads_count == 0)
   {
-    m_block_reward = 0;
-    m_mine_address = adr;
-    m_threads_total = static_cast<uint32_t>(threads_count);
-    if (threads_count == 0)
-    {
-      m_threads_autodetect.clear();
-      m_threads_autodetect.push_back({epee::misc_utils::get_ns_count(), m_total_hashes});
-      m_threads_total = 1;
-    }
-    m_starter_nonce = crypto::rand<uint32_t>();
-    CRITICAL_REGION_LOCAL(m_threads_lock);
-    if(is_mining())
-    {
-      LOG_ERROR("Starting miner but it's already started");
-      return false;
-    }
-
-    if(!m_threads.empty())
-    {
-      LOG_ERROR("Unable to start miner because there are active mining threads");
-      return false;
-    }
-
-    request_block_template();//lets update block template
-
-    m_stop = false;
-    m_thread_index = 0;
-    m_stop_height = stop_after ? m_height + stop_after : std::numeric_limits<uint64_t>::max();
-    if (stop_after)
-      MGINFO("Mining until height " << m_stop_height);
-    set_is_background_mining_enabled(do_background);
-    set_ignore_battery(ignore_battery);
-    
-    for(size_t i = 0; i != m_threads_total; i++)
-    {
-      m_threads.push_back(boost::thread(m_attrs, boost::bind(&miner::worker_thread, this, slow_mining)));
-    }
-
-    if (threads_count == 0)
-      MINFO("Mining has started, autodetecting optimal number of threads, good luck!" );
-    else
-      MINFO("Mining has started with " << threads_count << " threads, good luck!" );
-
-    if( get_is_background_mining_enabled() )
-    {
-      m_background_mining_thread = boost::thread(m_attrs, boost::bind(&miner::background_worker_thread, this));
-      LOG_PRINT_L0("Background mining controller thread started" );
-    }
-
-    if(get_ignore_battery())
-    {
-      MINFO("Ignoring battery");
-    }
-
-    return true;
+    m_threads_autodetect.clear();
+    m_threads_autodetect.push_back({epee::misc_utils::get_ns_count(), m_total_hashes});
+    m_threads_total = 1;
   }
+  m_starter_nonce = crypto::rand<uint64_t>(); // Use uint64_t for tx-based PoW compatibility
+  CRITICAL_REGION_LOCAL(m_threads_lock);
+  if (is_mining())
+  {
+    LOG_ERROR("Starting miner but it's already started");
+    return false;
+  }
+
+  if (!m_threads.empty())
+  {
+    LOG_ERROR("Unable to start miner because there are active mining threads");
+    return false;
+  }
+
+  request_block_template(); // Update block template, ensuring correct major_version
+
+  m_stop = false;
+  m_thread_index = 0;
+  m_stop_height = stop_after ? m_height + stop_after : std::numeric_limits<uint64_t>::max();
+  if (stop_after)
+    MGINFO("Mining until height " << m_stop_height);
+  set_is_background_mining_enabled(do_background);
+  set_ignore_battery(ignore_battery);
+
+  for (size_t i = 0; i != m_threads_total; i++)
+  {
+    m_threads.push_back(boost::thread(m_attrs, boost::bind(&miner::worker_thread, this, slow_mining)));
+  }
+
+  if (threads_count == 0)
+    MINFO("Mining has started, autodetecting optimal number of threads, good luck!");
+  else
+    MINFO("Mining has started with " << threads_count << " threads, good luck!");
+
+  if (get_is_background_mining_enabled())
+  {
+    m_background_mining_thread = boost::thread(m_attrs, boost::bind(&miner::background_worker_thread, this));
+    LOG_PRINT_L0("Background mining controller thread started");
+  }
+
+  if (get_ignore_battery())
+  {
+    MINFO("Ignoring battery");
+  }
+
+  return true;
+}
   //-----------------------------------------------------------------------------------------------------
   uint64_t miner::get_speed() const
   {
@@ -473,13 +511,51 @@ namespace cryptonote
   }
   //-----------------------------------------------------------------------------------------------------
   bool miner::find_nonce_for_given_block(const Blockchain *pbc, block& bl, const difficulty_type& diffic, uint64_t height)
+{
+  if (bl.major_version >= 19) // Version 0.19: tx-based PoW
   {
-    for(; bl.nonce != std::numeric_limits<uint32_t>::max(); bl.nonce++)
+    // Collect transactions for tx-based PoW
+    std::vector<transaction> txs;
+    std::vector<crypto::hash> missed;
+
+    if (!pbc->get_transactions(bl.tx_hashes, txs, missed) || !missed.empty())
+    {
+      MERROR("Failed to retrieve all transactions for block at height " << height);
+      bl.invalidate_hashes();
+      return false;
+    }
+
+    // Include miner transaction at front
+    txs.insert(txs.begin(), bl.miner_tx);
+
+    // Setup tx-based block header
+    tx_based_block_header header;
+    header.major_version = bl.major_version;
+    header.minor_version = bl.minor_version;
+    header.prev_id = bl.prev_id;
+    header.timestamp = bl.timestamp;
+    header.nonce = bl.nonce;
+    header.tx_digest = generate_block_tx_digest(txs);
+
+    // Find nonce using tx-based PoW
+    uint64_t winning_nonce;
+    if (mine_tx_based_block(txs, bl.prev_id, bl.timestamp, diffic, header, winning_nonce))
+    {
+      bl.nonce = winning_nonce;
+      bl.invalidate_hashes();
+      return true;
+    }
+
+    bl.invalidate_hashes();
+    return false;
+  }
+  else // Versions < 18: RandomX mining
+  {
+    for (; bl.nonce != std::numeric_limits<uint64_t>::max(); bl.nonce++)
     {
       crypto::hash h;
       get_block_longhash(pbc, bl, h, height, tools::get_max_concurrency());
-
-      if(check_hash(h, diffic))
+      if (check_hash(h, diffic))
       {
         bl.invalidate_hashes();
         return true;
@@ -487,6 +563,7 @@ namespace cryptonote
     }
     bl.invalidate_hashes();
     return false;
+   }
   }
   //-----------------------------------------------------------------------------------------------------
   void miner::on_synchronized()
@@ -520,109 +597,169 @@ namespace cryptonote
       MDEBUG("MINING RESUMED");
   }
   //-----------------------------------------------------------------------------------------------------
-  bool miner::worker_thread(bool slow_mining)
+bool miner::worker_thread(bool slow_mining)
+{
+  uint32_t th_local_index = m_thread_index++;
+  MLOG_SET_THREAD_NAME(std::string("[miner ") + std::to_string(th_local_index) + "]");
+  MGINFO("Miner thread was started [" << th_local_index << "]");
+  uint64_t nonce = m_starter_nonce + th_local_index; // Use uint64_t to support tx-based PoW
+  uint64_t height = 0;
+  difficulty_type local_diff = 0;
+  uint32_t local_template_ver = 0;
+  block b;
+  bool use_randomx = false;
+  if (m_template.major_version < 19) // Only allocate RandomX state for versions < 18
   {
-    uint32_t th_local_index = m_thread_index++;
-    MLOG_SET_THREAD_NAME(std::string("[miner ") + std::to_string(th_local_index) + "]");
-    MGINFO("Miner thread was started ["<< th_local_index << "]");
-    uint32_t nonce = m_starter_nonce + th_local_index;
-    uint64_t height = 0;
-    difficulty_type local_diff = 0;
-    uint32_t local_template_ver = 0;
-    block b;
-    rx_slow_hash_allocate_state();
-    ++m_threads_active;
-    bool call_stop = false;
+    crypto::rx_slow_hash_allocate_state();
+    use_randomx = true;
+  }
+  ++m_threads_active;
+  bool call_stop = false;
 #if defined(SISPOP_ENABLE_INTEGRATION_TEST_HOOKS)
-    call_stop = true;
+  call_stop = true;
 #endif
 
-    while(!m_stop)
+  while (!m_stop)
+  {
+    if (m_pausers_count) // anti split workaround
     {
-      if(m_pausers_count)//anti split workaround
+      misc_utils::sleep_no_w(100);
+      continue;
+    }
+    else if (m_is_background_mining_enabled)
+    {
+      misc_utils::sleep_no_w(m_miner_extra_sleep);
+      while (!m_is_background_mining_started)
       {
-        misc_utils::sleep_no_w(100);
-        continue;
+        MGINFO("background mining is enabled, but not started, waiting until start triggers");
+        boost::unique_lock<boost::mutex> started_lock(m_is_background_mining_started_mutex);
+        m_is_background_mining_started_cond.wait(started_lock);
+        if (m_stop) break;
       }
-      else if( m_is_background_mining_enabled )
-      {
-        misc_utils::sleep_no_w(m_miner_extra_sleep);
-        while( !m_is_background_mining_started )
-        {
-          MGINFO("background mining is enabled, but not started, waiting until start triggers");
-          boost::unique_lock<boost::mutex> started_lock( m_is_background_mining_started_mutex );        
-          m_is_background_mining_started_cond.wait( started_lock );
-          if( m_stop ) break;
-        }
-        
-        if( m_stop ) continue;         
-      }
+      if (m_stop) continue;
+    }
 
-      if(local_template_ver != m_template_no)
-      {
-        CRITICAL_REGION_BEGIN(m_template_lock);
-        b = m_template;
-        local_diff = m_diffic;
-        height = m_height;
-        CRITICAL_REGION_END();
-        local_template_ver = m_template_no;
-        nonce = m_starter_nonce + th_local_index;
-      }
+    if (local_template_ver != m_template_no)
+    {
+      CRITICAL_REGION_BEGIN(m_template_lock);
+      b = m_template;
+      local_diff = m_diffic;
+      height = m_height;
+      CRITICAL_REGION_END();
+      local_template_ver = m_template_no;
+      nonce = m_starter_nonce + th_local_index;
+      use_randomx = (b.major_version < 15); // Update RandomX usage based on block version
+    }
 
-      if(!local_template_ver)//no any set_block_template call
-      {
-        LOG_PRINT_L2("Block template not set yet");
-        epee::misc_utils::sleep_no_w(1000);
-        continue;
-      }
+    if (!local_template_ver) // no set_block_template call
+    {
+      LOG_PRINT_L2("Block template not set yet");
+      epee::misc_utils::sleep_no_w(1000);
+      continue;
+    }
 
-      if (height >= m_stop_height)
-      {
-        m_stop = true;
-        call_stop = true;
-        break;
-      }
+    if (height >= m_stop_height)
+    {
+      m_stop = true;
+      call_stop = true;
+      break;
+    }
 
-      b.nonce = nonce;
-      crypto::hash h;
-      get_block_longhash(m_pbc, b, h, height, slow_mining ? 0 : tools::get_max_concurrency());
+    b.nonce = nonce;
 
-      if(check_hash(h, local_diff))
+    if (b.major_version >= 19) // Version 0.19: tx-based PoW
+    {
+      // Collect transactions for tx-based PoW
+        std::vector<transaction> txs;
+  txs.push_back(b.miner_tx);
+  for (const auto& tx_hash : b.tx_hashes)
+  {
+    std::vector<crypto::hash> tx_hash_vec = { tx_hash };
+    std::vector<transaction> txs_vec;
+    std::vector<crypto::hash> missed;
+    if (!m_pbc->get_transactions(tx_hash_vec, txs_vec, missed) || !missed.empty())
+    {
+      MERROR("Failed to retrieve transaction with hash: " << tx_hash << " for block at height " << height);
+      continue;
+    }
+    txs.push_back(txs_vec[0]);
+  }
+
+      // Setup tx-based block header
+      tx_based_block_header header;
+      header.major_version = b.major_version;
+      header.minor_version = b.minor_version;
+      header.prev_id = b.prev_id;
+      header.timestamp = b.timestamp;
+      header.nonce = nonce;
+      header.tx_digest = generate_block_tx_digest(txs);
+
+      // Find nonce using tx-based PoW
+      uint64_t winning_nonce;
+      if (mine_tx_based_block(txs, b.prev_id, b.timestamp, local_diff, header, winning_nonce))
       {
-        //we lucky!
+        b.nonce = winning_nonce;
+        b.invalidate_hashes();
         ++m_config.current_extra_message_index;
         MGINFO_GREEN("Found block " << get_block_hash(b) << " at height " << height << " for difficulty: " << local_diff);
         cryptonote::block_verification_context bvc;
-        if(!m_phandler->handle_block_found(b, bvc) || !bvc.m_added_to_main_chain)
+        if (!m_phandler->handle_block_found(b, bvc) || !bvc.m_added_to_main_chain)
         {
           --m_config.current_extra_message_index;
-        }else
+        }
+        else
         {
-          //success update, lets update config
+          // Success update, lets update config
           if (!m_config_folder_path.empty())
             epee::serialization::store_t_to_json_file(m_config, m_config_folder_path + "/" + MINER_CONFIG_FILE_NAME);
         }
+      }
+    }
+    else // Versions < 19: RandomX
+    {
+      crypto::hash h;
+      get_block_longhash(m_pbc, b, h, height, slow_mining ? 0 : tools::get_max_concurrency());
+      if (check_hash(h, local_diff))
+      {
+        // We lucky!
+        b.invalidate_hashes();
+        ++m_config.current_extra_message_index;
+        MGINFO_GREEN("Found block " << get_block_hash(b) << " at height " << height << " for difficulty: " << local_diff);
+        cryptonote::block_verification_context bvc;
+        if (!m_phandler->handle_block_found(b, bvc) || !bvc.m_added_to_main_chain)
+        {
+          --m_config.current_extra_message_index;
+        }
+        else
+        {
+          // Success update, lets update config
+          if (!m_config_folder_path.empty())
+            epee::serialization::store_t_to_json_file(m_config, m_config_folder_path + "/" + MINER_CONFIG_FILE_NAME);
+        }
+      }
+    }
 
 #if defined(SISPOP_ENABLE_INTEGRATION_TEST_HOOKS)
-        if (m_debug_mine_singular_block)
-        {
-          m_debug_mine_singular_block = false;
-          break;
-        }
-#endif
-      }
-
-      nonce+=m_threads_total;
-      ++m_hashes;
-      ++m_total_hashes;
+    if (m_debug_mine_singular_block)
+    {
+      m_debug_mine_singular_block = false;
+      break;
     }
-    rx_slow_hash_free_state();
-    MGINFO("Miner thread stopped ["<< th_local_index << "]");
-    --m_threads_active;
-    if (call_stop)
-      stop();
-    return true;
+#endif
+
+    nonce += m_threads_total;
+    ++m_hashes;
+    ++m_total_hashes;
   }
+
+  if (use_randomx)
+    crypto::rx_slow_hash_free_state();
+  MGINFO("Miner thread stopped [" << th_local_index << "]");
+  --m_threads_active;
+  if (call_stop)
+    stop();
+  return true;
+}
   //-----------------------------------------------------------------------------------------------------
   bool miner::get_is_background_mining_enabled() const
   {

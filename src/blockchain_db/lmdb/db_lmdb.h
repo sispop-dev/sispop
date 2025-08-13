@@ -78,6 +78,7 @@ struct mdb_txn_cursors
   MDB_cursor *service_node_proofs;
   MDB_cursor *output_blacklist;
   MDB_cursor *properties;
+  MDB_cursor *block_longhash;
 };
 
 struct mdb_rflags
@@ -104,6 +105,7 @@ struct mdb_rflags
   bool m_rf_hf_versions;
   bool m_rf_service_node_data;
   bool m_rf_service_node_proofs;
+  bool m_rf_block_longhash;
   bool m_rf_properties;
 };
 
@@ -237,6 +239,9 @@ public:
   block get_top_block() const override;
 
   uint64_t height() const override;
+
+  void set_block_longhash(uint64_t height, const crypto::hash& longhash) override;
+  bool get_block_longhash(uint64_t height, crypto::hash& longhash) const override;
 
   bool tx_exists(const crypto::hash& h) const override;
   bool tx_exists(const crypto::hash& h, uint64_t& tx_index) const override;
@@ -457,6 +462,7 @@ private:
   MDB_dbi m_tx_indices;
   MDB_dbi m_tx_outputs;
 
+  MDB_dbi m_block_longhash;
   MDB_dbi m_output_txs;
   MDB_dbi m_output_amounts;
   MDB_dbi m_output_blacklist;

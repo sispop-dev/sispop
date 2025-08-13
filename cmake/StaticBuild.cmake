@@ -26,7 +26,7 @@ set(UNBOUND_HASH SHA256=6701534c938eb019626601191edc6d012fc534c09d2418d5b92827db
     CACHE STRING "unbound source hash")
 
 set(BOOST_VERSION 1.73.0 CACHE STRING "boost version")
-set(BOOST_MIRROR ${LOCAL_MIRROR} https://boostorg.jfrog.io/artifactory/main/release/${BOOST_VERSION}/source
+set(BOOST_MIRROR ${LOCAL_MIRROR} https://archives.boost.io/release/${BOOST_VERSION}/source
     CACHE STRING "boost download mirror(s)")
 string(REPLACE "." "_" BOOST_VERSION_ ${BOOST_VERSION})
 set(BOOST_SOURCE boost_${BOOST_VERSION_}.tar.gz)

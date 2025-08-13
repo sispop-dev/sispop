@@ -221,6 +221,7 @@ namespace config
   {
     "49HsfhWTvKZgc4qH1hwcEpM99Ng2TqmcxVHJoSkSQvV3N9iVJP1NT6gJTWRvuTWMNqeDgHNUcrpYVdnXW5Ep33W33YfwqRe",
     "49HsfhWTvKZgc4qH1hwcEpM99Ng2TqmcxVHJoSkSQvV3N9iVJP1NT6gJTWRvuTWMNqeDgHNUcrpYVdnXW5Ep33W33YfwqRe",
+    "45QjYYBY2QA7w9uXqP598SgwCpC8dGEDSEWta3KXC5hXXssB4H9owgyibzEMQDzpMH2vqnS4XKvJb4XDv9kq3vFaMd6zZZU",
   };
 
   namespace testnet
@@ -287,6 +288,7 @@ namespace cryptonote
     network_version_16, // future fork
     network_version_17,
     network_version_18,
+    network_version_19,
 
     network_version_count,
   };
@@ -370,8 +372,10 @@ namespace cryptonote
 
         if (hard_fork_version <= network_version_10_bulletproofs)
           mainnet.GOVERNANCE_WALLET_ADDRESS = &::config::GOVERNANCE_WALLET_ADDRESS[0];
-        else
+        else if (hard_fork_version <= network_version_18)
           mainnet.GOVERNANCE_WALLET_ADDRESS = &::config::GOVERNANCE_WALLET_ADDRESS[1];
+        else
+          mainnet.GOVERNANCE_WALLET_ADDRESS = &::config::GOVERNANCE_WALLET_ADDRESS[2];
 
         return mainnet;
       }

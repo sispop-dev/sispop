@@ -244,9 +244,11 @@ const char* const LMDB_HF_VERSIONS = "hf_versions";
 const char* const LMDB_SERVICE_NODE_DATA = "service_node_data";
 const char* const LMDB_SERVICE_NODE_LATEST = "service_node_proofs"; // contains the latest data sent with a proof: time, aux keys, ip, ports
 
+const char* const LMDB_BLOCK_LONGHASH  = "block_longhash";
+
 const char* const LMDB_PROPERTIES = "properties";
 
-constexpr unsigned int LMDB_DB_COUNT = 23; // Should agree with the number of db's above
+constexpr unsigned int LMDB_DB_COUNT = 24; // Should agree with the number of db's above
 
 const char zerokey[8] = {0};
 const MDB_val zerokval = { sizeof(zerokey), (void *)zerokey };
@@ -1489,6 +1491,7 @@ void BlockchainLMDB::open(const std::string& filename, cryptonote::network_type 
 
   lmdb_db_open(txn, LMDB_ALT_BLOCKS, MDB_CREATE, m_alt_blocks, "Failed to open db handle for m_alt_blocks");
 
+  lmdb_db_open(txn, LMDB_BLOCK_LONGHASH, MDB_CREATE, m_block_longhash, "Failed to open db handle for m_block_longhash");
   // this subdb is dropped on sight, so it may not be present when we open the DB.
   // Since we use MDB_CREATE, we'll get an exception if we open read-only and it does not exist.
   // So we don't open for read-only, and also not drop below. It is not used elsewhere.
@@ -1515,7 +1518,7 @@ void BlockchainLMDB::open(const std::string& filename, cryptonote::network_type 
     mdb_set_dupsort(txn, m_txs_prunable_tip, compare_uint64);
   mdb_set_compare(txn, m_txs_prunable, compare_uint64);
   mdb_set_dupsort(txn, m_txs_prunable_hash, compare_uint64);
-
+  mdb_set_compare(txn, m_block_longhash, compare_uint64);
   mdb_set_compare(txn, m_txpool_meta, compare_hash32);
   mdb_set_compare(txn, m_txpool_blob, compare_hash32);
   mdb_set_compare(txn, m_alt_blocks, compare_hash32);
@@ -1683,6 +1686,8 @@ void BlockchainLMDB::reset()
     throw0(DB_ERROR(lmdb_error("Failed to drop m_hf_versions: ", result).c_str()));
   if (auto result = mdb_drop(txn, m_service_node_data, 0))
     throw0(DB_ERROR(lmdb_error("Failed to drop m_service_node_data: ", result).c_str()));
+  if (auto result = mdb_drop(txn, m_block_longhash, 0))
+    throw0(DB_ERROR(lmdb_error("Failed to drop m_block_longhash: ", result).c_str()));
   if (auto result = mdb_drop(txn, m_properties, 0))
     throw0(DB_ERROR(lmdb_error("Failed to drop m_properties: ", result).c_str()));
 
@@ -1797,6 +1802,43 @@ void BlockchainLMDB::unlock()
     if (! m_batch_active && ! m_write_txn) \
       auto_txn.commit(); \
   } while(0)
+
+void BlockchainLMDB::set_block_longhash(uint64_t height, const crypto::hash& longhash)
+{
+  check_open();
+  LOG_PRINT_L3("BlockchainLMDB::set_block_longhash");
+
+  auto txn = mdb_txn_safe(); // Begin a write transaction
+
+  MDB_val key = { sizeof(height), (void*)&height };
+  MDB_val val = { sizeof(longhash), (void*)&longhash };
+
+  int err = mdb_put(txn, m_block_longhash, &key, &val, 0);
+  if (err)
+    throw0(DB_ERROR("Failed to store block longhash for height " + std::to_string(height)));
+
+  txn.commit();
+}
+
+bool BlockchainLMDB::get_block_longhash(uint64_t height, crypto::hash& longhash) const
+{
+  check_open();
+  LOG_PRINT_L3("BlockchainLMDB::get_block_longhash");
+
+  MDB_val key = { sizeof(height), (void*)&height };
+  MDB_val val;
+
+  auto txn = mdb_txn_safe(true); // Read-only transaction
+
+  int err = mdb_get(txn, m_block_longhash, &key, &val);
+  if (err == MDB_NOTFOUND)
+    return false;
+  if (err)
+    throw0(DB_ERROR("Failed to read block longhash for height " + std::to_string(height)));
+
+  memcpy(&longhash, val.mv_data, sizeof(crypto::hash));
+  return true;
+}
 
 void BlockchainLMDB::add_txpool_tx(const crypto::hash &txid, const cryptonote::blobdata &blob, const txpool_tx_meta_t &meta)
 {
@@ -4698,8 +4740,16 @@ void BlockchainLMDB::fixup(fixup_context const context)
             v12_initial_override = true;
             v12_initial_blocks_remaining--;
           }
-          difficulty_type diff = next_difficulty_v2(timestamps, difficulties, DIFFICULTY_TARGET_V2,
-              version <= cryptonote::network_version_9_service_nodes, v12_initial_override);
+          difficulty_type diff = next_difficulty_v2(
+    timestamps,
+    difficulties,
+    DIFFICULTY_TARGET_V2,
+    version <= cryptonote::network_version_9_service_nodes,
+    v12_initial_override,
+    version >= cryptonote::network_version_19,
+    {}
+    );
+
 
           MDB_val_set(key, curr_height);
 

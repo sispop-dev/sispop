@@ -528,6 +528,8 @@ private:
   uint64_t time_blk_hash = 0;  //!< a performance metric
   uint64_t time_add_block1 = 0;  //!< a performance metric
   uint64_t time_add_transaction = 0;  //!< a performance metric
+//virtual void set_block_longhash(uint64_t height, const crypto::hash& longhash) = 0;
+//virtual bool get_block_longhash(uint64_t height, crypto::hash& longhash) const = 0;
 
 
 protected:
@@ -563,6 +565,8 @@ public:
    */
   virtual ~BlockchainDB() = default;
 
+virtual void set_block_longhash(uint64_t height, const crypto::hash& longhash) = 0;
+virtual bool get_block_longhash(uint64_t height, crypto::hash& longhash) const = 0;
   /**
    * @brief init command line options
    */
